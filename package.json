@@ -1,0 +1,18 @@
+{
+  "name": "ew-markets",
+  "version": "1.0.0",
+  "description": "EW Markets — Emery Weiner School Prediction Market Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "npx nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "sqlite3": "^5.1.7",
+    "sqlite": "^5.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
