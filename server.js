@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const { open } = require('sqlite');
@@ -5,11 +6,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 const app = express();
-const PORT = 3000;
-const JWT_SECRET = 'ew-markets-secret-change-in-production';
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'ew-markets-secret-change-in-production';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
+app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -17,7 +21,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let db;
 
 async function initDB() {
-  db = await open({ filename: 'ew-markets.db', driver: sqlite3.Database });
+  db = await open({ filename: process.env.DB_PATH || 'ew-markets.db', driver: sqlite3.Database });
   await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, name TEXT, password TEXT NOT NULL,
@@ -41,12 +45,6 @@ async function initDB() {
       type TEXT NOT NULL, reference_id TEXT, description TEXT, timestamp INTEGER,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
-    CREATE TABLE IF NOT EXISTS volunteer_submissions (
-      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, org TEXT, hours REAL,
-      description TEXT, date TEXT, status TEXT DEFAULT 'pending',
-      credits_awarded INTEGER DEFAULT 0,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    );
     CREATE TABLE IF NOT EXISTS store_items (
       id TEXT PRIMARY KEY, name TEXT, icon TEXT, cost INTEGER, description TEXT
     );
@@ -57,6 +55,13 @@ async function initDB() {
       FOREIGN KEY (item_id) REFERENCES store_items(id)
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE IF NOT EXISTS stripe_sessions (
+      session_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      credits INTEGER NOT NULL,
+      fulfilled INTEGER DEFAULT 0,
+      created_at INTEGER
+    );
   `);
   await seedIfEmpty();
 }
@@ -113,7 +118,89 @@ function lmsrShares(y,n,b,side,amt) {
   return (lo+hi)/2;
 }
 
-// AUTH
+// ── STRIPE ──
+app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
+  try {
+    const { amountCents } = req.body;
+    if (!amountCents || amountCents < 100) return res.status(400).json({ error: 'Minimum purchase is $1.00' });
+
+    const credits = Math.floor(amountCents / 100) * 100;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          unit_amount: amountCents,
+          product_data: {
+            name: `Jewshi Markets — ${credits.toLocaleString()} Credits`,
+            description: `${credits} credits added to your Jewshi account`,
+          },
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${CLIENT_URL}/payment-success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${CLIENT_URL}/?cancelled=1`,
+      metadata: {
+        user_id: req.user.id,
+        credits: String(credits),
+      },
+    });
+
+    await db.run(
+      'INSERT INTO stripe_sessions (session_id,user_id,credits,fulfilled,created_at) VALUES (?,?,?,0,?)',
+      [session.id, req.user.id, credits, Date.now()]
+    );
+
+    res.json({ url: session.url });
+  } catch(e) {
+    console.error('Checkout error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/stripe-webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch(e) {
+    console.error('Webhook signature failed:', e.message);
+    return res.status(400).send(`Webhook Error: ${e.message}`);
+  }
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const { user_id, credits } = session.metadata;
+    const creditsNum = parseInt(credits);
+    const existing = await db.get('SELECT fulfilled FROM stripe_sessions WHERE session_id=?', [session.id]);
+    if (!existing || existing.fulfilled) return res.json({ received: true });
+    await db.run('BEGIN');
+    try {
+      await db.run('UPDATE users SET credits=credits+? WHERE id=?', [creditsNum, user_id]);
+      await recordTx(user_id, creditsNum, 'purchase', session.id, `Purchased ${creditsNum} credits`);
+      await db.run('UPDATE stripe_sessions SET fulfilled=1 WHERE session_id=?', [session.id]);
+      await db.run('COMMIT');
+      console.log(`Credited ${creditsNum} to ${user_id}`);
+    } catch(e) {
+      await db.run('ROLLBACK');
+      console.error('Fulfillment error:', e);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  res.json({ received: true });
+});
+
+app.get('/api/credits/verify/:sessionId', authMiddleware, async (req, res) => {
+  const row = await db.get(
+    'SELECT fulfilled, credits FROM stripe_sessions WHERE session_id=? AND user_id=?',
+    [req.params.sessionId, req.user.id]
+  );
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  res.json({ fulfilled: !!row.fulfilled, credits: row.credits });
+});
+
+// ── AUTH ──
 app.post('/api/auth/login', async(req,res)=>{
   try{
     const {id,password}=req.body;
@@ -140,7 +227,7 @@ app.post('/api/auth/register', async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// USER
+// ── USER ──
 app.get('/api/me', authMiddleware, async(req,res)=>{
   res.json(await db.get('SELECT id,name,role,credits,grade FROM users WHERE id=?',[req.user.id]));
 });
@@ -157,7 +244,7 @@ app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// MARKETS
+// ── MARKETS ──
 app.get('/api/markets', authMiddleware, async(req,res)=>{
   const {category}=req.query;
   res.json(category
@@ -208,7 +295,7 @@ app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
   res.json({success:true});
 });
 
-// BETS
+// ── BETS ──
 app.post('/api/bets', authMiddleware, async(req,res)=>{
   try{
     const {marketId,side,amount}=req.body;
@@ -239,12 +326,12 @@ app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
     FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]));
 });
 
-// LEADERBOARD
+// ── LEADERBOARD ──
 app.get('/api/leaderboard', authMiddleware, async(req,res)=>{
   res.json(await db.all("SELECT id,name,grade,credits FROM users WHERE role='student' ORDER BY credits DESC"));
 });
 
-// STORE
+// ── STORE ──
 app.get('/api/store', authMiddleware, async(req,res)=>{ res.json(await db.all('SELECT * FROM store_items')); });
 app.post('/api/store', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -279,45 +366,7 @@ app.get('/api/store/redemptions/mine', authMiddleware, async(req,res)=>{
   res.json(await db.all(`SELECT r.*,s.name,s.icon FROM redemptions r JOIN store_items s ON r.item_id=s.id WHERE r.user_id=? ORDER BY r.timestamp DESC`,[req.user.id]));
 });
 
-// VOLUNTEER
-app.post('/api/volunteer', authMiddleware, async(req,res)=>{
-  try{
-    const {org,hours,description,date}=req.body;
-    if(!org||!hours||!description||!date) return res.status(400).json({error:'Missing fields'});
-    const id=generateId('v');
-    await db.run("INSERT INTO volunteer_submissions (id,user_id,org,hours,description,date,status,credits_awarded) VALUES (?,?,?,?,?,?,'pending',0)",
-      [id,req.user.id,org,hours,description,date]);
-    res.json({id,status:'pending'});
-  }catch(e){res.status(500).json({error:e.message});}
-});
-app.get('/api/volunteer/mine', authMiddleware, async(req,res)=>{
-  res.json(await db.all('SELECT * FROM volunteer_submissions WHERE user_id=? ORDER BY date DESC',[req.user.id]));
-});
-app.get('/api/volunteer/pending', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all(`SELECT v.*,u.name as student_name FROM volunteer_submissions v JOIN users u ON v.user_id=u.id WHERE v.status='pending'`));
-});
-app.post('/api/volunteer/:id/approve', authMiddleware, adminOnly, async(req,res)=>{
-  try{
-    await db.run('BEGIN');
-    try{
-      const v=await db.get('SELECT * FROM volunteer_submissions WHERE id=?',[req.params.id]);
-      if(!v) throw new Error('Not found');
-      const rate=parseInt((await db.get("SELECT value FROM settings WHERE key='volunteer_rate'"))?.value||'100');
-      const credits=Math.round(v.hours*rate);
-      await db.run("UPDATE volunteer_submissions SET status='approved',credits_awarded=? WHERE id=?",[credits,v.id]);
-      await db.run('UPDATE users SET credits=credits+? WHERE id=?',[credits,v.user_id]);
-      await recordTx(v.user_id,credits,'volunteer_approved',v.id,`Volunteer: ${v.org}`);
-      await db.run('COMMIT');
-      res.json({credits});
-    }catch(err){await db.run('ROLLBACK');throw err;}
-  }catch(e){res.status(400).json({error:e.message});}
-});
-app.post('/api/volunteer/:id/reject', authMiddleware, adminOnly, async(req,res)=>{
-  await db.run("UPDATE volunteer_submissions SET status='rejected' WHERE id=?",[req.params.id]);
-  res.json({success:true});
-});
-
-// ADMIN
+// ── ADMIN ──
 app.post('/api/admin/distribute-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {amount}=req.body;
@@ -351,17 +400,11 @@ app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
   const students=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c;
   const openMarkets=(await db.get("SELECT COUNT(*) as c FROM markets WHERE status='open'")).c;
   const totalBets=(await db.get('SELECT COUNT(*) as c FROM bets')).c;
-  const pendingVol=(await db.get("SELECT COUNT(*) as c FROM volunteer_submissions WHERE status='pending'")).c;
+  const pendingVol=(await db.get("SELECT COUNT(*) as c FROM volunteer_submissions WHERE status='pending'")).c || 0;
   const circ=(await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s||0;
   res.json({students,openMarkets,totalBets,pendingVol,totalCreditsInCirculation:circ});
 });
 
 initDB().then(()=>{
-  app.listen(PORT,()=>{
-    console.log(`\n🚀 EW Markets running at http://localhost:${PORT}`);
-    console.log(`\n  Admin:      GROSE        / BryceB0mb!`);
-    console.log(`  Student 1:  STUDENT-001  / daren`);
-    console.log(`  Student 2:  STUDENT-002  / Hello123`);
-    console.log(`  Student 3:  STUDENT-003  / BigIce\n`);
-  });
+  app.listen(PORT,()=>{ console.log(`\n🚀 Jewshi Markets running at http://localhost:${PORT}\n`); });
 }).catch(err=>{console.error('DB init failed:',err);process.exit(1);});

@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jewshi Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #16161f;
+    --bg4: #1e1e2a;
+    --border: rgba(255,255,255,0.07);
+    --border-hi: rgba(255,255,255,0.14);
+    --text: #eeeef5;
+    --text2: #8888a8;
+    --text3: #55556a;
+    --green: #00d084;
+    --green-bg: rgba(0,208,132,0.08);
+    --green-dim: rgba(0,208,132,0.18);
+    --red: #ff4560;
+    --red-bg: rgba(255,69,96,0.08);
+    --red-dim: rgba(255,69,96,0.18);
+    --accent: #7c6af7;
+    --accent-bg: rgba(124,106,247,0.12);
+    --gold: #f0c040;
+    --gold-bg: rgba(240,192,64,0.1);
+    --shadow: 0 2px 16px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 40px rgba(0,0,0,0.6);
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+  #auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  .auth-card { background: var(--bg2); border: 1px solid var(--border-hi); border-radius: 18px; padding: 44px 40px; width: 400px; box-shadow: var(--shadow-lg); }
+  .auth-logo { text-align: center; margin-bottom: 32px; }
+  .auth-logo .brand { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; color: var(--text); }
+  .auth-logo .brand span { color: var(--accent); }
+  .auth-logo .tagline { font-size: 12px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 5px; }
+  .auth-logo .star { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.9; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin-bottom: 7px; }
+  .form-group input, .form-group select { width: 100%; padding: 11px 14px; background: var(--bg3); border: 1px solid var(--border-hi); border-radius: var(--radius); font-family: 'Inter', sans-serif; font-size: 14px; color: var(--text); outline: none; transition: border-color 0.2s; }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .form-group select option { background: var(--bg3); }
+  .btn-primary { width: 100%; padding: 13px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; letter-spacing: 0.01em; }
+  .btn-primary:hover { opacity: 0.88; }
+  .auth-toggle { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text3); }
+  .auth-toggle a { color: var(--accent); cursor: pointer; font-weight: 500; }
+  .error-msg { background: var(--red-bg); border: 1px solid var(--red-dim); color: var(--red); padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 14px; }
+
+  #app { display: none; min-height: 100vh; }
+  .topbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 28px; height: 58px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .topbar-brand { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); }
+  .topbar-brand span { color: var(--accent); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .credits-badge { background: var(--bg4); border: 1px solid var(--border-hi); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--green); cursor: pointer; transition: border-color 0.2s; }
+  .credits-badge:hover { border-color: var(--green); }
+  .user-info { font-size: 12px; color: var(--text3); }
+  .btn-logout { background: transparent; border: 1px solid var(--border-hi); color: var(--text2); padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: 'Inter', sans-serif; transition: border-color 0.2s, color 0.2s; }
+  .btn-logout:hover { color: var(--text); }
+  .btn-buy { background: var(--accent-bg); border: 1px solid var(--accent); color: var(--accent); padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.2s; }
+  .btn-buy:hover { background: rgba(124,106,247,0.22); }
+
+  .nav-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--bg2); padding: 0 28px; }
+  .nav-tab { padding: 14px 16px; font-size: 13px; font-weight: 500; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; letter-spacing: 0.01em; }
+  .nav-tab:hover { color: var(--text2); }
+  .nav-tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .main-content { padding: 28px; max-width: 1100px; margin: 0 auto; }
+  .panel { background: var(--bg2); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 22px; margin-bottom: 18px; }
+  .panel-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 16px; letter-spacing: 0.01em; }
+
+  .markets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; }
+  .market-card { background: var(--bg2); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 18px; cursor: pointer; transition: border-color 0.2s, transform 0.15s; }
+  .market-card:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+  .market-card.resolved { opacity: 0.45; pointer-events: none; }
+  .market-category { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .market-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px; line-height: 1.45; }
+  .market-odds { display: flex; gap: 8px; margin-bottom: 14px; }
+  .odds-bar-wrap { flex: 1; }
+  .odds-label { font-size: 11px; font-weight: 600; margin-bottom: 5px; display: flex; justify-content: space-between; }
+  .odds-bar { height: 4px; border-radius: 2px; background: var(--bg4); overflow: hidden; }
+  .odds-fill-yes { height: 100%; background: var(--green); border-radius: 2px; }
+  .odds-fill-no { height: 100%; background: var(--red); border-radius: 2px; }
+  .market-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text3); }
+  .status-tag { padding: 3px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+  .status-open { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-dim); }
+  .status-closed { background: var(--bg4); color: var(--text3); border: 1px solid var(--border); }
+  .status-resolved-yes { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-dim); }
+  .status-resolved-no { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-dim); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+  .modal { background: var(--bg2); border: 1px solid var(--border-hi); border-radius: 18px; padding: 26px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+  .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .modal-close { background: var(--bg4); border: 1px solid var(--border); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; color: var(--text2); }
+  .modal-close:hover { color: var(--text); }
+  .bet-choice-btns { display: flex; gap: 10px; margin-bottom: 16px; }
+  .bet-choice-btn { flex: 1; padding: 12px; border: 1px solid var(--border-hi); border-radius: var(--radius); background: var(--bg3); cursor: pointer; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; transition: all 0.15s; color: var(--text2); }
+  .bet-choice-btn.yes { color: var(--green); }
+  .bet-choice-btn.no { color: var(--red); }
+  .bet-choice-btn.yes.active { border-color: var(--green); background: var(--green-bg); }
+  .bet-choice-btn.no.active { border-color: var(--red); background: var(--red-bg); }
+  .bet-amount-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .bet-amount-row input { flex: 1; padding: 11px 14px; background: var(--bg3); border: 1px solid var(--border-hi); border-radius: var(--radius); font-size: 16px; font-family: 'Inter', sans-serif; color: var(--text); outline: none; }
+  .bet-amount-row input:focus { border-color: var(--accent); }
+  .quick-amounts { display: flex; gap: 8px; margin-bottom: 16px; }
+  .quick-btn { padding: 5px 12px; border: 1px solid var(--border-hi); border-radius: 20px; background: var(--bg3); cursor: pointer; font-size: 12px; font-weight: 500; font-family: 'Inter', sans-serif; color: var(--text2); transition: all 0.15s; }
+  .quick-btn:hover { background: var(--bg4); color: var(--text); }
+  .bet-summary { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 16px; font-size: 13px; }
+  .bet-summary-row { display: flex; justify-content: space-between; padding: 3px 0; color: var(--text2); }
+  .bet-summary-row.total { font-weight: 700; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 9px; font-size: 14px; color: var(--text); }
+  .btn-bet { width: 100%; padding: 13px; border: none; border-radius: var(--radius); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: 0.01em; }
+  .btn-bet-yes { background: var(--green); color: #000; }
+  .btn-bet-no { background: var(--red); color: #fff; }
+  .btn-bet:hover { opacity: 0.88; }
+
+  .portfolio-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .portfolio-table th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border); }
+  .portfolio-table td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text2); }
+  .portfolio-table tr:last-child td { border-bottom: none; }
+
+  .leaderboard-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 14px; }
+  .leaderboard-row:last-child { border-bottom: none; }
+  .lb-rank { font-size: 15px; font-weight: 700; color: var(--text3); width: 28px; text-align: center; }
+  .lb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--bg4); border: 1px solid var(--border-hi); color: var(--text2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .lb-name { flex: 1; font-weight: 500; font-size: 14px; color: var(--text); }
+  .lb-id { font-size: 11px; color: var(--text3); }
+
+  .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .store-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; text-align: center; transition: border-color 0.2s; }
+  .store-item:hover { border-color: var(--border-hi); }
+  .store-item-icon { font-size: 32px; margin-bottom: 10px; }
+  .store-item-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+  .store-item-desc { font-size: 12px; color: var(--text3); margin-bottom: 14px; }
+  .store-item-cost { font-size: 18px; font-weight: 700; color: var(--green); margin-bottom: 12px; }
+  .btn-redeem { width: 100%; padding: 9px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: opacity 0.2s; }
+  .btn-redeem:hover { opacity: 0.85; }
+  .btn-redeem:disabled { background: var(--bg4); color: var(--text3); cursor: not-allowed; opacity: 1; }
+
+  .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 768px) { .admin-grid { grid-template-columns: 1fr; } }
+  .admin-form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .admin-form-row .form-group { flex: 1; min-width: 130px; margin-bottom: 0; }
+  .btn-admin { padding: 9px 16px; background: var(--accent); color: white; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: opacity 0.2s; }
+  .btn-admin:hover { opacity: 0.85; }
+  .btn-danger { background: var(--red) !important; color: #fff !important; }
+  .btn-success { background: var(--green) !important; color: #000 !important; }
+  .btn-sm { padding: 4px 10px !important; font-size: 11px !important; border-radius: 6px !important; }
+  .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+  @media (max-width: 768px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; }
+  .stat-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+  .stat-value { font-size: 26px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+
+  .notification { padding: 11px 15px; border-radius: var(--radius); font-size: 13px; margin-bottom: 14px; font-weight: 500; }
+  .notification.success { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-dim); }
+  .notification.error { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-dim); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--text3); }
+  .empty-state .icon { font-size: 36px; margin-bottom: 12px; }
+  select, textarea { width: 100%; padding: 11px 14px; background: var(--bg3); border: 1px solid var(--border-hi); border-radius: var(--radius); font-family: 'Inter', sans-serif; font-size: 14px; color: var(--text); outline: none; }
+  textarea { resize: vertical; min-height: 70px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .history-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .loading { text-align: center; padding: 40px; color: var(--text3); font-size: 13px; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg2); } ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+  /* Buy credits custom amount */
+  .buy-input-wrap { position: relative; margin-bottom: 10px; }
+  .buy-input-wrap .dollar { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text2); font-size: 16px; font-weight: 500; }
+  .buy-input-wrap input { width: 100%; padding: 14px 14px 14px 30px; background: var(--bg3); border: 1px solid var(--border-hi); border-radius: var(--radius); font-size: 22px; font-weight: 700; font-family: 'Inter', sans-serif; color: var(--text); outline: none; }
+  .buy-input-wrap input:focus { border-color: var(--accent); }
+  .buy-quick { display: flex; gap: 8px; margin-bottom: 18px; }
+  .buy-quick button { flex: 1; padding: 7px; border: 1px solid var(--border-hi); border-radius: 8px; background: var(--bg3); color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.15s; }
+  .buy-quick button:hover { background: var(--bg4); color: var(--text); border-color: var(--accent); }
+  .buy-preview { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+  .buy-preview .label { font-size: 13px; color: var(--text2); }
+  .buy-preview .credits { font-size: 20px; font-weight: 700; color: var(--green); }
+</style>
+</head>
+<body>
+
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="star">✡</span>
+      <div class="brand">Jew<span>shi</span></div>
+      <div class="tagline">Prediction Markets</div>
+    </div>
+    <div id="auth-error" class="error-msg" style="display:none;"></div>
+    <div class="form-group"><label>Student ID</label><input type="text" id="login-id" placeholder="e.g. STUDENT-001"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn-primary" onclick="doLogin()">Sign In</button>
+    <div class="auth-toggle">No account? <a onclick="showRegister()">Register</a></div>
+  </div>
+</div>
+
+<div id="register-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="auth-card" style="max-height:90vh; overflow-y:auto;">
+    <h2 style="font-size:18px; font-weight:700; margin-bottom:20px; text-align:center; color:var(--text);">Create Account</h2>
+    <div id="reg-error" class="error-msg" style="display:none;"></div>
+    <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
+    <div class="form-group"><label>Student ID</label><input type="text" id="reg-id" placeholder="e.g. EW-2025-042"></div>
+    <div class="form-group"><label>Grade</label>
+      <select id="reg-grade">
+        <option>6th Grade</option><option>7th Grade</option><option>8th Grade</option>
+        <option>9th Grade</option><option>10th Grade</option><option>11th Grade</option><option>12th Grade</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="Choose a password"></div>
+    <button class="btn-primary" onclick="doRegister()">Create Account</button>
+    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideRegister()">← Back to login</a></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:20px;">
+      <div class="topbar-brand">Jew<span>shi</span></div>
+      <span style="font-size:11px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;">Markets</span>
+    </div>
+    <div class="topbar-right">
+      <div class="credits-badge" onclick="openBuyCredits()">⬡ <span id="topbar-credits">0</span> credits</div>
+      <button class="btn-buy" onclick="openBuyCredits()">+ Buy</button>
+      <div class="user-info" id="topbar-user"></div>
+      <button class="btn-logout" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="nav-tabs" id="nav-tabs">
+    <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
+    <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
+    <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
+    <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
+    <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
+  </div>
+
+  <div class="main-content">
+
+    <div id="tab-markets" class="tab-content active">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Active Markets</h2>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Bet school credits on upcoming events</p>
+        </div>
+        <select id="filter-category" onchange="renderMarkets()" style="width:150px;padding:8px 12px;font-size:13px;">
+          <option value="">All Categories</option>
+          <option value="Sports">Sports</option>
+          <option value="School">School Events</option>
+          <option value="Fun">Fun Bets</option>
+          <option value="Current Events">Current Events</option>
+        </select>
+      </div>
+      <div class="markets-grid" id="markets-grid"><div class="loading">Loading markets…</div></div>
+    </div>
+
+    <div id="tab-portfolio" class="tab-content">
+      <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">My Bets</h2>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Your positions and history</p>
+      <div class="stat-cards" id="portfolio-stats"></div>
+      <div class="panel"><div class="panel-title">Active Positions</div><div id="active-positions"></div></div>
+      <div class="panel"><div class="panel-title">Bet History</div><div id="bet-history"></div></div>
+    </div>
+
+    <div id="tab-leaderboard" class="tab-content">
+      <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Leaderboard</h2>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Rankings by portfolio balance</p>
+      <div class="panel"><div id="leaderboard-list"><div class="loading">Loading…</div></div></div>
+    </div>
+
+    <div id="tab-store" class="tab-content">
+      <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Redeem Credits</h2>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Spend your winnings on real rewards</p>
+      <div id="store-notification"></div>
+      <div class="store-grid" id="store-grid"></div>
+      <div class="panel" style="margin-top:18px;"><div class="panel-title">Redemption History</div><div id="redemption-history"></div></div>
+    </div>
+
+    <div id="tab-admin" class="tab-content">
+      <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:18px;">Admin Dashboard</h2>
+      <div class="stat-cards" id="admin-stats"></div>
+      <div class="admin-grid">
+        <div class="panel">
+          <div class="panel-title">Create Market</div>
+          <div class="form-group"><label>Question</label><input type="text" id="new-market-q" placeholder="Will the Eagles win the championship?"></div>
+          <div class="admin-form-row">
+            <div class="form-group"><label>Category</label>
+              <select id="new-market-cat"><option>Sports</option><option>School</option><option>Fun</option><option>Current Events</option></select>
+            </div>
+            <div class="form-group"><label>Closes</label><input type="date" id="new-market-close"></div>
+          </div>
+          <div class="form-group"><label>Starting Liquidity</label><input type="number" id="new-market-liq" value="500" min="100"></div>
+          <button class="btn-admin" onclick="createMarket()">Create Market</button>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Credit Management</div>
+          <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Distribute weekly credits to all students</p>
+          <div class="admin-form-row">
+            <div class="form-group"><label>Credits per student</label><input type="number" id="weekly-credits" value="200" min="10"></div>
+          </div>
+          <button class="btn-admin" onclick="distributeCredits()" style="margin-bottom:16px;">Distribute Weekly Credits</button>
+          <hr class="divider">
+          <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Volunteer hour → credits rate</p>
+          <div class="admin-form-row">
+            <div class="form-group"><label>Credits per hour</label><input type="number" id="vol-rate" value="100" min="10"></div>
+          </div>
+          <button class="btn-admin" onclick="updateVolRate()">Update Rate</button>
+          <p style="font-size:11px;color:var(--text3);margin-top:8px;" id="vol-rate-display">Current rate: 100 credits/hour</p>
+        </div>
+      </div>
+      <div class="panel"><div class="panel-title">Resolve Markets</div><div id="admin-markets-list"></div></div>
+      <div class="panel">
+        <div class="panel-title">Manage Store</div>
+        <div class="admin-form-row">
+          <div class="form-group"><label>Item Name</label><input type="text" id="store-item-name" placeholder="Café Sandwich"></div>
+          <div class="form-group"><label>Emoji</label><input type="text" id="store-item-icon" placeholder="🥪" maxlength="2"></div>
+          <div class="form-group"><label>Cost</label><input type="number" id="store-item-cost" min="1" placeholder="150"></div>
+        </div>
+        <div class="form-group"><label>Description</label><input type="text" id="store-item-desc" placeholder="Redeemable at the school café"></div>
+        <button class="btn-admin" onclick="addStoreItem()">Add Item</button>
+        <hr class="divider">
+        <div id="admin-store-list"></div>
+      </div>
+      <div class="panel"><div class="panel-title">Student Accounts</div><div id="admin-users-list"></div></div>
+      <div class="panel"><div class="panel-title">Transaction Log</div><div id="admin-txn-list"><div class="loading">Loading…</div></div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BET MODAL -->
+<div class="modal-overlay" id="bet-modal" style="display:none;" onclick="closeBetModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 style="font-size:16px;font-weight:700;" id="modal-title">Place a Bet</h3>
+      <button class="modal-close" onclick="closeBetModal()">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;" id="modal-question"></p>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:10px;" id="modal-odds-display"></div>
+    <div class="bet-choice-btns">
+      <button class="bet-choice-btn yes" id="btn-yes" onclick="selectSide('YES')">YES</button>
+      <button class="bet-choice-btn no" id="btn-no" onclick="selectSide('NO')">NO</button>
+    </div>
+    <div class="bet-amount-row">
+      <input type="number" id="bet-amount" placeholder="Amount" min="1" oninput="updateBetSummary()">
+      <span style="font-size:13px;color:var(--text3);">credits</span>
+    </div>
+    <div class="quick-amounts">
+      <button class="quick-btn" onclick="setQuickAmount(25)">25</button>
+      <button class="quick-btn" onclick="setQuickAmount(50)">50</button>
+      <button class="quick-btn" onclick="setQuickAmount(100)">100</button>
+      <button class="quick-btn" onclick="setQuickAmount(200)">200</button>
+    </div>
+    <div class="bet-summary" id="bet-summary"></div>
+    <button class="btn-bet" id="btn-place-bet" onclick="placeBet()">Place Bet</button>
+    <p style="font-size:12px;color:var(--text3);margin-top:10px;text-align:center;">Balance after: <strong id="balance-after" style="color:var(--text);">—</strong></p>
+  </div>
+</div>
+
+<!-- BUY CREDITS MODAL -->
+<div class="modal-overlay" id="buy-modal" style="display:none;" onclick="closeBuyModal(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+    <div class="modal-header">
+      <h3 style="font-size:16px;font-weight:700;">Buy Credits</h3>
+      <button class="modal-close" onclick="closeBuyModal()">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:18px;">Enter any dollar amount — you'll receive 100 credits per $1.00.</p>
+    <div class="buy-input-wrap">
+      <span class="dollar">$</span>
+      <input type="number" id="buy-amount" placeholder="0.00" min="1" step="1" oninput="updateBuyPreview()">
+    </div>
+    <div class="buy-quick">
+      <button onclick="setBuyAmount(5)">$5</button>
+      <button onclick="setBuyAmount(10)">$10</button>
+      <button onclick="setBuyAmount(20)">$20</button>
+      <button onclick="setBuyAmount(50)">$50</button>
+    </div>
+    <div class="buy-preview" id="buy-preview" style="display:none;">
+      <span class="label">You'll receive</span>
+      <span class="credits" id="buy-credits-preview">⬡ 0</span>
+    </div>
+    <button class="btn-primary" onclick="startCheckout()" style="margin-bottom:12px;">Continue to Payment</button>
+    <p style="font-size:11px;color:var(--text3);text-align:center;">Secured by Stripe · Apple Pay &amp; Google Pay supported</p>
+  </div>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' ? 'http://localhost:3000/api' : '/api';
+const CREDITS_PER_DOLLAR = 100;
+
+let authToken = localStorage.getItem('ew_token');
+let currentUser = null;
+let currentBetMarket = null;
+let currentBetSide = 'YES';
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: 'Bearer ' + authToken } : {}) } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+function lmsrCost(yQ, nQ, b) { return b * Math.log(Math.exp(yQ/b) + Math.exp(nQ/b)); }
+function lmsrPrice(yQ, nQ, b) { const eY=Math.exp(yQ/b),eN=Math.exp(nQ/b); return eY/(eY+eN); }
+function lmsrSharesForCost(yQ, nQ, b, side, amt) {
+  const cb = lmsrCost(yQ, nQ, b); let lo=0, hi=amt*10;
+  for(let i=0;i<60;i++){const mid=(lo+hi)/2;const ca=side==='YES'?lmsrCost(yQ+mid,nQ,b):lmsrCost(yQ,nQ+mid,b);if(ca-cb<amt)lo=mid;else hi=mid;}
+  return (lo+hi)/2;
+}
+function getYesProb(m) { return lmsrPrice(m.yes_shares, m.no_shares, m.b_param); }
+
+async function doLogin() {
+  const id = document.getElementById('login-id').value.trim().toUpperCase();
+  const password = document.getElementById('login-pass').value;
+  try {
+    const data = await api('POST', '/auth/login', { id, password });
+    authToken = data.token; localStorage.setItem('ew_token', authToken); currentUser = data.user; enterApp();
+  } catch(e) { const el=document.getElementById('auth-error'); el.textContent=e.message; el.style.display='block'; }
+}
+
+async function doRegister() {
+  const name=document.getElementById('reg-name').value.trim(), id=document.getElementById('reg-id').value.trim().toUpperCase();
+  const grade=document.getElementById('reg-grade').value, password=document.getElementById('reg-pass').value;
+  if(!name||!id||!password){showRegError('Please fill all fields.');return;}
+  try {
+    const data=await api('POST','/auth/register',{id,name,password,grade});
+    authToken=data.token; localStorage.setItem('ew_token',authToken); currentUser=data.user; hideRegister(); enterApp();
+  } catch(e){showRegError(e.message);}
+}
+
+function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
+function showRegister(){document.getElementById('register-screen').style.display='flex';}
+function hideRegister(){document.getElementById('register-screen').style.display='none';}
+
+function doLogout(){
+  authToken=null;currentUser=null;localStorage.removeItem('ew_token');
+  document.getElementById('app').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
+  document.getElementById('login-id').value='';document.getElementById('login-pass').value='';
+  document.getElementById('auth-error').style.display='none';
+}
+
+async function enterApp(){
+  currentUser=await api('GET','/me');
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  if(currentUser.role==='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='block');
+  updateTopbar(); renderMarkets();
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();}});
+}
+
+function updateTopbar(){
+  if(!currentUser)return;
+  document.getElementById('topbar-user').textContent=currentUser.name+' · '+currentUser.id;
+  document.getElementById('topbar-credits').textContent=currentUser.credits.toLocaleString();
+}
+async function refreshUser(){currentUser=await api('GET','/me');updateTopbar();}
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelector(`.nav-tab[data-tab="${tab}"]`).classList.add('active');
+  if(tab==='markets')renderMarkets();
+  if(tab==='portfolio')renderPortfolio();
+  if(tab==='leaderboard')renderLeaderboard();
+  if(tab==='store')renderStore();
+  if(tab==='admin')renderAdminTab();
+}
+
+async function renderMarkets(){
+  const grid=document.getElementById('markets-grid');
+  grid.innerHTML='<div class="loading">Loading markets…</div>';
+  const cat=document.getElementById('filter-category').value;
+  const markets=await api('GET','/markets'+(cat?'?category='+encodeURIComponent(cat):''));
+  markets.sort((a,b)=>a.status==='open'?-1:1);
+  if(!markets.length){grid.innerHTML='<div class="empty-state"><div class="icon">📊</div><p>No markets yet.</p></div>';return;}
+  grid.innerHTML=markets.map(m=>{
+    const yesP=getYesProb(m),noP=1-yesP,pct=(n,d=0)=>(n*100).toFixed(d)+'%';
+    let statusTag='';
+    if(m.status==='open')statusTag=`<span class="status-tag status-open">Live</span>`;
+    else if(m.status==='closed')statusTag=`<span class="status-tag status-closed">Closed</span>`;
+    else if(m.status==='resolved-yes')statusTag=`<span class="status-tag status-resolved-yes">YES</span>`;
+    else if(m.status==='resolved-no')statusTag=`<span class="status-tag status-resolved-no">NO</span>`;
+    return `<div class="market-card ${m.status!=='open'?'resolved':''}" onclick="${m.status==='open'?`openBetModal('${m.id}')`:'' }">
+      <div class="market-category">${m.category}</div>
+      <div class="market-title">${m.question}</div>
+      <div class="market-odds">
+        <div class="odds-bar-wrap">
+          <div class="odds-label"><span style="color:var(--green)">YES</span><span style="color:var(--green)">${pct(yesP,1)}</span></div>
+          <div class="odds-bar"><div class="odds-fill-yes" style="width:${pct(yesP)}"></div></div>
+        </div>
+        <div class="odds-bar-wrap">
+          <div class="odds-label"><span style="color:var(--red)">NO</span><span style="color:var(--red)">${pct(noP,1)}</span></div>
+          <div class="odds-bar"><div class="odds-fill-no" style="width:${pct(noP)}"></div></div>
+        </div>
+      </div>
+      <div class="market-meta"><span>⬡ ${m.pool.toLocaleString()} pool</span>${statusTag}</div>
+    </div>`;
+  }).join('');
+}
+
+async function openBetModal(marketId){
+  const m=await api('GET','/markets/'+marketId);
+  if(!m||m.status!=='open')return;
+  currentBetMarket=m;
+  document.getElementById('modal-question').textContent=m.question;
+  document.getElementById('modal-title').textContent=m.category+' Market';
+  const yesP=getYesProb(m);
+  document.getElementById('modal-odds-display').innerHTML=
+    `<span style="color:var(--green)">YES ${(yesP*100).toFixed(1)}%</span><span>Pool: ⬡ ${m.pool.toLocaleString()}</span><span style="color:var(--red)">NO ${((1-yesP)*100).toFixed(1)}%</span>`;
+  selectSide('YES');
+  document.getElementById('bet-amount').value='';
+  document.getElementById('bet-summary').innerHTML='';
+  document.getElementById('balance-after').textContent='—';
+  document.getElementById('bet-modal').style.display='flex';
+}
+function closeBetModal(event){if(!event||event.target===document.getElementById('bet-modal'))document.getElementById('bet-modal').style.display='none';}
+
+function selectSide(side){
+  currentBetSide=side;
+  document.getElementById('btn-yes').classList.toggle('active',side==='YES');
+  document.getElementById('btn-no').classList.toggle('active',side==='NO');
+  const btn=document.getElementById('btn-place-bet');
+  btn.className='btn-bet '+(side==='YES'?'btn-bet-yes':'btn-bet-no');
+  btn.textContent=`Place ${side} Bet`;
+  updateBetSummary();
+}
+function setQuickAmount(n){document.getElementById('bet-amount').value=n;updateBetSummary();}
+function updateBetSummary(){
+  if(!currentBetMarket)return;
+  const amount=parseFloat(document.getElementById('bet-amount').value);
+  if(!amount||amount<=0){document.getElementById('bet-summary').innerHTML='';return;}
+  const m=currentBetMarket,yesP=getYesProb(m),price=currentBetSide==='YES'?yesP:(1-yesP);
+  const shares=lmsrSharesForCost(m.yes_shares,m.no_shares,m.b_param,currentBetSide,amount);
+  document.getElementById('bet-summary').innerHTML=`
+    <div class="bet-summary-row"><span>Bet amount</span><span>⬡ ${amount}</span></div>
+    <div class="bet-summary-row"><span>Current ${currentBetSide} price</span><span>${(price*100).toFixed(1)}¢</span></div>
+    <div class="bet-summary-row"><span>Shares purchased</span><span>${shares.toFixed(2)}</span></div>
+    <div class="bet-summary-row total"><span>Potential payout</span><span style="color:var(--green)">⬡ ${shares.toFixed(0)}</span></div>`;
+  const balAfter=currentUser.credits-amount;
+  document.getElementById('balance-after').textContent=balAfter>=0?'⬡ '+balAfter.toLocaleString():'⚠ Insufficient';
+}
+async function placeBet(){
+  const amount=parseFloat(document.getElementById('bet-amount').value);
+  if(!amount||amount<=0){alert('Enter a valid amount.');return;}
+  if(currentUser.credits<amount){alert('Insufficient credits!');return;}
+  try{
+    await api('POST','/bets',{marketId:currentBetMarket.id,side:currentBetSide,amount});
+    closeBetModal();await refreshUser();await renderMarkets();showToast(`Bet placed — ⬡ ${amount} on ${currentBetSide}`);
+  }catch(e){alert(e.message);}
+}
+
+async function renderPortfolio(){
+  const bets=await api('GET','/bets/mine');
+  const active=bets.filter(b=>b.status==='active'),won=bets.filter(b=>b.status==='won');
+  const totalWagered=bets.reduce((s,b)=>s+b.amount,0);
+  document.getElementById('portfolio-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green)">⬡ ${currentUser.credits.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Active Bets</div><div class="stat-value">${active.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Bets Won</div><div class="stat-value" style="color:var(--green)">${won.length}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value">⬡ ${totalWagered.toLocaleString()}</div></div>`;
+  document.getElementById('active-positions').innerHTML=!active.length
+    ?'<div class="empty-state"><div class="icon">📈</div><p>No active positions.</p></div>'
+    :`<table class="portfolio-table"><thead><tr><th>Market</th><th>Side</th><th>Wagered</th><th>Shares</th><th>Odds</th></tr></thead><tbody>${active.map(b=>{
+        const p=lmsrPrice(b.yes_shares,b.no_shares,b.b_param),curPrice=b.side==='YES'?p:(1-p);
+        return `<tr><td style="color:var(--text)">${b.question}</td><td><span class="history-pill" style="background:${b.side==='YES'?'var(--green-bg)':'var(--red-bg)'};color:${b.side==='YES'?'var(--green)':'var(--red)'}">${b.side}</span></td><td>⬡ ${b.amount}</td><td>${b.shares.toFixed(2)}</td><td>${(curPrice*100).toFixed(1)}¢</td></tr>`;
+      }).join('')}</tbody></table>`;
+  const history=bets.filter(b=>b.status!=='active');
+  document.getElementById('bet-history').innerHTML=!history.length
+    ?'<p style="color:var(--text3);font-size:13px;">No completed bets yet.</p>'
+    :`<table class="portfolio-table"><thead><tr><th>Market</th><th>Side</th><th>Wagered</th><th>Result</th><th>Payout</th></tr></thead><tbody>${history.map(b=>{
+        const status=b.status==='won'?`<span class="history-pill" style="background:var(--green-bg);color:var(--green)">Won</span>`:`<span class="history-pill" style="background:var(--red-bg);color:var(--red)">Lost</span>`;
+        return `<tr><td style="color:var(--text)">${b.question}</td><td>${b.side}</td><td>⬡ ${b.amount}</td><td>${status}</td><td>${b.payout?'⬡ '+b.payout:'—'}</td></tr>`;
+      }).join('')}</tbody></table>`;
+}
+
+async function renderLeaderboard(){
+  const users=await api('GET','/leaderboard');
+  const medals=['🥇','🥈','🥉'];
+  document.getElementById('leaderboard-list').innerHTML=users.map((u,i)=>{
+    const initials=u.name?u.name.split(' ').map(w=>w[0]).join('').slice(0,2):u.id.slice(0,2);
+    const isMe=u.id===currentUser.id;
+    return `<div class="leaderboard-row" style="${isMe?'background:var(--accent-bg);border-radius:10px;padding-left:10px;padding-right:10px;':''}">
+      <span class="lb-rank" style="${i<3?'font-size:18px;':''}">${i<3?medals[i]:'#'+(i+1)}</span>
+      <div class="lb-avatar">${initials}</div>
+      <div style="flex:1;"><div class="lb-name">${u.name||u.id} ${isMe?'<span style="font-size:11px;color:var(--accent)">(you)</span>':''}</div><div class="lb-id">${u.grade||''} · ${u.id}</div></div>
+      <div style="font-size:14px;font-weight:700;color:var(--green)">⬡ ${u.credits.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderStore(){
+  const [items,history]=await Promise.all([api('GET','/store'),api('GET','/store/redemptions/mine')]);
+  document.getElementById('store-grid').innerHTML=items.map(item=>{
+    const canAfford=currentUser.credits>=item.cost;
+    return `<div class="store-item"><div class="store-item-icon">${item.icon}</div><div class="store-item-name">${item.name}</div><div class="store-item-desc">${item.description}</div><div class="store-item-cost">⬡ ${item.cost.toLocaleString()}</div>
+      <button class="btn-redeem" ${canAfford?'':'disabled'} onclick="redeemItem('${item.id}')">${canAfford?'Redeem':'Need more credits'}</button></div>`;
+  }).join('')||'<p style="color:var(--text3);font-size:13px;">No items in store yet.</p>';
+  document.getElementById('redemption-history').innerHTML=!history.length
+    ?'<p style="color:var(--text3);font-size:13px;">No redemptions yet.</p>'
+    :history.map(r=>`<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text)">${r.icon} ${r.name}</span><span style="color:var(--text3)">⬡ ${r.cost} · ${new Date(r.timestamp).toLocaleDateString()}</span></div>`).join('');
+}
+async function redeemItem(itemId){
+  const items=await api('GET','/store');const item=items.find(s=>s.id===itemId);if(!item)return;
+  if(!confirm(`Redeem "${item.name}" for ⬡ ${item.cost}?`))return;
+  try{await api('POST','/store/'+itemId+'/redeem');await refreshUser();renderStore();showNotif('store-notification',`Redeemed ${item.icon} ${item.name}!`,'success');}
+  catch(e){showNotif('store-notification',e.message,'error');}
+}
+
+async function renderAdminTab(){
+  if(!currentUser||currentUser.role!=='admin')return;
+  const [stats,markets,users,storeItems,txns]=await Promise.all([
+    api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/transactions'),
+  ]);
+  document.getElementById('admin-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
+    <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${stats.totalBets}</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Vol.</div><div class="stat-value">${stats.pendingVol}</div></div>`;
+  document.getElementById('admin-markets-list').innerHTML=markets.map(m=>{
+    const yesP=getYesProb(m);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;"><div style="font-size:13px;font-weight:600;color:var(--text)">${m.question}</div><div style="font-size:11px;color:var(--text3);margin-top:3px;">${m.category} · YES ${(yesP*100).toFixed(1)}% · Pool ⬡${m.pool}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${m.status==='open'?`<button class="btn-admin btn-sm btn-success" onclick="resolveMarket('${m.id}','YES')">Resolve YES</button><button class="btn-admin btn-sm btn-danger" onclick="resolveMarket('${m.id}','NO')">Resolve NO</button><button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="closeMarket('${m.id}')">Close</button>`:`<span class="status-tag ${m.status==='resolved-yes'?'status-resolved-yes':m.status==='resolved-no'?'status-resolved-no':'status-closed'}">${m.status}</span>`}
+      </div></div>`;
+  }).join('')||'<p style="color:var(--text3);font-size:13px;">No markets.</p>';
+  document.getElementById('admin-store-list').innerHTML=storeItems.map(item=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:20px;">${item.icon}</span><span style="flex:1;font-size:13px;color:var(--text)">${item.name} — ⬡${item.cost}</span>
+      <button class="btn-admin btn-sm btn-danger" onclick="removeStoreItem('${item.id}')">Remove</button></div>`).join('')||'<p style="color:var(--text3);font-size:13px;">No items.</p>';
+  document.getElementById('admin-users-list').innerHTML=`<table class="portfolio-table"><thead><tr><th>Name</th><th>ID</th><th>Grade</th><th>Balance</th><th>Add Credits</th></tr></thead><tbody>${users.map(u=>`<tr>
+    <td style="color:var(--text)">${u.name||'—'}</td><td style="color:var(--text3)">${u.id}</td><td>${u.grade||'—'}</td><td style="color:var(--green)">⬡ ${u.credits.toLocaleString()}</td>
+    <td style="display:flex;gap:6px;align-items:center;"><input type="number" id="add-cred-${u.id}" placeholder="0" style="width:70px;padding:4px 8px;font-size:12px;"><button class="btn-admin btn-sm" onclick="addCreditsToUser('${u.id}')">Add</button></td>
+  </tr>`).join('')}</tbody></table>`;
+  document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
+    :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
+      <td style="color:var(--text)">${t.user_name||t.user_id}</td>
+      <td style="${t.amount>0?'color:var(--green)':'color:var(--red)'};font-weight:600;">${t.amount>0?'+':''}${t.amount}</td>
+      <td><span class="history-pill" style="background:var(--bg4);color:var(--text3)">${t.type}</span></td>
+      <td style="color:var(--text3)">${t.description||'—'}</td>
+      <td style="color:var(--text3)">${new Date(t.timestamp).toLocaleString()}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function createMarket(){
+  const question=document.getElementById('new-market-q').value.trim(),category=document.getElementById('new-market-cat').value;
+  const closeDate=document.getElementById('new-market-close').value,liquidity=parseInt(document.getElementById('new-market-liq').value);
+  if(!question||!closeDate){alert('Fill in all fields.');return;}
+  try{await api('POST','/markets',{question,category,closeDate,liquidity});document.getElementById('new-market-q').value='';document.getElementById('new-market-close').value='';renderAdminTab();showToast('Market created!');}
+  catch(e){alert(e.message);}
+}
+async function resolveMarket(id,outcome){
+  if(!confirm(`Resolve market as ${outcome}?`))return;
+  try{await api('POST','/markets/'+id+'/resolve',{outcome});await refreshUser();renderAdminTab();showToast(`Resolved as ${outcome}!`);}
+  catch(e){alert(e.message);}
+}
+async function closeMarket(id){await api('POST','/markets/'+id+'/close');renderAdminTab();}
+async function distributeCredits(){
+  const amount=parseInt(document.getElementById('weekly-credits').value);
+  if(!amount||amount<=0){alert('Enter a valid amount.');return;}
+  await api('POST','/admin/distribute-credits',{amount});await refreshUser();renderAdminTab();showToast(`Distributed ⬡${amount} to all students!`);
+}
+async function updateVolRate(){
+  const rate=parseInt(document.getElementById('vol-rate').value);
+  if(!rate||rate<=0){alert('Enter valid rate.');return;}
+  await api('POST','/admin/volunteer-rate',{rate});showToast(`Volunteer rate set to ⬡${rate}/hour`);renderAdminTab();
+}
+async function addStoreItem(){
+  const name=document.getElementById('store-item-name').value.trim(),icon=document.getElementById('store-item-icon').value.trim()||'🎁';
+  const cost=parseInt(document.getElementById('store-item-cost').value),description=document.getElementById('store-item-desc').value.trim();
+  if(!name||!cost){alert('Fill in name and cost.');return;}
+  await api('POST','/store',{name,icon,cost,description});
+  document.getElementById('store-item-name').value='';document.getElementById('store-item-icon').value='';document.getElementById('store-item-cost').value='';document.getElementById('store-item-desc').value='';
+  renderAdminTab();showToast('Store item added!');
+}
+async function removeStoreItem(id){await api('DELETE','/store/'+id);renderAdminTab();}
+async function addCreditsToUser(userId){
+  const amount=parseInt(document.getElementById('add-cred-'+userId).value);if(!amount||amount<=0)return;
+  try{await api('POST','/users/'+userId+'/add-credits',{amount});await refreshUser();renderAdminTab();showToast(`Added ⬡${amount}`);}
+  catch(e){alert(e.message);}
+}
+
+// BUY CREDITS
+function openBuyCredits(){
+  document.getElementById('buy-amount').value='';
+  document.getElementById('buy-preview').style.display='none';
+  document.getElementById('buy-modal').style.display='flex';
+}
+function closeBuyModal(event){
+  if(!event||event.target===document.getElementById('buy-modal'))document.getElementById('buy-modal').style.display='none';
+}
+function setBuyAmount(n){document.getElementById('buy-amount').value=n;updateBuyPreview();}
+function updateBuyPreview(){
+  const dollars=parseFloat(document.getElementById('buy-amount').value);
+  const preview=document.getElementById('buy-preview');
+  if(!dollars||dollars<=0){preview.style.display='none';return;}
+  const credits=Math.floor(dollars*CREDITS_PER_DOLLAR);
+  document.getElementById('buy-credits-preview').textContent='⬡ '+credits.toLocaleString();
+  preview.style.display='flex';
+}
+async function startCheckout(){
+  const dollars=parseFloat(document.getElementById('buy-amount').value);
+  if(!dollars||dollars<1){alert('Minimum purchase is $1.');return;}
+  const amountCents=Math.floor(dollars*100);
+  try{
+    const {url}=await api('POST','/credits/checkout',{amountCents});
+    window.location.href=url;
+  }catch(e){alert('Could not start checkout: '+e.message);}
+}
+
+function showToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--bg4);border:1px solid var(--border-hi);color:var(--text);padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);';
+  t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);
+}
+function showNotif(containerId,msg,type){
+  const el=document.getElementById(containerId);if(!el)return;
+  el.innerHTML=`<div class="notification ${type}">${msg}</div>`;
+  setTimeout(()=>{el.innerHTML='';},5000);
+}
+
+window.onload=async()=>{
+  if(authToken){try{await enterApp();}catch(e){localStorage.removeItem('ew_token');authToken=null;}}
+};
+</script>
+</body>
+</html>

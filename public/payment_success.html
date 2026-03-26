@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Success — Jewshi</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: #0a0a0f; color: #eeeef5; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+  .topbar { position: fixed; top: 0; left: 0; right: 0; background: #111118; border-bottom: 1px solid rgba(255,255,255,0.07); padding: 0 24px; height: 54px; display: flex; align-items: center; }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .brand span { color: #7c6af7; }
+  .card { background: #111118; border: 1px solid rgba(255,255,255,0.14); border-radius: 18px; padding: 44px 40px; width: 380px; text-align: center; }
+  .icon { font-size: 44px; margin-bottom: 18px; display: block; }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #eeeef5; margin-bottom: 8px; }
+  p { color: #8888a8; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+  .credits-badge { background: rgba(0,208,132,0.08); border: 1px solid rgba(0,208,132,0.2); color: #00d084; font-size: 26px; font-weight: 700; padding: 14px 28px; border-radius: 12px; display: inline-block; margin-bottom: 28px; letter-spacing: -0.01em; }
+  .btn { display: inline-block; background: #7c6af7; color: white; padding: 13px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px; transition: opacity 0.2s; }
+  .btn:hover { opacity: 0.88; }
+  .status { font-size: 12px; color: #55556a; margin-top: 18px; min-height: 18px; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(124,106,247,0.2); border-top-color: #7c6af7; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Jew<span>shi</span></div>
+  </div>
+
+  <div class="card">
+    <span class="icon" id="icon">⏳</span>
+    <h1 id="title">Confirming payment…</h1>
+    <p id="msg">Please wait while we verify your purchase.</p>
+    <div class="credits-badge" id="badge" style="display:none"></div>
+    <a href="/" class="btn" id="btn" style="display:none">Back to Jewshi</a>
+    <p class="status" id="status"><span class="spinner"></span> Verifying…</p>
+  </div>
+
+<script>
+const token = localStorage.getItem('ew_token');
+const params = new URLSearchParams(location.search);
+const sessionId = params.get('session_id');
+
+async function poll(attempts = 0) {
+  if (!token || !sessionId) {
+    document.getElementById('icon').textContent = '❌';
+    document.getElementById('title').textContent = 'Something went wrong';
+    document.getElementById('msg').textContent = 'Missing session info. Please go back and try again.';
+    document.getElementById('status').textContent = '';
+    document.getElementById('btn').style.display = 'inline-block';
+    return;
+  }
+  try {
+    const res = await fetch(`/api/credits/verify/${sessionId}`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (data.fulfilled) {
+      document.getElementById('icon').textContent = '✅';
+      document.getElementById('title').textContent = 'Credits added!';
+      document.getElementById('msg').textContent = 'Your purchase was successful. Credits have been added to your account.';
+      document.getElementById('badge').textContent = `+⬡ ${data.credits.toLocaleString()}`;
+      document.getElementById('badge').style.display = 'inline-block';
+      document.getElementById('btn').style.display = 'inline-block';
+      document.getElementById('status').textContent = '';
+    } else if (attempts < 8) {
+      document.getElementById('status').innerHTML = `<span class="spinner"></span> Verifying… (${attempts + 1}/8)`;
+      setTimeout(() => poll(attempts + 1), 2000);
+    } else {
+      document.getElementById('icon').textContent = '⚠️';
+      document.getElementById('title').textContent = 'Still processing';
+      document.getElementById('msg').textContent = 'Payment went through but credits may take a moment. Refresh the app in 30 seconds.';
+      document.getElementById('btn').style.display = 'inline-block';
+      document.getElementById('status').textContent = '';
+    }
+  } catch(e) {
+    if (attempts < 5) setTimeout(() => poll(attempts + 1), 3000);
+  }
+}
+
+poll();
+</script>
+</body>
+</html>
