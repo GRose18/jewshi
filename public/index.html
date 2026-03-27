@@ -193,27 +193,44 @@
       <div class="tagline">Prediction Markets</div>
     </div>
     <div id="auth-error" class="error-msg" style="display:none;"></div>
-    <div class="form-group"><label>Student ID</label><input type="text" id="login-id" placeholder="e.g. STUDENT-001"></div>
+    <div id="auth-success" class="notification success" style="display:none;"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
     <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">Sign In</button>
+    <div class="auth-toggle" style="margin-top:12px;"><a onclick="showForgotPassword()" style="color:var(--text3);font-size:12px;">Forgot password?</a></div>
     <div class="auth-toggle">No account? <a onclick="showRegister()">Register</a></div>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD SCREEN -->
+<div id="forgot-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="auth-card">
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Forgot Password</h2>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:20px;">Enter your email and we'll send a reset link.</p>
+    <div id="forgot-error" class="error-msg" style="display:none;"></div>
+    <div id="forgot-success" class="notification success" style="display:none;"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="forgot-email" placeholder="you@example.com"></div>
+    <button class="btn-primary" onclick="doForgotPassword()">Send Reset Link</button>
+    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideForgotPassword()">← Back to login</a></div>
   </div>
 </div>
 
 <div id="register-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="auth-card" style="max-height:90vh; overflow-y:auto;">
-    <h2 style="font-size:18px; font-weight:700; margin-bottom:20px; text-align:center; color:var(--text);">Create Account</h2>
+    <h2 style="font-size:18px; font-weight:700; margin-bottom:6px; text-align:center; color:var(--text);">Create Account</h2>
+    <p style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;">We'll send a verification email to activate your account.</p>
     <div id="reg-error" class="error-msg" style="display:none;"></div>
+    <div id="reg-success" class="notification success" style="display:none;"></div>
     <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
-    <div class="form-group"><label>Student ID</label><input type="text" id="reg-id" placeholder="e.g. EW-2025-042"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
     <div class="form-group"><label>Grade</label>
       <select id="reg-grade">
         <option>6th Grade</option><option>7th Grade</option><option>8th Grade</option>
         <option>9th Grade</option><option>10th Grade</option><option>11th Grade</option><option>12th Grade</option>
       </select>
     </div>
-    <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="Choose a password"></div>
-    <button class="btn-primary" onclick="doRegister()">Create Account</button>
+    <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="At least 6 characters"></div>
+    <button class="btn-primary" id="reg-btn" onclick="doRegister()">Create Account</button>
     <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideRegister()">← Back to login</a></div>
   </div>
 </div>
@@ -417,43 +434,95 @@ function lmsrSharesForCost(yQ, nQ, b, side, amt) {
 function getYesProb(m) { return lmsrPrice(m.yes_shares, m.no_shares, m.b_param); }
 
 async function doLogin() {
-  const id = document.getElementById('login-id').value.trim().toUpperCase();
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('auth-error');
+  const sucEl = document.getElementById('auth-success');
+  errEl.style.display='none'; sucEl.style.display='none';
   try {
-    const data = await api('POST', '/auth/login', { id, password });
-    authToken = data.token; localStorage.setItem('ew_token', authToken); currentUser = data.user; enterApp();
-  } catch(e) { const el=document.getElementById('auth-error'); el.textContent=e.message; el.style.display='block'; }
+    const data = await api('POST', '/auth/login', { email, password });
+    authToken = data.token;
+    localStorage.setItem('ew_token', authToken);
+    currentUser = data.user;
+    enterApp();
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
 }
 
 async function doRegister() {
-  const name=document.getElementById('reg-name').value.trim(), id=document.getElementById('reg-id').value.trim().toUpperCase();
-  const grade=document.getElementById('reg-grade').value, password=document.getElementById('reg-pass').value;
-  if(!name||!id||!password){showRegError('Please fill all fields.');return;}
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const grade = document.getElementById('reg-grade').value;
+  const password = document.getElementById('reg-pass').value;
+  if(!name||!email||!password){ showRegError('Please fill all fields.'); return; }
+  if(password.length < 6){ showRegError('Password must be at least 6 characters.'); return; }
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    const data=await api('POST','/auth/register',{id,name,password,grade});
-    authToken=data.token; localStorage.setItem('ew_token',authToken); currentUser=data.user; hideRegister(); enterApp();
-  } catch(e){showRegError(e.message);}
+    const data = await api('POST', '/auth/register', {name, email, password, grade});
+    document.getElementById('reg-error').style.display='none';
+    document.getElementById('reg-success').textContent = data.message;
+    document.getElementById('reg-success').style.display='block';
+    btn.style.display='none';
+    // Show resend option after a delay
+    setTimeout(()=>{
+      const resend = document.createElement('div');
+      resend.className='auth-toggle';
+      resend.style.marginTop='8px';
+      resend.innerHTML=`Didn't get it? <a onclick="doResendVerification('${email}')">Resend email</a>`;
+      document.getElementById('reg-success').after(resend);
+    }, 3000);
+  } catch(e) {
+    showRegError(e.message);
+    btn.disabled=false; btn.textContent='Create Account';
+  }
 }
 
-function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
-function showRegister(){document.getElementById('register-screen').style.display='flex';}
-function hideRegister(){document.getElementById('register-screen').style.display='none';}
+async function doResendVerification(email) {
+  try {
+    const data = await api('POST', '/auth/resend-verification', { email });
+    showToast(data.message);
+  } catch(e) { showToast('Could not resend: ' + e.message); }
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const errEl = document.getElementById('forgot-error');
+  const sucEl = document.getElementById('forgot-success');
+  errEl.style.display='none'; sucEl.style.display='none';
+  if(!email){ errEl.textContent='Please enter your email.'; errEl.style.display='block'; return; }
+  try {
+    const data = await api('POST', '/auth/forgot-password', { email });
+    sucEl.textContent = data.message;
+    sucEl.style.display='block';
+  } catch(e) { errEl.textContent=e.message; errEl.style.display='block'; }
+}
+
+function showRegError(msg){ const el=document.getElementById('reg-error'); el.textContent=msg; el.style.display='block'; }
+function showRegister(){ document.getElementById('register-screen').style.display='flex'; }
+function hideRegister(){ document.getElementById('register-screen').style.display='none'; }
+function showForgotPassword(){ document.getElementById('forgot-screen').style.display='flex'; }
+function hideForgotPassword(){ document.getElementById('forgot-screen').style.display='none'; }
 
 function doLogout(){
-  authToken=null;currentUser=null;localStorage.removeItem('ew_token');
+  authToken=null; currentUser=null; localStorage.removeItem('ew_token');
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').style.display='flex';
-  document.getElementById('login-id').value='';document.getElementById('login-pass').value='';
+  document.getElementById('login-email').value='';
+  document.getElementById('login-pass').value='';
   document.getElementById('auth-error').style.display='none';
+  document.getElementById('auth-success').style.display='none';
 }
 
 async function enterApp(){
-  currentUser=await api('GET','/me');
+  currentUser = await api('GET', '/me');
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='block');
   updateTopbar(); renderMarkets();
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();}});
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeBetModal();closeBuyModal();} });
 }
 
 function updateTopbar(){
@@ -728,7 +797,70 @@ function showNotif(containerId,msg,type){
   setTimeout(()=>{el.innerHTML='';},5000);
 }
 
+function showResetPasswordModal(token) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="auth-card" style="max-width:400px;" onclick="event.stopPropagation()">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Reset Password</h2>
+      <p style="font-size:13px;color:var(--text3);margin-bottom:20px;">Choose a new password for your account.</p>
+      <div id="reset-error" class="error-msg" style="display:none;"></div>
+      <div id="reset-success" class="notification success" style="display:none;"></div>
+      <div class="form-group"><label>New Password</label><input type="password" id="reset-pass" placeholder="At least 6 characters"></div>
+      <div class="form-group"><label>Confirm Password</label><input type="password" id="reset-pass2" placeholder="Repeat password"></div>
+      <button class="btn-primary" id="reset-btn" onclick="doResetPassword('${token}')">Update Password</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
+async function doResetPassword(token) {
+  const pass = document.getElementById('reset-pass').value;
+  const pass2 = document.getElementById('reset-pass2').value;
+  const errEl = document.getElementById('reset-error');
+  const sucEl = document.getElementById('reset-success');
+  errEl.style.display='none';
+  if(pass.length < 6){ errEl.textContent='Password must be at least 6 characters.'; errEl.style.display='block'; return; }
+  if(pass !== pass2){ errEl.textContent='Passwords do not match.'; errEl.style.display='block'; return; }
+  const btn = document.getElementById('reset-btn');
+  btn.disabled=true; btn.textContent='Updating…';
+  try{
+    const data = await api('POST', '/auth/reset-password', { token, password: pass });
+    sucEl.textContent = data.message + ' You can now close this and sign in.';
+    sucEl.style.display='block';
+    btn.style.display='none';
+  }catch(e){ errEl.textContent=e.message; errEl.style.display='block'; btn.disabled=false; btn.textContent='Update Password'; }
+}
+
 window.onload=async()=>{
+  // Handle email verification token in URL (e.g. ?verify=TOKEN)
+  const params = new URLSearchParams(window.location.search);
+  const verifyToken = params.get('verify');
+  if(verifyToken){
+    try{
+      const data = await api('GET', '/auth/verify-email?token=' + encodeURIComponent(verifyToken));
+      authToken = data.token;
+      localStorage.setItem('ew_token', authToken);
+      currentUser = data.user;
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+      await enterApp();
+      showToast('✅ Email verified! Welcome to Jewshi.');
+      return;
+    }catch(e){
+      // Show error on login screen
+      const errEl = document.getElementById('auth-error');
+      errEl.textContent = e.message || 'Verification failed. The link may have expired.';
+      errEl.style.display = 'block';
+    }
+  }
+  // Handle password reset token in URL (e.g. ?reset=TOKEN)
+  const resetToken = params.get('reset');
+  if(resetToken){
+    showResetPasswordModal(resetToken);
+    return;
+  }
   if(authToken){try{await enterApp();}catch(e){localStorage.removeItem('ew_token');authToken=null;}}
 };
 </script>

@@ -8,6 +8,7 @@
     "dev": "npx nodemon server.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
