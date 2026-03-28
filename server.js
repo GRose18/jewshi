@@ -19,7 +19,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── TURSO DB ──
 let db;
 
 async function initDB() {
@@ -99,10 +98,10 @@ async function seedIfEmpty() {
   const row = await db.get('SELECT COUNT(*) as c FROM users');
   if (row.c > 0) return;
   const users = [
-    { id: 'GROSE',       name: 'Administrator', email: process.env.ADMIN_EMAIL || 'admin@jewshi.com',   password: 'BryceB0mb!', role: 'admin',   credits: 0,   grade: '' },
-    { id: 'STUDENT-001', name: 'Blake Gubitz',  email: 'blake@jewshi.com',    password: 'daren',      role: 'student', credits: 500, grade: '' },
-    { id: 'STUDENT-002', name: 'Student 002',   email: 'student2@jewshi.com', password: 'Hello123',   role: 'student', credits: 500, grade: '' },
-    { id: 'STUDENT-003', name: 'Student 003',   email: 'student3@jewshi.com', password: 'BigIce',     role: 'student', credits: 500, grade: '' },
+    { id: 'GROSE',       name: 'Administrator', email: 'grose@emeryweiner.org', password: 'BryceB0mb!', role: 'admin',   credits: 0,   grade: '' },
+    { id: 'STUDENT-001', name: 'Blake Gubitz',  email: 'blake@jewshi.com',      password: 'daren',      role: 'student', credits: 500, grade: '' },
+    { id: 'STUDENT-002', name: 'Student 002',   email: 'student2@jewshi.com',   password: 'Hello123',   role: 'student', credits: 500, grade: '' },
+    { id: 'STUDENT-003', name: 'Student 003',   email: 'student3@jewshi.com',   password: 'BigIce',     role: 'student', credits: 500, grade: '' },
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
@@ -127,31 +126,23 @@ async function seedIfEmpty() {
   console.log('Database seeded.');
 }
 
-// ── GOOGLE SHEETS ──
 async function appendToSheet(name, email, grade) {
   try {
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_SHEET_ID) {
-      console.log(`[Sheets] Not configured — skipping sheet append for ${email}`);
+      console.log(`[Sheets] Not configured — skipping for ${email}`);
       return;
     }
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+    const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = google.sheets({ version: 'v4', auth });
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: 'Sheet1!A:D',
       valueInputOption: 'RAW',
-      requestBody: {
-        values: [[name, email, grade, new Date().toLocaleString()]],
-      },
+      requestBody: { values: [[name, email, grade, new Date().toLocaleString()]] },
     });
-    console.log(`[Sheets] Appended ${name} (${email}) to sheet`);
-  } catch(e) {
-    console.error('[Sheets] Error:', e.message);
-  }
+    console.log(`[Sheets] Appended ${name} (${email})`);
+  } catch(e) { console.error('[Sheets] Error:', e.message); }
 }
 
 function generateId(p='') { return p+Date.now()+Math.random().toString(36).slice(2,6); }
@@ -251,10 +242,7 @@ app.post('/api/auth/register', async(req,res)=>{
     await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
       [uid, name.trim(), trimmedEmail, hash, 'student', 200, grade||'']);
     await recordTx(uid, 200, 'signup_bonus', null, 'Welcome bonus');
-
-    // Append to Google Sheet (non-blocking)
     appendToSheet(name.trim(), trimmedEmail, grade||'');
-
     const token = jwt.sign({id:uid,role:'student'}, JWT_SECRET, {expiresIn:'30d'});
     const user = await db.get('SELECT id,name,email,role,credits,grade FROM users WHERE id=?',[uid]);
     res.json({token, user, message:'Account created!'});
@@ -299,7 +287,7 @@ app.get('/api/me', authMiddleware, async(req,res)=>{
   res.json(user);
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,email,role,credits,grade FROM users WHERE role='student'"));
+  res.json(await db.all("SELECT id,name,email,role,credits,grade FROM users WHERE role!='admin' OR id!='GROSE'"));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -317,6 +305,31 @@ app.post('/api/users/:id/remove-credits', authMiddleware, adminOnly, async(req,r
     await db.run('UPDATE users SET credits=MAX(0,credits-?) WHERE id=?',[amount,req.params.id]);
     await recordTx(req.params.id,-amount,'admin_deduct',null,`Admin removed ${amount}`);
     res.json(await db.get('SELECT id,name,credits FROM users WHERE id=?',[req.params.id]));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/users/:id/make-admin', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    await db.run("UPDATE users SET role='admin' WHERE id=?",[req.params.id]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/users/:id/make-student', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(req.params.id==='GROSE') return res.status(400).json({error:'Cannot demote primary admin'});
+    await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {id} = req.params;
+    if(id==='GROSE') return res.status(400).json({error:'Cannot delete primary admin'});
+    await db.run('DELETE FROM bets WHERE user_id=?',[id]);
+    await db.run('DELETE FROM transactions WHERE user_id=?',[id]);
+    await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
+    await db.run('DELETE FROM stripe_sessions WHERE user_id=?',[id]);
+    await db.run('DELETE FROM users WHERE id=?',[id]);
+    res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 

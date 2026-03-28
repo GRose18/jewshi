@@ -149,6 +149,7 @@
   .btn-admin:hover { opacity: 0.85; }
   .btn-danger { background: var(--red) !important; color: #fff !important; }
   .btn-success { background: var(--green) !important; color: #000 !important; }
+  .btn-warning { background: var(--gold) !important; color: #000 !important; }
   .btn-sm { padding: 4px 10px !important; font-size: 11px !important; border-radius: 6px !important; }
   .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
   @media (max-width: 768px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
@@ -184,7 +185,6 @@
 </head>
 <body>
 
-<!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">
@@ -201,7 +201,6 @@
   </div>
 </div>
 
-<!-- FORGOT PASSWORD -->
 <div id="forgot-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="auth-card">
     <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Forgot Password</h2>
@@ -214,7 +213,6 @@
   </div>
 </div>
 
-<!-- REGISTER -->
 <div id="register-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="auth-card" style="max-height:90vh; overflow-y:auto;">
     <h2 style="font-size:18px; font-weight:700; margin-bottom:6px; text-align:center; color:var(--text);">Create Account</h2>
@@ -234,7 +232,6 @@
   </div>
 </div>
 
-<!-- MAIN APP -->
 <div id="app">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:20px;">
@@ -691,14 +688,28 @@ async function renderAdminTab(){
     <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-size:20px;">${item.icon}</span><span style="flex:1;font-size:13px;color:var(--text)">${item.name} — ⬡${item.cost}</span>
       <button class="btn-admin btn-sm btn-danger" onclick="removeStoreItem('${item.id}')">Remove</button></div>`).join('')||'<p style="color:var(--text3);font-size:13px;">No items.</p>';
-  document.getElementById('admin-users-list').innerHTML=`<table class="portfolio-table"><thead><tr><th>Name</th><th>ID</th><th>Grade</th><th>Balance</th><th>Adjust Credits</th></tr></thead><tbody>${users.map(u=>`<tr>
-    <td style="color:var(--text)">${u.name||'—'}</td><td style="color:var(--text3)">${u.id}</td><td>${u.grade||'—'}</td><td style="color:var(--green)">⬡ ${u.credits.toLocaleString()}</td>
-    <td style="display:flex;gap:6px;align-items:center;">
-      <input type="number" id="add-cred-${u.id}" placeholder="0" style="width:70px;padding:4px 8px;font-size:12px;">
-      <button class="btn-admin btn-sm btn-success" onclick="addCreditsToUser('${u.id}')">Add</button>
-      <button class="btn-admin btn-sm btn-danger" onclick="removeCreditsFromUser('${u.id}')">Remove</button>
-    </td>
-  </tr>`).join('')}</tbody></table>`;
+  document.getElementById('admin-users-list').innerHTML=`
+    <table class="portfolio-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
+      <tbody>${users.map(u=>`<tr>
+        <td style="color:var(--text)">${u.name||'—'}</td>
+        <td style="color:var(--text3);font-size:12px;">${u.email||'—'}</td>
+        <td>${u.grade||'—'}</td>
+        <td><span class="history-pill" style="background:${u.role==='admin'?'var(--accent-bg)':'var(--bg4)'};color:${u.role==='admin'?'var(--accent)':'var(--text3)'}">${u.role}</span></td>
+        <td style="color:var(--green)">⬡ ${u.credits.toLocaleString()}</td>
+        <td>
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+            <input type="number" id="add-cred-${u.id}" placeholder="amt" style="width:60px;padding:4px 6px;font-size:11px;">
+            <button class="btn-admin btn-sm btn-success" onclick="addCreditsToUser('${u.id}')">Add</button>
+            <button class="btn-admin btn-sm btn-danger" onclick="removeCreditsFromUser('${u.id}')">Remove</button>
+            ${u.role==='student'
+              ? `<button class="btn-admin btn-sm btn-warning" onclick="makeAdmin('${u.id}')">Make Admin</button>`
+              : `<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="makeStudent('${u.id}')">Demote</button>`}
+            <button class="btn-admin btn-sm btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
+          </div>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
   document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
     :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
       <td style="color:var(--text)">${t.user_name||t.user_id}</td>
@@ -741,6 +752,7 @@ async function addStoreItem(){
   renderAdminTab();showToast('Store item added!');
 }
 async function removeStoreItem(id){await api('DELETE','/store/'+id);renderAdminTab();}
+
 async function addCreditsToUser(userId){
   const amount=parseInt(document.getElementById('add-cred-'+userId).value);if(!amount||amount<=0)return;
   try{await api('POST','/users/'+userId+'/add-credits',{amount});await refreshUser();renderAdminTab();showToast(`Added ⬡${amount}`);}
@@ -750,6 +762,21 @@ async function removeCreditsFromUser(userId){
   const amount=parseInt(document.getElementById('add-cred-'+userId).value);if(!amount||amount<=0)return;
   if(!confirm(`Remove ⬡${amount} from this user?`))return;
   try{await api('POST','/users/'+userId+'/remove-credits',{amount});await refreshUser();renderAdminTab();showToast(`Removed ⬡${amount}`);}
+  catch(e){alert(e.message);}
+}
+async function makeAdmin(userId){
+  if(!confirm(`Make ${userId} an admin?`))return;
+  try{await api('POST','/users/'+userId+'/make-admin');renderAdminTab();showToast(`${userId} is now an admin.`);}
+  catch(e){alert(e.message);}
+}
+async function makeStudent(userId){
+  if(!confirm(`Demote ${userId} to student?`))return;
+  try{await api('POST','/users/'+userId+'/make-student');renderAdminTab();showToast(`${userId} demoted to student.`);}
+  catch(e){alert(e.message);}
+}
+async function deleteUser(userId){
+  if(!confirm(`Permanently delete ${userId}? This cannot be undone.`))return;
+  try{await api('DELETE','/users/'+userId);renderAdminTab();showToast(`User ${userId} deleted.`);}
   catch(e){alert(e.message);}
 }
 
