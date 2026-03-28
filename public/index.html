@@ -351,7 +351,7 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
-    <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">Feed</div>
+    <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
@@ -810,13 +810,21 @@ function updateBetSummary(){
   if(!currentBetMarket)return;
   const amount=parseFloat(document.getElementById('bet-amount').value);
   if(!amount||amount<=0){document.getElementById('bet-summary').innerHTML='';return;}
-  const m=currentBetMarket,myPct=getMyPercent(m,currentBetSide),pool=(m.pool||0)+amount;
-  const payout=myPct>0?Math.round(pool*(myPct/100)):amount;
+  const m=currentBetMarket;
+  const isOU=m.market_type==='overunder';
+  const mySidePool=isOU
+    ?(currentBetSide==='OVER'?(m.over_shares||0):(m.under_shares||0))
+    :(currentBetSide==='YES'?(m.yes_shares||0):(m.no_shares||0));
+  const totalPool=(m.pool||0)+amount;
+  const mySideTotal=mySidePool+amount;
+  const payout=Math.round((amount/mySideTotal)*totalPool);
+  const profit=payout-amount;
   document.getElementById('bet-summary').innerHTML=`
     <div class="bet-summary-row"><span>Bet amount</span><span>⬡ ${amount}</span></div>
-    <div class="bet-summary-row"><span>Current ${currentBetSide} share</span><span>${myPct}%</span></div>
-    <div class="bet-summary-row"><span>Pool after bet</span><span>⬡ ${pool.toLocaleString()}</span></div>
-    <div class="bet-summary-row total"><span>Potential payout</span><span style="color:var(--green)">⬡ ${payout}</span></div>`;
+    <div class="bet-summary-row"><span>${currentBetSide} pool after bet</span><span>⬡ ${mySideTotal.toLocaleString()}</span></div>
+    <div class="bet-summary-row"><span>Total pool after bet</span><span>⬡ ${totalPool.toLocaleString()}</span></div>
+    <div class="bet-summary-row"><span>Your share of ${currentBetSide} pool</span><span>${Math.round((amount/mySideTotal)*100)}%</span></div>
+    <div class="bet-summary-row total"><span>Potential payout</span><span style="color:var(--green)">⬡ ${payout} (+${profit})</span></div>`;
   const balAfter=currentUser.credits-amount;
   document.getElementById('balance-after').textContent=balAfter>=0?'⬡ '+balAfter.toLocaleString():'⚠ Insufficient';
 }
@@ -849,8 +857,7 @@ async function renderFeed(){
       </div>
     </div>`;
   } else { composeWrap.innerHTML=''; }
-  await loadJewGram();
-  await loadFeed();
+  await Promise.all([loadJewGram(), loadFeed()]);
 }
 
 async function loadJewGram(){
@@ -1187,7 +1194,7 @@ async function renderAdminTab(){
           <button class="btn-admin btn-sm btn-danger" onclick="resolveMarket('${m.id}','NO')">Resolve NO</button>
           <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="closeMarket('${m.id}')">Close</button>
           <button class="btn-admin btn-sm btn-danger" onclick="deleteMarket('${m.id}')">Delete</button>
-        `):`<span class="status-tag status-closed">${m.status}</span>`}
+        `):`<button class="btn-admin btn-sm btn-danger" onclick="deleteMarket('${m.id}')">Delete</button>`}
       </div></div>`;
   }).join('')||'<p style="color:var(--text3);font-size:13px;">No markets.</p>';
 

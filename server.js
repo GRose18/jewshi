@@ -586,30 +586,38 @@ app.get('/api/messages/users', authMiddleware, async(req,res)=>{
 // ── POSTS / FEED ──
 app.get('/api/feed', authMiddleware, async(req,res)=>{
   try{
-    // Get original admin posts
-    const posts=await db.all(`SELECT p.*,u.name as author_name,u.role as author_role FROM posts p JOIN users u ON p.user_id=u.id ORDER BY p.timestamp DESC LIMIT 50`);
-    // Get reposts
-    const reposts=await db.all(`SELECT r.*,u.name as reposter_name,p.caption as original_caption,pu.name as original_author FROM post_reposts r JOIN users u ON r.user_id=u.id JOIN posts p ON r.post_id=p.id JOIN users pu ON p.user_id=pu.id ORDER BY r.timestamp DESC LIMIT 50`);
-    // Merge and sort
+    const [posts, reposts, allLikes, allReposts] = await Promise.all([
+      db.all(`SELECT p.*,u.name as author_name,u.role as author_role FROM posts p JOIN users u ON p.user_id=u.id ORDER BY p.timestamp DESC LIMIT 50`),
+      db.all(`SELECT r.*,u.name as reposter_name,p.caption as original_caption,pu.name as original_author FROM post_reposts r JOIN users u ON r.user_id=u.id JOIN posts p ON r.post_id=p.id JOIN users pu ON p.user_id=pu.id ORDER BY r.timestamp DESC LIMIT 50`),
+      db.all(`SELECT post_id, COUNT(*) as c FROM post_likes GROUP BY post_id`),
+      db.all(`SELECT post_id, COUNT(*) as c FROM post_reposts GROUP BY post_id`),
+    ]);
+
+    const userLikes=new Set(
+      (await db.all(`SELECT post_id FROM post_likes WHERE user_id=?`,[req.user.id])).map(r=>r.post_id)
+    );
+
+    const likeCounts=Object.fromEntries(allLikes.map(r=>[r.post_id,r.c]));
+    const repostCounts=Object.fromEntries(allReposts.map(r=>[r.post_id,r.c]));
+
     const feed=[
-      ...posts.map(p=>({...p,feed_type:'post',feed_time:p.timestamp})),
-      ...reposts.map(r=>({...r,feed_type:'repost',feed_time:r.timestamp})),
+      ...posts.map(p=>({
+        ...p,
+        feed_type:'post',
+        feed_time:p.timestamp,
+        like_count:likeCounts[p.id]||0,
+        user_liked:userLikes.has(p.id),
+        repost_count:repostCounts[p.id]||0,
+      })),
+      ...reposts.map(r=>({
+        ...r,
+        feed_type:'repost',
+        feed_time:r.timestamp,
+        like_count:likeCounts[r.post_id]||0,
+        user_liked:userLikes.has(r.post_id),
+      })),
     ].sort((a,b)=>b.feed_time-a.feed_time).slice(0,50);
-    // Add like counts and whether current user liked
-    for(const item of feed){
-      if(item.feed_type==='post'){
-        const likeCount=await db.get('SELECT COUNT(*) as c FROM post_likes WHERE post_id=?',[item.id]);
-        const userLiked=await db.get('SELECT id FROM post_likes WHERE post_id=? AND user_id=?',[item.id,req.user.id]);
-        item.like_count=likeCount.c;
-        item.user_liked=!!userLiked;
-        item.repost_count=(await db.get('SELECT COUNT(*) as c FROM post_reposts WHERE post_id=?',[item.id])).c;
-      } else {
-        const likeCount=await db.get('SELECT COUNT(*) as c FROM post_likes WHERE post_id=?',[item.post_id]);
-        const userLiked=await db.get('SELECT id FROM post_likes WHERE post_id=? AND user_id=?',[item.post_id,req.user.id]);
-        item.like_count=likeCount.c;
-        item.user_liked=!!userLiked;
-      }
-    }
+
     res.json(feed);
   }catch(e){res.status(500).json({error:e.message});}
 });
