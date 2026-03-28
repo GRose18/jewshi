@@ -118,6 +118,7 @@ async function seedIfEmpty() {
   await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     ['m2','Will the school play open on time?','School','open','2025-05-15',0,0,100,0,Date.now(),'binary']);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password','jewshi2025')");
   console.log('Database seeded.');
 }
 
@@ -151,24 +152,54 @@ function authMiddleware(req,res,next) {
   catch { res.status(401).json({error:'Invalid token'}); }
 }
 
-// ── Admin check hits DB so role changes take effect immediately ──
 async function adminOnly(req,res,next) {
   const user = await db.get('SELECT role FROM users WHERE id=?',[req.user.id]);
   if (!user || user.role !== 'admin') return res.status(403).json({error:'Admin only'});
   next();
 }
 
-// Pool-based percentage helpers
+function isGrose(req) { return req.user.id === 'GROSE'; }
+
 function getYesPercent(m) {
   const total = (m.yes_shares||0) + (m.no_shares||0);
-  if (total === 0) return 50;
-  return Math.round((m.yes_shares / total) * 100);
+  return total===0 ? 50 : Math.round((m.yes_shares/total)*100);
 }
 function getOverPercent(m) {
   const total = (m.over_shares||0) + (m.under_shares||0);
-  if (total === 0) return 50;
-  return Math.round((m.over_shares / total) * 100);
+  return total===0 ? 50 : Math.round((m.over_shares/total)*100);
 }
+
+// ── ACCESS PASSWORD ──
+app.post('/api/access/verify', authMiddleware, async(req,res)=>{
+  try{
+    const {password} = req.body;
+    const row = await db.get("SELECT value FROM settings WHERE key='access_password'");
+    const correct = row?.value || 'jewshi2025';
+    if(password === correct) res.json({success:true});
+    else res.status(401).json({error:'Wrong password'});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/access-password', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can change the access password'});
+    const {password} = req.body;
+    if(!password||password.length<4) return res.status(400).json({error:'Password too short'});
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('access_password',?)",[password]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+// ── LIVE FEED ──
+app.get('/api/live', async(req,res)=>{
+  try{
+    const totalCredits = (await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s || 0;
+    const activePlayers = (await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c || 0;
+    const markets = await db.all("SELECT id,question,category,close_date,pool,yes_shares,no_shares,over_shares,under_shares,market_type,line,status FROM markets WHERE status='open' ORDER BY created_at DESC");
+    const totalBets = (await db.get("SELECT COUNT(*) as c FROM bets WHERE status='active'")).c || 0;
+    res.json({ totalCredits, activePlayers, markets, totalBets });
+  }catch(e){res.status(500).json({error:e.message});}
+});
 
 // ── STRIPE ──
 app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
@@ -303,10 +334,12 @@ app.post('/api/users/:id/remove-credits', authMiddleware, adminOnly, async(req,r
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/users/:id/make-admin', authMiddleware, adminOnly, async(req,res)=>{
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can promote users'});
   await db.run("UPDATE users SET role='admin' WHERE id=?",[req.params.id]);
   res.json({success:true});
 });
 app.post('/api/users/:id/make-student', authMiddleware, adminOnly, async(req,res)=>{
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can demote users'});
   if(req.params.id==='GROSE') return res.status(400).json({error:'Cannot demote primary admin'});
   await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
   res.json({success:true});
@@ -337,9 +370,9 @@ app.get('/api/markets/:id', authMiddleware, async(req,res)=>{
 });
 app.post('/api/markets', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    const {question,category,closeDate,liquidity,market_type,line}=req.body;
+    const {question,category,closeDate,market_type,line}=req.body;
     if(!question||!closeDate) return res.status(400).json({error:'Missing fields'});
-    if(market_type==='overunder'&&(line===undefined||line===null)) return res.status(400).json({error:'Line required for over/under'});
+    if(market_type==='overunder'&&(line===undefined||line===null)) return res.status(400).json({error:'Line required'});
     const id=generateId('m');
     if(market_type==='overunder'){
       await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type,line,over_shares,under_shares) VALUES (?,?,?,'open',?,0,0,100,0,?,?,?,0,0)`,
@@ -351,8 +384,6 @@ app.post('/api/markets', authMiddleware, adminOnly, async(req,res)=>{
     res.json(await db.get('SELECT * FROM markets WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
-
-// Resolve binary market
 app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {outcome}=req.body;
@@ -372,15 +403,12 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
     res.json({success:true,outcome});
   }catch(e){res.status(500).json({error:e.message});}
 });
-
-// Resolve over/under market with actual result
 app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {actual}=req.body;
     if(actual===undefined||actual===null) return res.status(400).json({error:'Actual result required'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
     if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
-    if(m.market_type!=='overunder') return res.status(400).json({error:'Not an over/under market'});
     const outcome = parseFloat(actual) > parseFloat(m.line) ? 'OVER' : 'UNDER';
     await db.run('UPDATE markets SET status=? WHERE id=?',[`resolved-${outcome.toLowerCase()}`,m.id]);
     const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
@@ -395,7 +423,6 @@ app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(
     res.json({success:true,outcome,actual,line:m.line});
   }catch(e){res.status(500).json({error:e.message});}
 });
-
 app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
   await db.run("UPDATE markets SET status='closed' WHERE id=?",[req.params.id]);
   res.json({success:true});
@@ -410,15 +437,9 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
     if(user.credits<amount) return res.status(400).json({error:'Insufficient credits'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[marketId]);
     if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
-
-    // Validate side based on market type
-    if(m.market_type==='overunder' && !['OVER','UNDER'].includes(side))
-      return res.status(400).json({error:'Side must be OVER or UNDER'});
-    if(m.market_type==='binary' && !['YES','NO'].includes(side))
-      return res.status(400).json({error:'Side must be YES or NO'});
-
+    if(m.market_type==='overunder'&&!['OVER','UNDER'].includes(side)) return res.status(400).json({error:'Side must be OVER or UNDER'});
+    if(m.market_type==='binary'&&!['YES','NO'].includes(side)) return res.status(400).json({error:'Side must be YES or NO'});
     await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,user.id]);
-
     if(m.market_type==='overunder'){
       if(side==='OVER') await db.run('UPDATE markets SET over_shares=over_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
       else await db.run('UPDATE markets SET under_shares=under_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
@@ -426,7 +447,6 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
       if(side==='YES') await db.run('UPDATE markets SET yes_shares=yes_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
       else await db.run('UPDATE markets SET no_shares=no_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
     }
-
     const betId=generateId('b');
     await db.run("INSERT INTO bets (id,user_id,market_id,side,amount,shares,status,timestamp) VALUES (?,?,?,?,?,?,'active',?)",
       [betId,user.id,marketId,side,amount,amount,Date.now()]);
@@ -434,7 +454,6 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
     res.json({betId,shares:amount,newBalance:user.credits-amount});
   }catch(e){res.status(400).json({error:e.message});}
 });
-
 app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
   res.json(await db.all(`
     SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,
@@ -493,10 +512,8 @@ app.post('/api/messages', authMiddleware, async(req,res)=>{
 });
 app.get('/api/messages/conversations', authMiddleware, async(req,res)=>{
   try{
-    const rows = await db.all(`
-      SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id
-      FROM messages WHERE sender_id=? OR recipient_id=?
-    `,[req.user.id, req.user.id, req.user.id]);
+    const rows = await db.all(`SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id FROM messages WHERE sender_id=? OR recipient_id=?`,
+      [req.user.id, req.user.id, req.user.id]);
     const conversations = [];
     for(const row of rows){
       const other = await db.get('SELECT id,name,grade,role FROM users WHERE id=?',[row.other_id]);

@@ -21,6 +21,8 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+  /* ── AUTH ── */
   #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center}
   .auth-card{background:var(--bg2);border:1px solid var(--border-hi);border-radius:18px;padding:44px 40px;width:400px;box-shadow:var(--shadow-lg)}
   .auth-logo{text-align:center;margin-bottom:32px}
@@ -38,6 +40,35 @@
   .auth-toggle{text-align:center;margin-top:16px;font-size:13px;color:var(--text3)}
   .auth-toggle a{color:var(--accent);cursor:pointer;font-weight:500}
   .error-msg{background:var(--red-bg);border:1px solid var(--red-dim);color:var(--red);padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:14px}
+
+  /* ── LIVE / ACCESS GATE ── */
+  #live-screen{display:none;min-height:100vh;background:#000;color:#fff;font-family:'Inter',sans-serif}
+  .live-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:40px 20px}
+  .live-brand{font-size:52px;font-weight:700;letter-spacing:-0.04em;margin-bottom:4px}
+  .live-brand span{color:#7c6af7}
+  .live-tagline{font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:#222;margin-bottom:60px}
+  .live-stats{display:flex;gap:60px;margin-bottom:60px;flex-wrap:wrap;justify-content:center}
+  .live-stat{text-align:center}
+  .live-stat-num{font-size:48px;font-weight:700;letter-spacing:-0.03em;color:#fff;font-variant-numeric:tabular-nums}
+  .live-stat-label{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#222;margin-top:6px}
+  .live-markets{width:100%;max-width:600px;margin-bottom:60px}
+  .live-market-row{border-top:1px solid #111;padding:20px 0;display:flex;justify-content:space-between;align-items:center;gap:20px}
+  .live-market-row:last-child{border-bottom:1px solid #111}
+  .live-market-q{font-size:14px;font-weight:500;color:#444}
+  .live-countdown{font-size:22px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:#fff}
+  .live-countdown.urgent{color:#ff4560}
+  .live-countdown.soon{color:#f0c040}
+  .live-dot{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#222;margin-bottom:40px}
+  .dot{width:5px;height:5px;border-radius:50%;background:#00d084;animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}
+  .access-gate{display:flex;flex-direction:column;align-items:center;gap:16px;margin-top:20px}
+  .access-input{background:transparent;border:none;border-bottom:1px solid #222;color:#fff;font-family:'Inter',sans-serif;font-size:20px;padding:8px 0;outline:none;text-align:center;width:220px;letter-spacing:0.15em}
+  .access-input::placeholder{color:#1a1a1a}
+  .access-input:focus{border-bottom-color:#7c6af7}
+  .access-hint{font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#1a1a1a}
+  .access-error{font-size:11px;color:#ff4560;letter-spacing:0.05em}
+
+  /* ── APP ── */
   #app{display:none;min-height:100vh}
   .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
   .topbar-brand{font-size:19px;font-weight:700;letter-spacing:-0.02em}
@@ -93,7 +124,7 @@
   .bet-amount-row input{flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:16px;font-family:'Inter',sans-serif;color:var(--text);outline:none}
   .bet-amount-row input:focus{border-color:var(--accent)}
   .quick-amounts{display:flex;gap:8px;margin-bottom:16px}
-  .quick-btn{padding:5px 12px;border:1px solid var(--border-hi);border-radius:20px;background:var(--bg3);cursor:pointer;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;color:var(--text2);transition:all 0.15s}
+  .quick-btn{padding:5px 12px;border:1px solid var(--border-hi);border-radius:20px;background:var(--bg3);cursor:pointer;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;color:var(--text2)}
   .quick-btn:hover{background:var(--bg4);color:var(--text)}
   .bet-summary{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px;font-size:13px}
   .bet-summary-row{display:flex;justify-content:space-between;padding:3px 0;color:var(--text2)}
@@ -119,14 +150,14 @@
   .store-item-name{font-size:14px;font-weight:600;margin-bottom:4px;color:var(--text)}
   .store-item-desc{font-size:12px;color:var(--text3);margin-bottom:14px}
   .store-item-cost{font-size:18px;font-weight:700;color:var(--green);margin-bottom:12px}
-  .btn-redeem{width:100%;padding:9px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity 0.2s}
+  .btn-redeem{width:100%;padding:9px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
   .btn-redeem:hover{opacity:0.85}
   .btn-redeem:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed;opacity:1}
   .admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
   @media(max-width:768px){.admin-grid{grid-template-columns:1fr}}
   .admin-form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
   .admin-form-row .form-group{flex:1;min-width:130px;margin-bottom:0}
-  .btn-admin{padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity 0.2s}
+  .btn-admin{padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
   .btn-admin:hover{opacity:0.85}
   .btn-danger{background:var(--red)!important;color:#fff!important}
   .btn-success{background:var(--green)!important;color:#000!important}
@@ -154,7 +185,7 @@
   .buy-input-wrap input{width:100%;padding:14px 14px 14px 30px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:22px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none}
   .buy-input-wrap input:focus{border-color:var(--accent)}
   .buy-quick{display:flex;gap:8px;margin-bottom:18px}
-  .buy-quick button{flex:1;padding:7px;border:1px solid var(--border-hi);border-radius:8px;background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s}
+  .buy-quick button{flex:1;padding:7px;border:1px solid var(--border-hi);border-radius:8px;background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
   .buy-quick button:hover{background:var(--bg4);color:var(--text);border-color:var(--accent)}
   .buy-preview{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
   .buy-preview .label{font-size:13px;color:var(--text2)}
@@ -165,6 +196,7 @@
 </head>
 <body>
 
+<!-- AUTH -->
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">
@@ -181,6 +213,7 @@
   </div>
 </div>
 
+<!-- FORGOT PASSWORD -->
 <div id="forgot-screen" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div class="auth-card">
     <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Forgot Password</h2>
@@ -189,10 +222,11 @@
     <div id="forgot-success" class="notification success" style="display:none;"></div>
     <div class="form-group"><label>Email</label><input type="email" id="forgot-email" placeholder="you@example.com"></div>
     <button class="btn-primary" onclick="doForgotPassword()">Send Reset Link</button>
-    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideForgotPassword()">← Back to login</a></div>
+    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideForgotPassword()">← Back</a></div>
   </div>
 </div>
 
+<!-- REGISTER -->
 <div id="register-screen" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div class="auth-card" style="max-height:90vh;overflow-y:auto;">
     <h2 style="font-size:18px;font-weight:700;margin-bottom:6px;text-align:center;color:var(--text);">Create Account</h2>
@@ -205,10 +239,40 @@
     </div>
     <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="At least 6 characters"></div>
     <button class="btn-primary" id="reg-btn" onclick="doRegister()">Create Account</button>
-    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideRegister()">← Back to login</a></div>
+    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideRegister()">← Back</a></div>
   </div>
 </div>
 
+<!-- LIVE / ACCESS GATE -->
+<div id="live-screen">
+  <div class="live-wrap">
+    <div class="live-brand">Jew<span>shi</span></div>
+    <div class="live-tagline">Markets</div>
+    <div class="live-dot"><div class="dot"></div>Live</div>
+    <div class="live-stats">
+      <div class="live-stat">
+        <div class="live-stat-num" id="live-credits">—</div>
+        <div class="live-stat-label">Credits in play</div>
+      </div>
+      <div class="live-stat">
+        <div class="live-stat-num" id="live-players">—</div>
+        <div class="live-stat-label">Players</div>
+      </div>
+      <div class="live-stat">
+        <div class="live-stat-num" id="live-bets">—</div>
+        <div class="live-stat-label">Open positions</div>
+      </div>
+    </div>
+    <div class="live-markets" id="live-markets"></div>
+    <div class="access-gate">
+      <div class="access-hint">Enter access code to trade</div>
+      <input class="access-input" type="password" id="access-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')tryAccess()">
+      <div class="access-error" id="access-error" style="display:none;">Invalid code.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
 <div id="app">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:20px;">
@@ -222,7 +286,6 @@
       <button class="btn-logout" onclick="doLogout()">Sign out</button>
     </div>
   </div>
-
   <div class="nav-tabs" id="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
@@ -231,7 +294,6 @@
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
   </div>
-
   <div class="main-content">
 
     <div id="tab-markets" class="tab-content active">
@@ -330,6 +392,8 @@
           </div>
           <button class="btn-admin" onclick="distributeCredits()" style="margin-bottom:16px;">Distribute Credits</button>
           <hr class="divider">
+          <div id="grose-only-panel"></div>
+          <hr class="divider">
           <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Volunteer hour → credits rate</p>
           <div class="admin-form-row">
             <div class="form-group"><label>Credits per hour</label><input type="number" id="vol-rate" value="100" min="10"></div>
@@ -366,7 +430,7 @@
       <button class="modal-close" onclick="closeBetModal()">✕</button>
     </div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:6px;" id="modal-question"></p>
-    <p style="font-size:13px;color:var(--gold);margin-bottom:12px;font-weight:600;" id="modal-line" style="display:none;"></p>
+    <p style="font-size:13px;color:var(--gold);margin-bottom:12px;font-weight:600;" id="modal-line"></p>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:10px;" id="modal-odds-display"></div>
     <div class="bet-choice-btns" id="bet-choice-btns"></div>
     <div class="bet-amount-row">
@@ -422,44 +486,117 @@ let currentBetSide = 'YES';
 let msgPollInterval = null;
 let convPollInterval = null;
 let currentThreadUserId = null;
+let liveInterval = null;
+let countdownInterval = null;
+let liveMarketsData = [];
 
 async function api(method, path, body) {
-  const opts = {method, headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{})}};
-  if(body) opts.body = JSON.stringify(body);
-  const res = await fetch(API+path, opts);
-  const data = await res.json();
+  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{})}};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(API+path,opts);
+  const data=await res.json();
   if(!res.ok) throw new Error(data.error||'Request failed');
   return data;
 }
 
-// ── Pool-based percentage helpers ──
-function getYesPercent(m) {
-  const total = (m.yes_shares||0) + (m.no_shares||0);
-  return total===0 ? 50 : Math.round((m.yes_shares/total)*100);
-}
-function getOverPercent(m) {
-  const total = (m.over_shares||0) + (m.under_shares||0);
-  return total===0 ? 50 : Math.round((m.over_shares/total)*100);
-}
-function getMyPercent(m, side) {
-  if(m.market_type==='overunder') {
-    return side==='OVER' ? getOverPercent(m) : 100-getOverPercent(m);
-  }
-  return side==='YES' ? getYesPercent(m) : 100-getYesPercent(m);
+function getYesPercent(m){const t=(m.yes_shares||0)+(m.no_shares||0);return t===0?50:Math.round((m.yes_shares/t)*100);}
+function getOverPercent(m){const t=(m.over_shares||0)+(m.under_shares||0);return t===0?50:Math.round((m.over_shares/t)*100);}
+function getMyPercent(m,side){
+  if(m.market_type==='overunder') return side==='OVER'?getOverPercent(m):100-getOverPercent(m);
+  return side==='YES'?getYesPercent(m):100-getYesPercent(m);
 }
 
-async function doLogin() {
+// ── LIVE SCREEN ──
+async function showLiveScreen(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('live-screen').style.display='block';
+  await fetchLiveData();
+  liveInterval=setInterval(fetchLiveData,5000);
+  countdownInterval=setInterval(updateCountdowns,1000);
+}
+
+async function fetchLiveData(){
+  try{
+    const res=await fetch(API+'/live');
+    const data=await res.json();
+    document.getElementById('live-credits').textContent=data.totalCredits.toLocaleString();
+    document.getElementById('live-players').textContent=data.activePlayers;
+    document.getElementById('live-bets').textContent=data.totalBets;
+    liveMarketsData=data.markets||[];
+    renderLiveMarkets();
+  }catch(e){}
+}
+
+function renderLiveMarkets(){
+  const el=document.getElementById('live-markets');
+  if(!liveMarketsData.length){el.innerHTML='';return;}
+  el.innerHTML=liveMarketsData.map(m=>`
+    <div class="live-market-row">
+      <div>
+        <div class="live-market-q">${m.question}</div>
+      </div>
+      <div>
+        <div class="live-countdown" id="cd-${m.id}" data-close="${m.close_date}">—</div>
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#222;text-align:right;margin-top:3px;">closes</div>
+      </div>
+    </div>`).join('');
+  updateCountdowns();
+}
+
+function updateCountdowns(){
+  document.querySelectorAll('.live-countdown').forEach(el=>{
+    const close=new Date(el.dataset.close);
+    const diff=close-Date.now();
+    if(diff<=0){el.textContent='Closed';el.classList.remove('urgent','soon');return;}
+    const d=Math.floor(diff/86400000);
+    const h=Math.floor((diff%86400000)/3600000);
+    const m=Math.floor((diff%3600000)/60000);
+    const s=Math.floor((diff%60000)/1000);
+    el.classList.toggle('urgent',diff<3600000);
+    el.classList.toggle('soon',diff>=3600000&&diff<86400000);
+    if(d>0) el.textContent=`${d}d ${h}h`;
+    else if(h>0) el.textContent=`${h}h ${m}m`;
+    else el.textContent=`${m}m ${s}s`;
+  });
+}
+
+async function tryAccess(){
+  const pw=document.getElementById('access-input').value;
+  const errEl=document.getElementById('access-error');
+  errEl.style.display='none';
+  try{
+    await api('POST','/access/verify',{password:pw});
+    sessionStorage.setItem('access_granted','1');
+    clearInterval(liveInterval);
+    clearInterval(countdownInterval);
+    document.getElementById('live-screen').style.display='none';
+    enterApp();
+  }catch(e){
+    errEl.style.display='block';
+    document.getElementById('access-input').value='';
+    setTimeout(()=>errEl.style.display='none',2000);
+  }
+}
+
+// ── AUTH ──
+async function doLogin(){
   const email=document.getElementById('login-email').value.trim();
   const password=document.getElementById('login-pass').value;
   const errEl=document.getElementById('auth-error');
   errEl.style.display='none';
-  try {
+  try{
     const data=await api('POST','/auth/login',{email,password});
-    authToken=data.token; localStorage.setItem('ew_token',authToken); currentUser=data.user; enterApp();
-  } catch(e){errEl.textContent=e.message;errEl.style.display='block';}
+    authToken=data.token; localStorage.setItem('ew_token',authToken); currentUser=data.user;
+    // Admins skip the access gate
+    if(currentUser.role==='admin'||sessionStorage.getItem('access_granted')){
+      enterApp();
+    } else {
+      showLiveScreen();
+    }
+  }catch(e){errEl.textContent=e.message;errEl.style.display='block';}
 }
 
-async function doRegister() {
+async function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim();
   const grade=document.getElementById('reg-grade').value;
@@ -467,15 +604,16 @@ async function doRegister() {
   if(!name||!email||!password){showRegError('Please fill all fields.');return;}
   if(password.length<6){showRegError('Password must be at least 6 characters.');return;}
   const btn=document.getElementById('reg-btn');
-  btn.disabled=true; btn.textContent='Creating…';
-  try {
+  btn.disabled=true;btn.textContent='Creating…';
+  try{
     const data=await api('POST','/auth/register',{name,email,password,grade});
     authToken=data.token; localStorage.setItem('ew_token',authToken); currentUser=data.user;
-    hideRegister(); await enterApp(); showToast('Welcome to Jewshi! 🎉');
-  } catch(e){showRegError(e.message);btn.disabled=false;btn.textContent='Create Account';}
+    hideRegister();
+    showLiveScreen();
+  }catch(e){showRegError(e.message);btn.disabled=false;btn.textContent='Create Account';}
 }
 
-async function doForgotPassword() {
+async function doForgotPassword(){
   const email=document.getElementById('forgot-email').value.trim();
   const errEl=document.getElementById('forgot-error'),sucEl=document.getElementById('forgot-success');
   errEl.style.display='none';sucEl.style.display='none';
@@ -491,7 +629,9 @@ function showForgotPassword(){document.getElementById('forgot-screen').style.dis
 function hideForgotPassword(){document.getElementById('forgot-screen').style.display='none';}
 
 function doLogout(){
-  authToken=null;currentUser=null;localStorage.removeItem('ew_token');
+  authToken=null;currentUser=null;
+  localStorage.removeItem('ew_token');
+  sessionStorage.removeItem('access_granted');
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').style.display='flex';
@@ -503,6 +643,7 @@ function doLogout(){
 async function enterApp(){
   currentUser=await api('GET','/me');
   document.getElementById('auth-screen').style.display='none';
+  document.getElementById('live-screen').style.display='none';
   document.getElementById('app').style.display='block';
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='block');
   updateTopbar(); renderMarkets();
@@ -538,41 +679,21 @@ async function renderMarkets(){
   markets.sort((a,b)=>a.status==='open'?-1:1);
   if(!markets.length){grid.innerHTML='<div class="empty-state"><div class="icon">📊</div><p>No markets yet.</p></div>';return;}
   grid.innerHTML=markets.map(m=>{
-    const isOU = m.market_type==='overunder';
+    const isOU=m.market_type==='overunder';
     let statusTag='';
     if(m.status==='open')statusTag=`<span class="status-tag status-open">Live</span>`;
     else if(m.status==='closed')statusTag=`<span class="status-tag status-closed">Closed</span>`;
     else if(m.status==='resolved-yes'||m.status==='resolved-over')statusTag=`<span class="status-tag status-resolved-yes">${isOU?'OVER':'YES'}</span>`;
     else if(m.status==='resolved-no'||m.status==='resolved-under')statusTag=`<span class="status-tag status-resolved-no">${isOU?'UNDER':'NO'}</span>`;
-
     let oddsHtml='';
     if(isOU){
-      const overPct=getOverPercent(m), underPct=100-overPct;
-      oddsHtml=`<div class="market-odds">
-        <div class="odds-bar-wrap">
-          <div class="odds-label"><span style="color:var(--blue)">OVER</span><span style="color:var(--blue)">${overPct}%</span></div>
-          <div class="odds-bar"><div class="odds-fill-over" style="width:${overPct}%"></div></div>
-        </div>
-        <div class="odds-bar-wrap">
-          <div class="odds-label"><span style="color:var(--orange)">UNDER</span><span style="color:var(--orange)">${underPct}%</span></div>
-          <div class="odds-bar"><div class="odds-fill-under" style="width:${underPct}%"></div></div>
-        </div>
-      </div>`;
+      const op=getOverPercent(m),up=100-op;
+      oddsHtml=`<div class="market-odds"><div class="odds-bar-wrap"><div class="odds-label"><span style="color:var(--blue)">OVER</span><span style="color:var(--blue)">${op}%</span></div><div class="odds-bar"><div class="odds-fill-over" style="width:${op}%"></div></div></div><div class="odds-bar-wrap"><div class="odds-label"><span style="color:var(--orange)">UNDER</span><span style="color:var(--orange)">${up}%</span></div><div class="odds-bar"><div class="odds-fill-under" style="width:${up}%"></div></div></div></div>`;
     } else {
-      const yesPct=getYesPercent(m), noPct=100-yesPct;
-      oddsHtml=`<div class="market-odds">
-        <div class="odds-bar-wrap">
-          <div class="odds-label"><span style="color:var(--green)">YES</span><span style="color:var(--green)">${yesPct}%</span></div>
-          <div class="odds-bar"><div class="odds-fill-yes" style="width:${yesPct}%"></div></div>
-        </div>
-        <div class="odds-bar-wrap">
-          <div class="odds-label"><span style="color:var(--red)">NO</span><span style="color:var(--red)">${noPct}%</span></div>
-          <div class="odds-bar"><div class="odds-fill-no" style="width:${noPct}%"></div></div>
-        </div>
-      </div>`;
+      const yp=getYesPercent(m),np=100-yp;
+      oddsHtml=`<div class="market-odds"><div class="odds-bar-wrap"><div class="odds-label"><span style="color:var(--green)">YES</span><span style="color:var(--green)">${yp}%</span></div><div class="odds-bar"><div class="odds-fill-yes" style="width:${yp}%"></div></div></div><div class="odds-bar-wrap"><div class="odds-label"><span style="color:var(--red)">NO</span><span style="color:var(--red)">${np}%</span></div><div class="odds-bar"><div class="odds-fill-no" style="width:${np}%"></div></div></div></div>`;
     }
-    const isOpen = m.status==='open';
-    return `<div class="market-card ${!isOpen?'resolved':''}" onclick="${isOpen?`openBetModal('${m.id}')`:'' }">
+    return `<div class="market-card ${m.status!=='open'?'resolved':''}" onclick="${m.status==='open'?`openBetModal('${m.id}')`:'' }">
       ${isOU?`<span class="market-type-badge" style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-dim);">Over/Under</span>`:''}
       <div class="market-category">${m.category}</div>
       <div class="market-title">${m.question}</div>
@@ -591,25 +712,17 @@ async function openBetModal(marketId){
   document.getElementById('modal-question').textContent=m.question;
   document.getElementById('modal-title').textContent=m.category+(isOU?' — Over/Under':' Market');
   const lineEl=document.getElementById('modal-line');
-  if(isOU){lineEl.textContent=`Line: ${m.line}`;lineEl.style.display='block';}
-  else{lineEl.style.display='none';}
-
+  if(isOU){lineEl.textContent=`Line: ${m.line}`;lineEl.style.display='block';}else{lineEl.style.display='none';}
   const btnsEl=document.getElementById('bet-choice-btns');
   if(isOU){
-    const overPct=getOverPercent(m),underPct=100-overPct;
-    btnsEl.innerHTML=`
-      <button class="bet-choice-btn over" id="btn-over" onclick="selectSide('OVER')">OVER ${overPct}%</button>
-      <button class="bet-choice-btn under" id="btn-under" onclick="selectSide('UNDER')">UNDER ${underPct}%</button>`;
-    document.getElementById('modal-odds-display').innerHTML=
-      `<span style="color:var(--blue)">OVER ${overPct}%</span><span>Pool: ⬡ ${(m.pool||0).toLocaleString()}</span><span style="color:var(--orange)">UNDER ${underPct}%</span>`;
+    const op=getOverPercent(m),up=100-op;
+    btnsEl.innerHTML=`<button class="bet-choice-btn over" id="btn-over" onclick="selectSide('OVER')">OVER ${op}%</button><button class="bet-choice-btn under" id="btn-under" onclick="selectSide('UNDER')">UNDER ${up}%</button>`;
+    document.getElementById('modal-odds-display').innerHTML=`<span style="color:var(--blue)">OVER ${op}%</span><span>Pool: ⬡ ${(m.pool||0).toLocaleString()}</span><span style="color:var(--orange)">UNDER ${up}%</span>`;
     selectSide('OVER');
   } else {
-    const yesPct=getYesPercent(m),noPct=100-yesPct;
-    btnsEl.innerHTML=`
-      <button class="bet-choice-btn yes" id="btn-yes" onclick="selectSide('YES')">YES ${yesPct}%</button>
-      <button class="bet-choice-btn no" id="btn-no" onclick="selectSide('NO')">NO ${noPct}%</button>`;
-    document.getElementById('modal-odds-display').innerHTML=
-      `<span style="color:var(--green)">YES ${yesPct}%</span><span>Pool: ⬡ ${(m.pool||0).toLocaleString()}</span><span style="color:var(--red)">NO ${noPct}%</span>`;
+    const yp=getYesPercent(m),np=100-yp;
+    btnsEl.innerHTML=`<button class="bet-choice-btn yes" id="btn-yes" onclick="selectSide('YES')">YES ${yp}%</button><button class="bet-choice-btn no" id="btn-no" onclick="selectSide('NO')">NO ${np}%</button>`;
+    document.getElementById('modal-odds-display').innerHTML=`<span style="color:var(--green)">YES ${yp}%</span><span>Pool: ⬡ ${(m.pool||0).toLocaleString()}</span><span style="color:var(--red)">NO ${np}%</span>`;
     selectSide('YES');
   }
   document.getElementById('bet-amount').value='';
@@ -617,24 +730,21 @@ async function openBetModal(marketId){
   document.getElementById('balance-after').textContent='—';
   document.getElementById('bet-modal').style.display='flex';
 }
-
 function closeBetModal(event){if(!event||event.target===document.getElementById('bet-modal'))document.getElementById('bet-modal').style.display='none';}
 
 function selectSide(side){
   currentBetSide=side;
   document.querySelectorAll('.bet-choice-btn').forEach(b=>b.classList.remove('active'));
-  const btnId = side==='YES'?'btn-yes':side==='NO'?'btn-no':side==='OVER'?'btn-over':'btn-under';
+  const btnId=side==='YES'?'btn-yes':side==='NO'?'btn-no':side==='OVER'?'btn-over':'btn-under';
   const btn=document.getElementById(btnId);
-  if(btn) btn.classList.add('active');
+  if(btn)btn.classList.add('active');
   const placBtn=document.getElementById('btn-place-bet');
-  const colorMap={YES:'btn-bet-yes',NO:'btn-bet-no',OVER:'btn-bet-over',UNDER:'btn-bet-under'};
-  placBtn.className='btn-bet '+(colorMap[side]||'btn-bet-yes');
+  const cm={YES:'btn-bet-yes',NO:'btn-bet-no',OVER:'btn-bet-over',UNDER:'btn-bet-under'};
+  placBtn.className='btn-bet '+(cm[side]||'btn-bet-yes');
   placBtn.textContent=`Place ${side} Bet`;
   updateBetSummary();
 }
-
 function setQuickAmount(n){document.getElementById('bet-amount').value=n;updateBetSummary();}
-
 function updateBetSummary(){
   if(!currentBetMarket)return;
   const amount=parseFloat(document.getElementById('bet-amount').value);
@@ -642,7 +752,7 @@ function updateBetSummary(){
   const m=currentBetMarket;
   const myPct=getMyPercent(m,currentBetSide);
   const pool=(m.pool||0)+amount;
-  const estimatedPayout = myPct>0 ? Math.round(pool*(myPct/100)) : amount;
+  const estimatedPayout=myPct>0?Math.round(pool*(myPct/100)):amount;
   document.getElementById('bet-summary').innerHTML=`
     <div class="bet-summary-row"><span>Bet amount</span><span>⬡ ${amount}</span></div>
     <div class="bet-summary-row"><span>Current ${currentBetSide} share</span><span>${myPct}%</span></div>
@@ -651,7 +761,6 @@ function updateBetSummary(){
   const balAfter=currentUser.credits-amount;
   document.getElementById('balance-after').textContent=balAfter>=0?'⬡ '+balAfter.toLocaleString():'⚠ Insufficient';
 }
-
 async function placeBet(){
   const amount=parseFloat(document.getElementById('bet-amount').value);
   if(!amount||amount<=0){alert('Enter a valid amount.');return;}
@@ -674,11 +783,8 @@ async function renderPortfolio(){
   document.getElementById('active-positions').innerHTML=!active.length
     ?'<div class="empty-state"><div class="icon">📈</div><p>No active positions.</p></div>'
     :`<table class="portfolio-table"><thead><tr><th>Market</th><th>Side</th><th>Wagered</th><th>Type</th></tr></thead><tbody>${active.map(b=>{
-        const isOU=b.market_type==='overunder';
-        const sideColor=b.side==='YES'||b.side==='OVER'?'var(--green)':'var(--red)';
-        return `<tr><td style="color:var(--text)">${b.question}${b.line?` (Line: ${b.line})`:''}</td>
-          <td><span class="history-pill" style="background:${sideColor.replace(')','-bg)')};color:${sideColor}">${b.side}</span></td>
-          <td>⬡ ${b.amount}</td><td style="color:var(--text3)">${isOU?'O/U':'YES/NO'}</td></tr>`;
+        const sc=b.side==='YES'||b.side==='OVER'?'var(--green)':'var(--red)';
+        return `<tr><td style="color:var(--text)">${b.question}${b.line?` (Line: ${b.line})`:''}</td><td><span class="history-pill" style="background:${sc.replace(')','-bg)')};color:${sc}">${b.side}</span></td><td>⬡ ${b.amount}</td><td style="color:var(--text3)">${b.market_type==='overunder'?'O/U':'YES/NO'}</td></tr>`;
       }).join('')}</tbody></table>`;
   const history=bets.filter(b=>b.status!=='active');
   document.getElementById('bet-history').innerHTML=!history.length
@@ -810,6 +916,20 @@ async function renderAdminTab(){
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
     <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${stats.totalBets}</div></div>
     <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${stats.pendingVol}</div></div>`;
+
+  // GROSE-only panel
+  const grosePanel = document.getElementById('grose-only-panel');
+  if(currentUser.id==='GROSE'){
+    grosePanel.innerHTML=`
+      <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Change access password</p>
+      <div class="admin-form-row">
+        <div class="form-group"><label>New Password</label><input type="text" id="new-access-pw" placeholder="new password"></div>
+      </div>
+      <button class="btn-admin" onclick="changeAccessPassword()">Update Access Password</button>`;
+  } else {
+    grosePanel.innerHTML='';
+  }
+
   document.getElementById('admin-markets-list').innerHTML=markets.map(m=>{
     const isOU=m.market_type==='overunder';
     const pctDisplay=isOU?`OVER ${getOverPercent(m)}%`:`YES ${getYesPercent(m)}%`;
@@ -820,7 +940,7 @@ async function renderAdminTab(){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${m.status==='open'?(isOU?`
-          <input type="number" id="actual-${m.id}" placeholder="Actual result" style="width:120px;padding:4px 8px;font-size:12px;">
+          <input type="number" id="actual-${m.id}" placeholder="Actual" style="width:100px;padding:4px 8px;font-size:12px;">
           <button class="btn-admin btn-sm btn-success" onclick="resolveOU('${m.id}')">Resolve O/U</button>
           <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="closeMarket('${m.id}')">Close</button>
         `:`
@@ -828,13 +948,15 @@ async function renderAdminTab(){
           <button class="btn-admin btn-sm btn-danger" onclick="resolveMarket('${m.id}','NO')">Resolve NO</button>
           <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="closeMarket('${m.id}')">Close</button>
         `):`<span class="status-tag status-closed">${m.status}</span>`}
-      </div>
-    </div>`;
+      </div></div>`;
   }).join('')||'<p style="color:var(--text3);font-size:13px;">No markets.</p>';
+
   document.getElementById('admin-store-list').innerHTML=storeItems.map(item=>`
     <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-size:20px;">${item.icon}</span><span style="flex:1;font-size:13px;color:var(--text)">${item.name} — ⬡${item.cost}</span>
       <button class="btn-admin btn-sm btn-danger" onclick="removeStoreItem('${item.id}')">Remove</button></div>`).join('')||'<p style="color:var(--text3);font-size:13px;">No items.</p>';
+
+  const isGrose = currentUser.id==='GROSE';
   document.getElementById('admin-users-list').innerHTML=`
     <table class="portfolio-table">
       <thead><tr><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
@@ -848,13 +970,14 @@ async function renderAdminTab(){
           <input type="number" id="add-cred-${u.id}" placeholder="amt" style="width:60px;padding:4px 6px;font-size:11px;">
           <button class="btn-admin btn-sm btn-success" onclick="addCreditsToUser('${u.id}')">Add</button>
           <button class="btn-admin btn-sm btn-danger" onclick="removeCreditsFromUser('${u.id}')">Remove</button>
-          ${u.role==='student'
+          ${isGrose?(u.role==='student'
             ?`<button class="btn-admin btn-sm btn-warning" onclick="makeAdmin('${u.id}')">Make Admin</button>`
-            :`<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="makeStudent('${u.id}')">Demote</button>`}
+            :`<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="makeStudent('${u.id}')">Demote</button>`):''}
           <button class="btn-admin btn-sm btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
         </div></td>
       </tr>`).join('')}</tbody>
     </table>`;
+
   document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
     :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
       <td style="color:var(--text)">${t.user_name||t.user_id}</td>
@@ -866,10 +989,8 @@ async function renderAdminTab(){
 }
 
 function toggleLineInput(){
-  const type=document.getElementById('new-market-type').value;
-  document.getElementById('line-input-group').style.display=type==='overunder'?'block':'none';
+  document.getElementById('line-input-group').style.display=document.getElementById('new-market-type').value==='overunder'?'block':'none';
 }
-
 async function createMarket(){
   const question=document.getElementById('new-market-q').value.trim();
   const category=document.getElementById('new-market-cat').value;
@@ -877,42 +998,41 @@ async function createMarket(){
   const market_type=document.getElementById('new-market-type').value;
   const line=market_type==='overunder'?parseFloat(document.getElementById('new-market-line').value):null;
   if(!question||!closeDate){alert('Fill in all fields.');return;}
-  if(market_type==='overunder'&&(isNaN(line)||line===null)){alert('Please enter a line for Over/Under.');return;}
+  if(market_type==='overunder'&&(isNaN(line)||line===null)){alert('Please enter a line.');return;}
   try{
     await api('POST','/markets',{question,category,closeDate,market_type,line});
-    document.getElementById('new-market-q').value='';
-    document.getElementById('new-market-close').value='';
-    document.getElementById('new-market-line').value='';
+    document.getElementById('new-market-q').value='';document.getElementById('new-market-close').value='';document.getElementById('new-market-line').value='';
     renderAdminTab();showToast('Market created!');
   }catch(e){alert(e.message);}
 }
-
 async function resolveMarket(id,outcome){
-  if(!confirm(`Resolve market as ${outcome}?`))return;
+  if(!confirm(`Resolve as ${outcome}?`))return;
   try{await api('POST','/markets/'+id+'/resolve',{outcome});await refreshUser();renderAdminTab();showToast(`Resolved as ${outcome}!`);}
   catch(e){alert(e.message);}
 }
-
 async function resolveOU(id){
   const actual=parseFloat(document.getElementById('actual-'+id).value);
   if(isNaN(actual)){alert('Enter the actual result.');return;}
-  if(!confirm(`Resolve with actual result: ${actual}?`))return;
-  try{
-    const res=await api('POST','/markets/'+id+'/resolve-overunder',{actual});
-    await refreshUser();renderAdminTab();showToast(`Resolved! ${actual} vs line → ${res.outcome}`);
-  }catch(e){alert(e.message);}
+  if(!confirm(`Resolve with actual: ${actual}?`))return;
+  try{const res=await api('POST','/markets/'+id+'/resolve-overunder',{actual});await refreshUser();renderAdminTab();showToast(`${actual} vs line → ${res.outcome}`);}
+  catch(e){alert(e.message);}
 }
-
 async function closeMarket(id){await api('POST','/markets/'+id+'/close');renderAdminTab();}
 async function distributeCredits(){
   const amount=parseInt(document.getElementById('weekly-credits').value);
   if(!amount||amount<=0){alert('Enter a valid amount.');return;}
-  await api('POST','/admin/distribute-credits',{amount});await refreshUser();renderAdminTab();showToast(`Distributed ⬡${amount} to all students!`);
+  await api('POST','/admin/distribute-credits',{amount});await refreshUser();renderAdminTab();showToast(`Distributed ⬡${amount}!`);
 }
 async function updateVolRate(){
   const rate=parseInt(document.getElementById('vol-rate').value);
   if(!rate||rate<=0){alert('Enter valid rate.');return;}
   await api('POST','/admin/volunteer-rate',{rate});showToast(`Rate set to ⬡${rate}/hour`);renderAdminTab();
+}
+async function changeAccessPassword(){
+  const pw=document.getElementById('new-access-pw').value.trim();
+  if(!pw){alert('Enter a password.');return;}
+  try{await api('POST','/admin/access-password',{password:pw});showToast('Access password updated!');document.getElementById('new-access-pw').value='';}
+  catch(e){alert(e.message);}
 }
 async function addStoreItem(){
   const name=document.getElementById('store-item-name').value.trim(),icon=document.getElementById('store-item-icon').value.trim()||'🎁';
@@ -930,7 +1050,7 @@ async function addCreditsToUser(userId){
 }
 async function removeCreditsFromUser(userId){
   const amount=parseInt(document.getElementById('add-cred-'+userId).value);if(!amount||amount<=0)return;
-  if(!confirm(`Remove ⬡${amount} from this user?`))return;
+  if(!confirm(`Remove ⬡${amount}?`))return;
   try{await api('POST','/users/'+userId+'/remove-credits',{amount});await refreshUser();renderAdminTab();showToast(`Removed ⬡${amount}`);}
   catch(e){alert(e.message);}
 }
@@ -940,21 +1060,17 @@ async function makeAdmin(userId){
   catch(e){alert(e.message);}
 }
 async function makeStudent(userId){
-  if(!confirm(`Demote ${userId} to student?`))return;
+  if(!confirm(`Demote ${userId}?`))return;
   try{await api('POST','/users/'+userId+'/make-student');renderAdminTab();showToast(`${userId} demoted.`);}
   catch(e){alert(e.message);}
 }
 async function deleteUser(userId){
-  if(!confirm(`Permanently delete ${userId}? This cannot be undone.`))return;
-  try{await api('DELETE','/users/'+userId);renderAdminTab();showToast(`User ${userId} deleted.`);}
+  if(!confirm(`Permanently delete ${userId}?`))return;
+  try{await api('DELETE','/users/'+userId);renderAdminTab();showToast(`Deleted ${userId}.`);}
   catch(e){alert(e.message);}
 }
 
-function openBuyCredits(){
-  document.getElementById('buy-amount').value='';
-  document.getElementById('buy-preview').style.display='none';
-  document.getElementById('buy-modal').style.display='flex';
-}
+function openBuyCredits(){document.getElementById('buy-amount').value='';document.getElementById('buy-preview').style.display='none';document.getElementById('buy-modal').style.display='flex';}
 function closeBuyModal(event){if(!event||event.target===document.getElementById('buy-modal'))document.getElementById('buy-modal').style.display='none';}
 function setBuyAmount(n){document.getElementById('buy-amount').value=n;updateBuyPreview();}
 function updateBuyPreview(){
@@ -983,7 +1099,16 @@ function showNotif(containerId,msg,type){
 }
 
 window.onload=async()=>{
-  if(authToken){try{await enterApp();}catch(e){localStorage.removeItem('ew_token');authToken=null;}}
+  if(authToken){
+    try{
+      currentUser=await api('GET','/me');
+      if(currentUser.role==='admin'||sessionStorage.getItem('access_granted')){
+        enterApp();
+      } else {
+        showLiveScreen();
+      }
+    }catch(e){localStorage.removeItem('ew_token');authToken=null;}
+  }
 };
 </script>
 </body>
