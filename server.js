@@ -42,36 +42,24 @@ async function initDB() {
   };
 
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      sender_id TEXT NOT NULL,
-      recipient_id TEXT NOT NULL,
-      text TEXT NOT NULL,
-      is_read INTEGER DEFAULT 0,
-      timestamp INTEGER
-    );
     CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      email TEXT UNIQUE,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'student',
-      credits INTEGER DEFAULT 200,
-      grade TEXT DEFAULT '',
+      id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT NOT NULL,
+      role TEXT DEFAULT 'student', credits INTEGER DEFAULT 200, grade TEXT DEFAULT '',
       email_verified INTEGER DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
-      token TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      used INTEGER DEFAULT 0,
-      created_at INTEGER
+      token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
+      used INTEGER DEFAULT 0, created_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS markets (
       id TEXT PRIMARY KEY, question TEXT NOT NULL, category TEXT,
       status TEXT DEFAULT 'open', close_date TEXT,
-      yes_shares REAL DEFAULT 50, no_shares REAL DEFAULT 50,
-      b_param REAL DEFAULT 100, pool INTEGER DEFAULT 500, created_at INTEGER
+      yes_shares REAL DEFAULT 0, no_shares REAL DEFAULT 0,
+      b_param REAL DEFAULT 100, pool INTEGER DEFAULT 0, created_at INTEGER,
+      market_type TEXT DEFAULT 'binary',
+      line REAL DEFAULT NULL,
+      over_shares REAL DEFAULT 0,
+      under_shares REAL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS bets (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, market_id TEXT NOT NULL,
@@ -91,11 +79,12 @@ async function initDB() {
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE IF NOT EXISTS stripe_sessions (
-      session_id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      credits INTEGER NOT NULL,
-      fulfilled INTEGER DEFAULT 0,
-      created_at INTEGER
+      session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
+      credits INTEGER NOT NULL, fulfilled INTEGER DEFAULT 0, created_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
+      text TEXT NOT NULL, is_read INTEGER DEFAULT 0, timestamp INTEGER
     )
   `);
 
@@ -113,10 +102,8 @@ async function seedIfEmpty() {
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
-    await db.run(
-      'INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
-      [u.id, u.name, u.email, hash, u.role, u.credits, u.grade]
-    );
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
+      [u.id, u.name, u.email, hash, u.role, u.credits, u.grade]);
   }
   const items = [
     ['s1','Café Sandwich','🥪',150,'Redeemable at school café'],
@@ -126,20 +113,17 @@ async function seedIfEmpty() {
   ];
   for (const [id,name,icon,cost,desc] of items)
     await db.run('INSERT INTO store_items (id,name,icon,cost,description) VALUES (?,?,?,?,?)',[id,name,icon,cost,desc]);
-  await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    ['m1','Will the Eagles win the district championship?','Sports','open','2025-06-01',52,48,100,800,Date.now()]);
-  await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    ['m2','Will the school play open on time?','School','open','2025-05-15',65,35,100,400,Date.now()]);
+  await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    ['m1','Will the Eagles win the district championship?','Sports','open','2025-06-01',0,0,100,0,Date.now(),'binary']);
+  await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    ['m2','Will the school play open on time?','School','open','2025-05-15',0,0,100,0,Date.now(),'binary']);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
   console.log('Database seeded.');
 }
 
 async function appendToSheet(name, email, grade) {
   try {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_SHEET_ID) {
-      console.log(`[Sheets] Not configured — skipping for ${email}`);
-      return;
-    }
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_SHEET_ID) return;
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = google.sheets({ version: 'v4', auth });
@@ -149,7 +133,6 @@ async function appendToSheet(name, email, grade) {
       valueInputOption: 'RAW',
       requestBody: { values: [[name, email, grade, new Date().toLocaleString()]] },
     });
-    console.log(`[Sheets] Appended ${name} (${email})`);
   } catch(e) { console.error('[Sheets] Error:', e.message); }
 }
 
@@ -160,21 +143,31 @@ async function recordTx(userId, amount, type, refId=null, desc='') {
   await db.run('INSERT INTO transactions (id,user_id,amount,type,reference_id,description,timestamp) VALUES (?,?,?,?,?,?,?)',
     [generateId('tx'),userId,amount,type,refId,desc,Date.now()]);
 }
+
 function authMiddleware(req,res,next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({error:'No token'});
   try { req.user = jwt.verify(token, JWT_SECRET); next(); }
   catch { res.status(401).json({error:'Invalid token'}); }
 }
-function adminOnly(req,res,next) {
-  if (req.user.role !== 'admin') return res.status(403).json({error:'Admin only'});
+
+// ── Admin check hits DB so role changes take effect immediately ──
+async function adminOnly(req,res,next) {
+  const user = await db.get('SELECT role FROM users WHERE id=?',[req.user.id]);
+  if (!user || user.role !== 'admin') return res.status(403).json({error:'Admin only'});
   next();
 }
-function lmsrCost(y,n,b) { return b*Math.log(Math.exp(y/b)+Math.exp(n/b)); }
-function lmsrShares(y,n,b,side,amt) {
-  const cb=lmsrCost(y,n,b); let lo=0,hi=amt*10;
-  for(let i=0;i<60;i++){const m=(lo+hi)/2;const ca=side==='YES'?lmsrCost(y+m,n,b):lmsrCost(y,n+m,b);if(ca-cb<amt)lo=m;else hi=m;}
-  return (lo+hi)/2;
+
+// Pool-based percentage helpers
+function getYesPercent(m) {
+  const total = (m.yes_shares||0) + (m.no_shares||0);
+  if (total === 0) return 50;
+  return Math.round((m.yes_shares / total) * 100);
+}
+function getOverPercent(m) {
+  const total = (m.over_shares||0) + (m.under_shares||0);
+  if (total === 0) return 50;
+  return Math.round((m.over_shares / total) * 100);
 }
 
 // ── STRIPE ──
@@ -185,7 +178,7 @@ app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
     const credits = Math.floor(amountCents / 100) * 100;
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{ price_data: { currency: 'usd', unit_amount: amountCents, product_data: { name: `Jewshi Markets — ${credits.toLocaleString()} Credits`, description: `${credits} credits added to your Jewshi account` } }, quantity: 1 }],
+      line_items: [{ price_data: { currency: 'usd', unit_amount: amountCents, product_data: { name: `Jewshi Markets — ${credits.toLocaleString()} Credits` } }, quantity: 1 }],
       mode: 'payment',
       success_url: `${CLIENT_URL}/payment-success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${CLIENT_URL}/?cancelled=1`,
@@ -194,7 +187,7 @@ app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
     await db.run('INSERT INTO stripe_sessions (session_id,user_id,credits,fulfilled,created_at) VALUES (?,?,?,0,?)',
       [session.id, req.user.id, credits, Date.now()]);
     res.json({ url: session.url });
-  } catch(e) { console.error('Checkout error:', e); res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/stripe-webhook', async (req, res) => {
@@ -208,11 +201,9 @@ app.post('/api/stripe-webhook', async (req, res) => {
     const creditsNum = parseInt(credits);
     const existing = await db.get('SELECT fulfilled FROM stripe_sessions WHERE session_id=?', [session.id]);
     if (!existing || existing.fulfilled) return res.json({ received: true });
-    try {
-      await db.run('UPDATE users SET credits=credits+? WHERE id=?', [creditsNum, user_id]);
-      await recordTx(user_id, creditsNum, 'purchase', session.id, `Purchased ${creditsNum} credits`);
-      await db.run('UPDATE stripe_sessions SET fulfilled=1 WHERE session_id=?', [session.id]);
-    } catch(e) { console.error('Fulfillment error:', e); return res.status(500).json({ error: e.message }); }
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?', [creditsNum, user_id]);
+    await recordTx(user_id, creditsNum, 'purchase', session.id, `Purchased ${creditsNum} credits`);
+    await db.run('UPDATE stripe_sessions SET fulfilled=1 WHERE session_id=?', [session.id]);
   }
   res.json({ received: true });
 });
@@ -260,14 +251,12 @@ app.post('/api/auth/register', async(req,res)=>{
 app.post('/api/auth/forgot-password', async(req,res)=>{
   try{
     const {email} = req.body;
-    if(!email) return res.status(400).json({error:'Missing email'});
-    const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
+    const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email?.trim()]);
     if(user){
-      await db.run('UPDATE password_reset_tokens SET used=1 WHERE user_id=?',[user.id]);
       const token = generateToken();
       await db.run('INSERT INTO password_reset_tokens (token,user_id,expires_at,used,created_at) VALUES (?,?,?,0,?)',
-        [token, user.id, Date.now() + 60*60*1000, Date.now()]);
-      console.log(`[Dev] Password reset link for ${user.email}:\n${CLIENT_URL}/reset-password.html?token=${token}`);
+        [token, user.id, Date.now()+3600000, Date.now()]);
+      console.log(`[Dev] Reset link: ${CLIENT_URL}/reset-password.html?token=${token}`);
     }
     res.json({message:'If that email has an account, a reset link has been sent.'});
   }catch(e){res.status(500).json({error:e.message});}
@@ -276,15 +265,13 @@ app.post('/api/auth/forgot-password', async(req,res)=>{
 app.post('/api/auth/reset-password', async(req,res)=>{
   try{
     const {token, password} = req.body;
-    if(!token||!password) return res.status(400).json({error:'Missing fields'});
-    if(password.length < 6) return res.status(400).json({error:'Password must be at least 6 characters'});
+    if(!token||!password||password.length<6) return res.status(400).json({error:'Invalid request'});
     const row = await db.get('SELECT * FROM password_reset_tokens WHERE token=? AND used=0',[token]);
-    if(!row) return res.status(400).json({error:'Invalid or expired reset link'});
-    if(row.expires_at < Date.now()) return res.status(400).json({error:'Reset link expired.'});
+    if(!row||row.expires_at<Date.now()) return res.status(400).json({error:'Invalid or expired link'});
     const hash = await bcrypt.hash(password, 10);
     await db.run('UPDATE users SET password=? WHERE id=?',[hash, row.user_id]);
     await db.run('UPDATE password_reset_tokens SET used=1 WHERE token=?',[token]);
-    res.json({message:'Password updated! You can now sign in.'});
+    res.json({message:'Password updated!'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -295,7 +282,7 @@ app.get('/api/me', authMiddleware, async(req,res)=>{
   res.json(user);
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,email,role,credits,grade FROM users WHERE role!='admin' OR id!='GROSE'"));
+  res.json(await db.all("SELECT id,name,email,role,credits,grade FROM users WHERE id!=?",[req.user.id]));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -316,29 +303,24 @@ app.post('/api/users/:id/remove-credits', authMiddleware, adminOnly, async(req,r
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/users/:id/make-admin', authMiddleware, adminOnly, async(req,res)=>{
-  try{
-    await db.run("UPDATE users SET role='admin' WHERE id=?",[req.params.id]);
-    res.json({success:true});
-  }catch(e){res.status(500).json({error:e.message});}
+  await db.run("UPDATE users SET role='admin' WHERE id=?",[req.params.id]);
+  res.json({success:true});
 });
 app.post('/api/users/:id/make-student', authMiddleware, adminOnly, async(req,res)=>{
-  try{
-    if(req.params.id==='GROSE') return res.status(400).json({error:'Cannot demote primary admin'});
-    await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
-    res.json({success:true});
-  }catch(e){res.status(500).json({error:e.message});}
+  if(req.params.id==='GROSE') return res.status(400).json({error:'Cannot demote primary admin'});
+  await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
+  res.json({success:true});
 });
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
-  try{
-    const {id} = req.params;
-    if(id==='GROSE') return res.status(400).json({error:'Cannot delete primary admin'});
-    await db.run('DELETE FROM bets WHERE user_id=?',[id]);
-    await db.run('DELETE FROM transactions WHERE user_id=?',[id]);
-    await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
-    await db.run('DELETE FROM stripe_sessions WHERE user_id=?',[id]);
-    await db.run('DELETE FROM users WHERE id=?',[id]);
-    res.json({success:true});
-  }catch(e){res.status(500).json({error:e.message});}
+  const {id}=req.params;
+  if(id==='GROSE') return res.status(400).json({error:'Cannot delete primary admin'});
+  await db.run('DELETE FROM bets WHERE user_id=?',[id]);
+  await db.run('DELETE FROM transactions WHERE user_id=?',[id]);
+  await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
+  await db.run('DELETE FROM stripe_sessions WHERE user_id=?',[id]);
+  await db.run('DELETE FROM messages WHERE sender_id=? OR recipient_id=?',[id,id]);
+  await db.run('DELETE FROM users WHERE id=?',[id]);
+  res.json({success:true});
 });
 
 // ── MARKETS ──
@@ -355,26 +337,33 @@ app.get('/api/markets/:id', authMiddleware, async(req,res)=>{
 });
 app.post('/api/markets', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    const {question,category,closeDate,liquidity}=req.body;
+    const {question,category,closeDate,liquidity,market_type,line}=req.body;
     if(!question||!closeDate) return res.status(400).json({error:'Missing fields'});
-    const liq=liquidity||500; const id=generateId('m');
-    await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at) VALUES (?,?,?,'open',?,50,50,?,?,?)`,
-      [id,question,category||'General',closeDate,Math.max(50,Math.round(liq/5)),liq,Date.now()]);
+    if(market_type==='overunder'&&(line===undefined||line===null)) return res.status(400).json({error:'Line required for over/under'});
+    const id=generateId('m');
+    if(market_type==='overunder'){
+      await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type,line,over_shares,under_shares) VALUES (?,?,?,'open',?,0,0,100,0,?,?,?,0,0)`,
+        [id,question,category||'Sports',closeDate,Date.now(),'overunder',line]);
+    } else {
+      await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,'open',?,0,0,100,0,?,'binary')`,
+        [id,question,category||'General',closeDate,Date.now()]);
+    }
     res.json(await db.get('SELECT * FROM markets WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
+
+// Resolve binary market
 app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {outcome}=req.body;
     if(!['YES','NO'].includes(outcome)) return res.status(400).json({error:'Bad outcome'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
-    if(!m) return res.status(404).json({error:'Not found'});
-    if(m.status!=='open') return res.status(400).json({error:'Not open'});
+    if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
     await db.run('UPDATE markets SET status=? WHERE id=?',[outcome==='YES'?'resolved-yes':'resolved-no',m.id]);
     const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
-    const total=wins.reduce((s,b)=>s+b.shares,0);
+    const total=wins.reduce((s,b)=>s+b.amount,0);
     for(const b of wins){
-      const pay=total>0?Math.round((b.shares/total)*m.pool):0;
+      const pay=total>0?Math.round((b.amount/total)*m.pool):0;
       await db.run("UPDATE bets SET status='won',payout=? WHERE id=?",[pay,b.id]);
       await db.run('UPDATE users SET credits=credits+? WHERE id=?',[pay,b.user_id]);
       await recordTx(b.user_id,pay,'bet_won',b.id,`Won: ${m.question}`);
@@ -383,6 +372,30 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
     res.json({success:true,outcome});
   }catch(e){res.status(500).json({error:e.message});}
 });
+
+// Resolve over/under market with actual result
+app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {actual}=req.body;
+    if(actual===undefined||actual===null) return res.status(400).json({error:'Actual result required'});
+    const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
+    if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
+    if(m.market_type!=='overunder') return res.status(400).json({error:'Not an over/under market'});
+    const outcome = parseFloat(actual) > parseFloat(m.line) ? 'OVER' : 'UNDER';
+    await db.run('UPDATE markets SET status=? WHERE id=?',[`resolved-${outcome.toLowerCase()}`,m.id]);
+    const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
+    const total=wins.reduce((s,b)=>s+b.amount,0);
+    for(const b of wins){
+      const pay=total>0?Math.round((b.amount/total)*m.pool):0;
+      await db.run("UPDATE bets SET status='won',payout=? WHERE id=?",[pay,b.id]);
+      await db.run('UPDATE users SET credits=credits+? WHERE id=?',[pay,b.user_id]);
+      await recordTx(b.user_id,pay,'bet_won',b.id,`Won O/U: ${m.question}`);
+    }
+    await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
+    res.json({success:true,outcome,actual,line:m.line});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
   await db.run("UPDATE markets SET status='closed' WHERE id=?",[req.params.id]);
   res.json({success:true});
@@ -393,25 +406,39 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
   try{
     const {marketId,side,amount}=req.body;
     if(!marketId||!side||!amount||amount<=0) return res.status(400).json({error:'Invalid bet'});
-    if(!['YES','NO'].includes(side)) return res.status(400).json({error:'Bad side'});
     const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(user.credits<amount) return res.status(400).json({error:'Insufficient credits'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[marketId]);
     if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
-    const shares=lmsrShares(m.yes_shares,m.no_shares,m.b_param,side,amount);
+
+    // Validate side based on market type
+    if(m.market_type==='overunder' && !['OVER','UNDER'].includes(side))
+      return res.status(400).json({error:'Side must be OVER or UNDER'});
+    if(m.market_type==='binary' && !['YES','NO'].includes(side))
+      return res.status(400).json({error:'Side must be YES or NO'});
+
     await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,user.id]);
-    if(side==='YES') await db.run('UPDATE markets SET yes_shares=yes_shares+?,pool=pool+? WHERE id=?',[shares,amount,m.id]);
-    else await db.run('UPDATE markets SET no_shares=no_shares+?,pool=pool+? WHERE id=?',[shares,amount,m.id]);
+
+    if(m.market_type==='overunder'){
+      if(side==='OVER') await db.run('UPDATE markets SET over_shares=over_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
+      else await db.run('UPDATE markets SET under_shares=under_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
+    } else {
+      if(side==='YES') await db.run('UPDATE markets SET yes_shares=yes_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
+      else await db.run('UPDATE markets SET no_shares=no_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
+    }
+
     const betId=generateId('b');
     await db.run("INSERT INTO bets (id,user_id,market_id,side,amount,shares,status,timestamp) VALUES (?,?,?,?,?,?,'active',?)",
-      [betId,user.id,marketId,side,amount,parseFloat(shares.toFixed(4)),Date.now()]);
+      [betId,user.id,marketId,side,amount,amount,Date.now()]);
     await recordTx(user.id,-amount,'bet_placed',betId,`Bet ${side} on: ${m.question}`);
-    res.json({betId,shares:parseFloat(shares.toFixed(4)),newBalance:user.credits-amount});
+    res.json({betId,shares:amount,newBalance:user.credits-amount});
   }catch(e){res.status(400).json({error:e.message});}
 });
+
 app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
   res.json(await db.all(`
-    SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,m.b_param
+    SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,
+           m.b_param,m.market_type,m.line,m.over_shares,m.under_shares
     FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]));
 });
 
@@ -456,71 +483,48 @@ app.post('/api/messages', authMiddleware, async(req,res)=>{
   try{
     const {recipientId, text} = req.body;
     if(!recipientId||!text||!text.trim()) return res.status(400).json({error:'Missing fields'});
-    const recipient = await db.get('SELECT id,role FROM users WHERE id=?',[recipientId]);
+    const recipient = await db.get('SELECT id FROM users WHERE id=?',[recipientId]);
     if(!recipient) return res.status(404).json({error:'User not found'});
-    // Students can only DM other students and admins. Admins can DM anyone.
-    if(req.user.role==='student' && recipient.role==='admin') {
-      // allow — students can message admins
-    }
     const id = generateId('msg');
     await db.run('INSERT INTO messages (id,sender_id,recipient_id,text,is_read,timestamp) VALUES (?,?,?,?,0,?)',
       [id, req.user.id, recipientId, text.trim(), Date.now()]);
     res.json({id, success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
-
 app.get('/api/messages/conversations', authMiddleware, async(req,res)=>{
   try{
-    // Get all users this person has exchanged messages with
     const rows = await db.all(`
-      SELECT DISTINCT
-        CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id
+      SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id
       FROM messages WHERE sender_id=? OR recipient_id=?
     `,[req.user.id, req.user.id, req.user.id]);
     const conversations = [];
     for(const row of rows){
       const other = await db.get('SELECT id,name,grade,role FROM users WHERE id=?',[row.other_id]);
       if(!other) continue;
-      const last = await db.get(`
-        SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)
-        ORDER BY timestamp DESC LIMIT 1
-      `,[req.user.id, row.other_id, row.other_id, req.user.id]);
-      const unread = await db.get(`
-        SELECT COUNT(*) as c FROM messages WHERE sender_id=? AND recipient_id=? AND is_read=0
-      `,[row.other_id, req.user.id]);
+      const last = await db.get(`SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) ORDER BY timestamp DESC LIMIT 1`,
+        [req.user.id, row.other_id, row.other_id, req.user.id]);
+      const unread = await db.get(`SELECT COUNT(*) as c FROM messages WHERE sender_id=? AND recipient_id=? AND is_read=0`,[row.other_id, req.user.id]);
       conversations.push({other, lastMessage: last, unreadCount: unread.c});
     }
     conversations.sort((a,b) => (b.lastMessage?.timestamp||0) - (a.lastMessage?.timestamp||0));
     res.json(conversations);
   }catch(e){res.status(500).json({error:e.message});}
 });
-
 app.get('/api/messages/thread/:userId', authMiddleware, async(req,res)=>{
   try{
     const other = req.params.userId;
-    const messages = await db.all(`
-      SELECT m.*, u.name as sender_name FROM messages m
-      JOIN users u ON m.sender_id=u.id
-      WHERE (m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?)
-      ORDER BY m.timestamp ASC
-    `,[req.user.id, other, other, req.user.id]);
-    // Mark received messages as read
+    const messages = await db.all(`SELECT m.*, u.name as sender_name FROM messages m JOIN users u ON m.sender_id=u.id WHERE (m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?) ORDER BY m.timestamp ASC`,
+      [req.user.id, other, other, req.user.id]);
     await db.run('UPDATE messages SET is_read=1 WHERE sender_id=? AND recipient_id=?',[other, req.user.id]);
     res.json(messages);
   }catch(e){res.status(500).json({error:e.message});}
 });
-
 app.get('/api/messages/unread-count', authMiddleware, async(req,res)=>{
   const row = await db.get('SELECT COUNT(*) as c FROM messages WHERE recipient_id=? AND is_read=0',[req.user.id]);
   res.json({count: row.c});
 });
-
 app.get('/api/messages/users', authMiddleware, async(req,res)=>{
-  // Return users this person can DM
-  // Students can DM other students + admins
-  // Admins can DM everyone
-  const users = await db.all("SELECT id,name,grade,role FROM users WHERE id!=? ORDER BY name ASC",[req.user.id]);
-  res.json(users);
+  res.json(await db.all("SELECT id,name,grade,role FROM users WHERE id!=? ORDER BY name ASC",[req.user.id]));
 });
 
 // ── ADMIN ──
