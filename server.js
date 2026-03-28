@@ -76,7 +76,7 @@ async function initDB() {
     );
     CREATE TABLE IF NOT EXISTS posts (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, caption TEXT NOT NULL,
-      timestamp INTEGER, repost_count INTEGER DEFAULT 0
+      image TEXT DEFAULT NULL, timestamp INTEGER, repost_count INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS post_likes (
       id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, timestamp INTEGER
@@ -86,6 +86,7 @@ async function initDB() {
       caption TEXT DEFAULT '', timestamp INTEGER
     )
   `);
+  await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await seedIfEmpty();
 }
 
@@ -454,6 +455,21 @@ app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
   res.json({success:true});
 });
 
+app.delete('/api/markets/:id', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const m=await db.get('SELECT id FROM markets WHERE id=?',[req.params.id]);
+    if(!m) return res.status(404).json({error:'Market not found'});
+    const activeBets=await db.all("SELECT * FROM bets WHERE market_id=? AND status='active'",[req.params.id]);
+    for(const b of activeBets){
+      await db.run('UPDATE users SET credits=credits+? WHERE id=?',[b.amount,b.user_id]);
+      await db.run("UPDATE bets SET status='refunded' WHERE id=?",[b.id]);
+      await recordTx(b.user_id,b.amount,'refund',b.id,`Market deleted — refund`);
+    }
+    await db.run('DELETE FROM markets WHERE id=?',[req.params.id]);
+    res.json({success:true, refunded:activeBets.length});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 // ── BETS ──
 app.post('/api/bets', authMiddleware, async(req,res)=>{
   try{
@@ -600,11 +616,12 @@ app.get('/api/feed', authMiddleware, async(req,res)=>{
 
 app.post('/api/posts', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    const {caption}=req.body;
+    const {caption,image}=req.body;
     if(!caption||!caption.trim()) return res.status(400).json({error:'Caption required'});
+    if(image&&image.length>2800000) return res.status(400).json({error:'Image too large'});
     const id=generateId('post');
-    await db.run('INSERT INTO posts (id,user_id,caption,timestamp,repost_count) VALUES (?,?,?,?,0)',
-      [id,req.user.id,caption.trim(),Date.now()]);
+    await db.run('INSERT INTO posts (id,user_id,caption,image,timestamp,repost_count) VALUES (?,?,?,?,?,0)',
+      [id,req.user.id,caption.trim(),image||null,Date.now()]);
     res.json(await db.get('SELECT * FROM posts WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
 });

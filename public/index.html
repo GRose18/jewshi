@@ -247,6 +247,24 @@
   .profile-stats{display:flex;justify-content:center;gap:32px;padding:14px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:12px 0}
   .profile-stat-num{font-size:20px;font-weight:700;color:var(--text);text-align:center}
   .profile-stat-label{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);text-align:center;margin-top:2px}
+  /* JEWGRAM STORIES */
+  .jewgram-bar{width:100%;overflow-x:auto;display:flex;gap:16px;padding:4px 0 16px;margin-bottom:18px;scrollbar-width:none;}
+  .jewgram-bar::-webkit-scrollbar{display:none;}
+  .jewgram-story{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;}
+  .jewgram-ring{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#e040fb);padding:2px;transition:transform 0.15s;}
+  .jewgram-ring:hover{transform:scale(1.07);}
+  .jewgram-avatar{width:100%;height:100%;border-radius:50%;background:var(--bg4);border:2px solid var(--bg2);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--text2);}
+  .jewgram-name{font-size:10px;color:var(--text3);max-width:58px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* FEED IMAGE */
+  .feed-post-image{width:100%;max-height:480px;object-fit:cover;display:block;}
+
+  /* IMAGE UPLOAD */
+  .img-upload-btn{display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border-hi);border-radius:20px;background:var(--bg3);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .img-upload-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .img-preview-wrap{position:relative;margin-top:10px;}
+  .img-preview{width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border);}
+  .img-remove-btn{position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
 </style>
 </head>
 <body>
@@ -818,24 +836,88 @@ async function renderFeed(){
   if(currentUser.role==='admin'){
     composeWrap.innerHTML=`<div class="feed-compose">
       <textarea id="feed-caption-input" placeholder="Post an update, market callout, or announcement…"></textarea>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+      <div id="img-preview-wrap" style="display:none;" class="img-preview-wrap">
+        <img id="img-preview" class="img-preview" src="">
+        <button class="img-remove-btn" onclick="removePostImage()">✕</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <label class="img-upload-btn">
+          📷 Add Photo
+          <input type="file" id="post-image-input" accept="image/*" style="display:none;" onchange="handlePostImage(this)">
+        </label>
         <button class="btn-admin" onclick="createPost()">Post</button>
       </div>
     </div>`;
   } else { composeWrap.innerHTML=''; }
+  await loadJewGram();
   await loadFeed();
 }
 
-async function loadFeed(){
-  const el=document.getElementById('feed-list');
+async function loadJewGram(){
   try{
-    const feed=await api('GET','/feed');
-    if(!feed.length){el.innerHTML='<div class="empty-state"><div class="icon">📱</div><p>No posts yet.</p></div>';return;}
-    el.innerHTML=feed.map(item=>{
-      if(item.feed_type==='post') return renderPost(item);
-      return renderRepost(item);
-    }).join('');
-  }catch(e){el.innerHTML='<p style="color:var(--text3);font-size:13px;">Could not load feed.</p>';}
+    const lb=await api('GET','/leaderboard');
+    const withProfile=lb.filter(u=>u.on_email_list&&u.id!==currentUser.id);
+    const feedEl=document.getElementById('feed-list');
+    let bar=document.getElementById('jewgram-bar');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='jewgram-bar';
+      bar.className='jewgram-bar';
+      feedEl.parentNode.insertBefore(bar,feedEl);
+    }
+    if(!withProfile.length){bar.style.display='none';return;}
+    bar.style.display='flex';
+    bar.innerHTML=withProfile.map(u=>`
+      <div class="jewgram-story" onclick="openProfile('${u.id}')">
+        <div class="jewgram-ring">
+          <div class="jewgram-avatar">${initials(u.name)}</div>
+        </div>
+        <div class="jewgram-name">${u.name.split(' ')[0]}</div>
+      </div>`).join('');
+  }catch(e){}
+}
+
+let postImageBase64=null;
+
+function handlePostImage(input){
+  const file=input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const canvas=document.createElement('canvas');
+      const maxW=800;
+      const scale=img.width>maxW?maxW/img.width:1;
+      canvas.width=Math.round(img.width*scale);
+      canvas.height=Math.round(img.height*scale);
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      postImageBase64=canvas.toDataURL('image/jpeg',0.82);
+      document.getElementById('img-preview').src=postImageBase64;
+      document.getElementById('img-preview-wrap').style.display='block';
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePostImage(){
+  postImageBase64=null;
+  document.getElementById('img-preview').src='';
+  document.getElementById('img-preview-wrap').style.display='none';
+  document.getElementById('post-image-input').value='';
+}
+
+async function createPost(){
+  const caption=document.getElementById('feed-caption-input').value.trim();
+  if(!caption&&!postImageBase64){alert('Write something or add a photo.');return;}
+  try{
+    await api('POST','/posts',{caption:caption||'📷',image:postImageBase64||null});
+    document.getElementById('feed-caption-input').value='';
+    removePostImage();
+    await loadFeed();
+    showToast('Posted!');
+  }catch(e){alert(e.message);}
 }
 
 function renderPost(p){
@@ -850,6 +932,7 @@ function renderPost(p){
       </div>
       ${currentUser.role==='admin'?`<button class="btn-admin btn-sm btn-danger" onclick="deletePost('${p.id}')">Delete</button>`:''}
     </div>
+    ${p.image?`<img class="feed-post-image" src="${p.image}" alt="post image">`:''}
     <div class="feed-caption">${p.caption}</div>
     <div class="feed-actions">
       <button class="feed-action-btn ${p.user_liked?'liked':''}" onclick="toggleLike('${p.id}',this)">
@@ -862,41 +945,6 @@ function renderPost(p){
       </button>
     </div>
   </div>`;
-}
-
-function renderRepost(r){
-  const av=initials(r.reposter_name);
-  return `<div class="feed-post">
-    <div class="feed-post-header">
-      <div class="feed-avatar feed-avatar-student">${av}</div>
-      <div style="flex:1;">
-        <div class="feed-author">${r.reposter_name}</div>
-        <div class="feed-time">${timeAgo(r.timestamp)} · reposted</div>
-      </div>
-    </div>
-    ${r.caption?`<div class="feed-caption" style="color:var(--text2);">${r.caption}</div>`:''}
-    <div class="feed-repost-bar">
-      <div class="feed-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0;">JW</div>
-      <div style="flex:1;min-width:0;">
-        <div class="feed-repost-label">jewshi</div>
-        <div class="feed-repost-caption" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.original_caption}</div>
-      </div>
-      <div class="feed-repost-tag">repost</div>
-    </div>
-    <div class="feed-actions">
-      <button class="feed-action-btn ${r.user_liked?'liked':''}" onclick="toggleLike('${r.post_id}',this)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="${r.user_liked?'#ff4560':'none'}" stroke="${r.user_liked?'#ff4560':'#55556a'}" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        <span class="feed-action-count">${r.like_count}</span>
-      </button>
-    </div>
-  </div>`;
-}
-
-async function createPost(){
-  const caption=document.getElementById('feed-caption-input').value.trim();
-  if(!caption){alert('Write something first.');return;}
-  try{await api('POST','/posts',{caption});document.getElementById('feed-caption-input').value='';await loadFeed();showToast('Posted!');}
-  catch(e){alert(e.message);}
 }
 
 async function deletePost(id){
@@ -1133,10 +1181,12 @@ async function renderAdminTab(){
           <input type="number" id="actual-${m.id}" placeholder="Actual" style="width:100px;padding:4px 8px;font-size:12px;">
           <button class="btn-admin btn-sm btn-success" onclick="resolveOU('${m.id}')">Resolve O/U</button>
           <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="closeMarket('${m.id}')">Close</button>
+          <button class="btn-admin btn-sm btn-danger" onclick="deleteMarket('${m.id}')">Delete</button>
         `:`
           <button class="btn-admin btn-sm btn-success" onclick="resolveMarket('${m.id}','YES')">Resolve YES</button>
           <button class="btn-admin btn-sm btn-danger" onclick="resolveMarket('${m.id}','NO')">Resolve NO</button>
           <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="closeMarket('${m.id}')">Close</button>
+          <button class="btn-admin btn-sm btn-danger" onclick="deleteMarket('${m.id}')">Delete</button>
         `):`<span class="status-tag status-closed">${m.status}</span>`}
       </div></div>`;
   }).join('')||'<p style="color:var(--text3);font-size:13px;">No markets.</p>';
@@ -1211,6 +1261,15 @@ async function resolveOU(id){
   catch(e){alert(e.message);}
 }
 async function closeMarket(id){await api('POST','/markets/'+id+'/close');renderAdminTab();}
+
+async function deleteMarket(id){
+  if(!confirm('Delete this market? All active bets will be refunded.'))return;
+  try{
+    const res=await api('DELETE','/markets/'+id);
+    showToast(`Market deleted. ${res.refunded} bet(s) refunded.`);
+    renderAdminTab();
+  }catch(e){alert(e.message);}
+}
 async function distributeCredits(){
   const amount=parseInt(document.getElementById('weekly-credits').value);
   if(!amount||amount<=0){alert('Enter a valid amount.');return;}
@@ -1298,7 +1357,6 @@ async function startCheckout(){
 }
 
 function showToast(msg){
-  // paste this starting at: function showToast(msg){  const
   const t=document.createElement('div');
   t.textContent=msg;
   t.style.cssText='position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e1e2a;border:1px solid rgba(255,255,255,0.14);color:#eeeef5;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,0.5);pointer-events:none;transition:opacity 0.3s;';
@@ -1313,9 +1371,7 @@ function showNotif(containerId,msg,type='success'){
   setTimeout(()=>{el.innerHTML='';},3500);
 }
 
-// ── INIT ──
 (async()=>{
-  // Handle Stripe success redirect
   const params=new URLSearchParams(window.location.search);
   if(params.get('session_id')&&authToken){
     try{
@@ -1324,10 +1380,7 @@ function showNotif(containerId,msg,type='success'){
     }catch(e){}
     history.replaceState({},'','/');
   }
-  if(params.get('cancelled')){
-    history.replaceState({},'','/');
-  }
-
+  if(params.get('cancelled')) history.replaceState({},'','/');
   if(authToken){
     try{
       currentUser=await api('GET','/me');
