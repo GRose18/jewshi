@@ -26,26 +26,16 @@ async function initDB() {
     url: process.env.TURSO_DATABASE_URL || 'file:local.db',
     authToken: process.env.TURSO_AUTH_TOKEN,
   });
-
   db.run = async (sql, args=[]) => { await db.execute({ sql, args }); };
-  db.get = async (sql, args=[]) => {
-    const res = await db.execute({ sql, args });
-    return res.rows[0] || null;
-  };
-  db.all = async (sql, args=[]) => {
-    const res = await db.execute({ sql, args });
-    return res.rows;
-  };
-  db.exec = async (sql) => {
-    const statements = sql.split(';').map(s => s.trim()).filter(Boolean);
-    for (const s of statements) await db.execute(s);
-  };
+  db.get = async (sql, args=[]) => { const r = await db.execute({ sql, args }); return r.rows[0] || null; };
+  db.all = async (sql, args=[]) => { const r = await db.execute({ sql, args }); return r.rows; };
+  db.exec = async (sql) => { for (const s of sql.split(';').map(s=>s.trim()).filter(Boolean)) await db.execute(s); };
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT NOT NULL,
       role TEXT DEFAULT 'student', credits INTEGER DEFAULT 200, grade TEXT DEFAULT '',
-      email_verified INTEGER DEFAULT 1
+      email_verified INTEGER DEFAULT 1, on_email_list INTEGER DEFAULT 0, bio TEXT DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
@@ -56,10 +46,8 @@ async function initDB() {
       status TEXT DEFAULT 'open', close_date TEXT,
       yes_shares REAL DEFAULT 0, no_shares REAL DEFAULT 0,
       b_param REAL DEFAULT 100, pool INTEGER DEFAULT 0, created_at INTEGER,
-      market_type TEXT DEFAULT 'binary',
-      line REAL DEFAULT NULL,
-      over_shares REAL DEFAULT 0,
-      under_shares REAL DEFAULT 0
+      market_type TEXT DEFAULT 'binary', line REAL DEFAULT NULL,
+      over_shares REAL DEFAULT 0, under_shares REAL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS bets (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, market_id TEXT NOT NULL,
@@ -85,9 +73,19 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
       text TEXT NOT NULL, is_read INTEGER DEFAULT 0, timestamp INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, caption TEXT NOT NULL,
+      timestamp INTEGER, repost_count INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS post_likes (
+      id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, timestamp INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS post_reposts (
+      id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL,
+      caption TEXT DEFAULT '', timestamp INTEGER
     )
   `);
-
   await seedIfEmpty();
 }
 
@@ -95,15 +93,15 @@ async function seedIfEmpty() {
   const row = await db.get('SELECT COUNT(*) as c FROM users');
   if (row.c > 0) return;
   const users = [
-    { id: 'GROSE',       name: 'Administrator', email: 'grose@emeryweiner.org', password: 'BryceB0mb!', role: 'admin',   credits: 0,   grade: '' },
-    { id: 'STUDENT-001', name: 'Blake Gubitz',  email: 'blake@jewshi.com',      password: 'daren',      role: 'student', credits: 500, grade: '' },
-    { id: 'STUDENT-002', name: 'Student 002',   email: 'student2@jewshi.com',   password: 'Hello123',   role: 'student', credits: 500, grade: '' },
-    { id: 'STUDENT-003', name: 'Student 003',   email: 'student3@jewshi.com',   password: 'BigIce',     role: 'student', credits: 500, grade: '' },
+    { id:'GROSE',       name:'Administrator', email:'grose@emeryweiner.org', password:'BryceB0mb!', role:'admin',   credits:0,   grade:'' },
+    { id:'STUDENT-001', name:'Blake Gubitz',  email:'blake@jewshi.com',      password:'daren',      role:'student', credits:500, grade:'' },
+    { id:'STUDENT-002', name:'Student 002',   email:'student2@jewshi.com',   password:'Hello123',   role:'student', credits:500, grade:'' },
+    { id:'STUDENT-003', name:'Student 003',   email:'student3@jewshi.com',   password:'BigIce',     role:'student', credits:500, grade:'' },
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
-      [u.id, u.name, u.email, hash, u.role, u.credits, u.grade]);
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list) VALUES (?,?,?,?,?,?,?,1,0)',
+      [u.id,u.name,u.email,hash,u.role,u.credits,u.grade]);
   }
   const items = [
     ['s1','Café Sandwich','🥪',150,'Redeemable at school café'],
@@ -137,6 +135,21 @@ async function appendToSheet(name, email, grade) {
   } catch(e) { console.error('[Sheets] Error:', e.message); }
 }
 
+// Send email via Apps Script
+async function sendViaAppsScript(type, payload) {
+  try {
+    if (!process.env.APPS_SCRIPT_URL) { console.log('[Email] APPS_SCRIPT_URL not set, skipping'); return 0; }
+    const fetch = (...args) => import('node-fetch').then(({default:f})=>f(...args));
+    const res = await fetch(process.env.APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, ...payload }),
+    });
+    const data = await res.json();
+    return data.sent || 0;
+  } catch(e) { console.error('[Email] Error:', e.message); return 0; }
+}
+
 function generateId(p='') { return p+Date.now()+Math.random().toString(36).slice(2,6); }
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
 
@@ -144,150 +157,141 @@ async function recordTx(userId, amount, type, refId=null, desc='') {
   await db.run('INSERT INTO transactions (id,user_id,amount,type,reference_id,description,timestamp) VALUES (?,?,?,?,?,?,?)',
     [generateId('tx'),userId,amount,type,refId,desc,Date.now()]);
 }
-
 function authMiddleware(req,res,next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({error:'No token'});
   try { req.user = jwt.verify(token, JWT_SECRET); next(); }
   catch { res.status(401).json({error:'Invalid token'}); }
 }
-
 async function adminOnly(req,res,next) {
   const user = await db.get('SELECT role FROM users WHERE id=?',[req.user.id]);
-  if (!user || user.role !== 'admin') return res.status(403).json({error:'Admin only'});
+  if (!user||user.role!=='admin') return res.status(403).json({error:'Admin only'});
   next();
 }
-
 function isGrose(req) { return req.user.id === 'GROSE'; }
-
-function getYesPercent(m) {
-  const total = (m.yes_shares||0) + (m.no_shares||0);
-  return total===0 ? 50 : Math.round((m.yes_shares/total)*100);
-}
-function getOverPercent(m) {
-  const total = (m.over_shares||0) + (m.under_shares||0);
-  return total===0 ? 50 : Math.round((m.over_shares/total)*100);
-}
+function getYesPercent(m) { const t=(m.yes_shares||0)+(m.no_shares||0); return t===0?50:Math.round((m.yes_shares/t)*100); }
+function getOverPercent(m) { const t=(m.over_shares||0)+(m.under_shares||0); return t===0?50:Math.round((m.over_shares/t)*100); }
 
 // ── ACCESS PASSWORD ──
 app.post('/api/access/verify', authMiddleware, async(req,res)=>{
-  try{
-    const {password} = req.body;
-    const row = await db.get("SELECT value FROM settings WHERE key='access_password'");
-    const correct = row?.value || 'jewshi2025';
-    if(password === correct) res.json({success:true});
-    else res.status(401).json({error:'Wrong password'});
-  }catch(e){res.status(500).json({error:e.message});}
+  const {password}=req.body;
+  const row=await db.get("SELECT value FROM settings WHERE key='access_password'");
+  if(password===(row?.value||'jewshi2025')) res.json({success:true});
+  else res.status(401).json({error:'Wrong password'});
 });
 
 app.post('/api/admin/access-password', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can change the access password'});
-    const {password} = req.body;
+    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can change the access password'});
+    const {password}=req.body;
     if(!password||password.length<4) return res.status(400).json({error:'Password too short'});
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('access_password',?)",[password]);
-    res.json({success:true});
+    // Email verified users the new password
+    const emailUsers=await db.all("SELECT email,name FROM users WHERE on_email_list=1 AND role='student'");
+    const emails=emailUsers.map(u=>({email:u.email,name:u.name}));
+    const sent=await sendViaAppsScript('access_password_changed',{emails,newPassword:password,siteUrl:CLIENT_URL});
+    res.json({success:true,emailsSent:sent});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
 // ── LIVE FEED ──
 app.get('/api/live', async(req,res)=>{
   try{
-    const totalCredits = (await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s || 0;
-    const activePlayers = (await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c || 0;
-    const markets = await db.all("SELECT id,question,category,close_date,pool,yes_shares,no_shares,over_shares,under_shares,market_type,line,status FROM markets WHERE status='open' ORDER BY created_at DESC");
-    const totalBets = (await db.get("SELECT COUNT(*) as c FROM bets WHERE status='active'")).c || 0;
-    res.json({ totalCredits, activePlayers, markets, totalBets });
+    const totalCredits=(await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s||0;
+    const activePlayers=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c||0;
+    const markets=await db.all("SELECT id,question,category,close_date,pool,yes_shares,no_shares,over_shares,under_shares,market_type,line,status FROM markets WHERE status='open' ORDER BY created_at DESC");
+    const totalBets=(await db.get("SELECT COUNT(*) as c FROM bets WHERE status='active'")).c||0;
+    res.json({totalCredits,activePlayers,markets,totalBets});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
 // ── STRIPE ──
-app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
-  try {
-    const { amountCents } = req.body;
-    if (!amountCents || amountCents < 100) return res.status(400).json({ error: 'Minimum purchase is $1.00' });
-    const credits = Math.floor(amountCents / 100) * 100;
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{ price_data: { currency: 'usd', unit_amount: amountCents, product_data: { name: `Jewshi Markets — ${credits.toLocaleString()} Credits` } }, quantity: 1 }],
-      mode: 'payment',
-      success_url: `${CLIENT_URL}/payment-success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${CLIENT_URL}/?cancelled=1`,
-      metadata: { user_id: req.user.id, credits: String(credits) },
+app.post('/api/credits/checkout', authMiddleware, async(req,res)=>{
+  try{
+    const {amountCents}=req.body;
+    if(!amountCents||amountCents<100) return res.status(400).json({error:'Minimum purchase is $1.00'});
+    const credits=Math.floor(amountCents/100)*100;
+    const session=await stripe.checkout.sessions.create({
+      payment_method_types:['card'],
+      line_items:[{price_data:{currency:'usd',unit_amount:amountCents,product_data:{name:`Jewshi Markets — ${credits.toLocaleString()} Credits`}},quantity:1}],
+      mode:'payment',
+      success_url:`${CLIENT_URL}/payment-success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:`${CLIENT_URL}/?cancelled=1`,
+      metadata:{user_id:req.user.id,credits:String(credits)},
     });
     await db.run('INSERT INTO stripe_sessions (session_id,user_id,credits,fulfilled,created_at) VALUES (?,?,?,0,?)',
-      [session.id, req.user.id, credits, Date.now()]);
-    res.json({ url: session.url });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+      [session.id,req.user.id,credits,Date.now()]);
+    res.json({url:session.url});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/stripe-webhook', async (req, res) => {
-  const sig = req.headers['stripe-signature'];
+app.post('/api/stripe-webhook', async(req,res)=>{
+  const sig=req.headers['stripe-signature'];
   let event;
-  try { event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET); }
-  catch(e) { return res.status(400).send(`Webhook Error: ${e.message}`); }
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const { user_id, credits } = session.metadata;
-    const creditsNum = parseInt(credits);
-    const existing = await db.get('SELECT fulfilled FROM stripe_sessions WHERE session_id=?', [session.id]);
-    if (!existing || existing.fulfilled) return res.json({ received: true });
-    await db.run('UPDATE users SET credits=credits+? WHERE id=?', [creditsNum, user_id]);
-    await recordTx(user_id, creditsNum, 'purchase', session.id, `Purchased ${creditsNum} credits`);
-    await db.run('UPDATE stripe_sessions SET fulfilled=1 WHERE session_id=?', [session.id]);
+  try{event=stripe.webhooks.constructEvent(req.body,sig,process.env.STRIPE_WEBHOOK_SECRET);}
+  catch(e){return res.status(400).send(`Webhook Error: ${e.message}`);}
+  if(event.type==='checkout.session.completed'){
+    const session=event.data.object;
+    const {user_id,credits}=session.metadata;
+    const creditsNum=parseInt(credits);
+    const existing=await db.get('SELECT fulfilled FROM stripe_sessions WHERE session_id=?',[session.id]);
+    if(!existing||existing.fulfilled) return res.json({received:true});
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[creditsNum,user_id]);
+    await recordTx(user_id,creditsNum,'purchase',session.id,`Purchased ${creditsNum} credits`);
+    await db.run('UPDATE stripe_sessions SET fulfilled=1 WHERE session_id=?',[session.id]);
   }
-  res.json({ received: true });
+  res.json({received:true});
 });
 
-app.get('/api/credits/verify/:sessionId', authMiddleware, async (req, res) => {
-  const row = await db.get('SELECT fulfilled, credits FROM stripe_sessions WHERE session_id=? AND user_id=?',
-    [req.params.sessionId, req.user.id]);
-  if (!row) return res.status(404).json({ error: 'Session not found' });
-  res.json({ fulfilled: !!row.fulfilled, credits: row.credits });
+app.get('/api/credits/verify/:sessionId', authMiddleware, async(req,res)=>{
+  const row=await db.get('SELECT fulfilled,credits FROM stripe_sessions WHERE session_id=? AND user_id=?',
+    [req.params.sessionId,req.user.id]);
+  if(!row) return res.status(404).json({error:'Session not found'});
+  res.json({fulfilled:!!row.fulfilled,credits:row.credits});
 });
 
 // ── AUTH ──
 app.post('/api/auth/login', async(req,res)=>{
   try{
-    const {email, password} = req.body;
+    const {email,password}=req.body;
     if(!email||!password) return res.status(400).json({error:'Missing fields'});
-    const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
+    const user=await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
     if(!user) return res.status(401).json({error:'Invalid email or password'});
     if(!await bcrypt.compare(password,user.password)) return res.status(401).json({error:'Invalid email or password'});
-    const token = jwt.sign({id:user.id,role:user.role}, JWT_SECRET, {expiresIn:'30d'});
-    const {password:_,...safe} = user;
-    res.json({token, user:safe});
+    const token=jwt.sign({id:user.id,role:user.role},JWT_SECRET,{expiresIn:'30d'});
+    const {password:_,...safe}=user;
+    res.json({token,user:safe});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.post('/api/auth/register', async(req,res)=>{
   try{
-    const {name, email, password, grade} = req.body;
+    const {name,email,password,grade}=req.body;
     if(!name||!email||!password) return res.status(400).json({error:'Missing fields'});
-    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedEmail=email.trim().toLowerCase();
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[trimmedEmail]))
       return res.status(409).json({error:'An account with that email already exists'});
-    const hash = await bcrypt.hash(password, 10);
-    const uid = generateId('U');
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
-      [uid, name.trim(), trimmedEmail, hash, 'student', 200, grade||'']);
-    await recordTx(uid, 200, 'signup_bonus', null, 'Welcome bonus');
-    appendToSheet(name.trim(), trimmedEmail, grade||'');
-    const token = jwt.sign({id:uid,role:'student'}, JWT_SECRET, {expiresIn:'30d'});
-    const user = await db.get('SELECT id,name,email,role,credits,grade FROM users WHERE id=?',[uid]);
-    res.json({token, user, message:'Account created!'});
+    const hash=await bcrypt.hash(password,10);
+    const uid=generateId('U');
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list) VALUES (?,?,?,?,?,?,?,1,0)',
+      [uid,name.trim(),trimmedEmail,hash,'student',200,grade||'']);
+    await recordTx(uid,200,'signup_bonus',null,'Welcome bonus');
+    appendToSheet(name.trim(),trimmedEmail,grade||'');
+    const token=jwt.sign({id:uid,role:'student'},JWT_SECRET,{expiresIn:'30d'});
+    const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list FROM users WHERE id=?',[uid]);
+    res.json({token,user,message:'Account created!'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.post('/api/auth/forgot-password', async(req,res)=>{
   try{
-    const {email} = req.body;
-    const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email?.trim()]);
+    const {email}=req.body;
+    const user=await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email?.trim()]);
     if(user){
-      const token = generateToken();
+      const token=generateToken();
       await db.run('INSERT INTO password_reset_tokens (token,user_id,expires_at,used,created_at) VALUES (?,?,?,0,?)',
-        [token, user.id, Date.now()+3600000, Date.now()]);
-      console.log(`[Dev] Reset link: ${CLIENT_URL}/reset-password.html?token=${token}`);
+        [token,user.id,Date.now()+3600000,Date.now()]);
+      console.log(`[Dev] Reset: ${CLIENT_URL}/reset-password.html?token=${token}`);
     }
     res.json({message:'If that email has an account, a reset link has been sent.'});
   }catch(e){res.status(500).json({error:e.message});}
@@ -295,12 +299,12 @@ app.post('/api/auth/forgot-password', async(req,res)=>{
 
 app.post('/api/auth/reset-password', async(req,res)=>{
   try{
-    const {token, password} = req.body;
+    const {token,password}=req.body;
     if(!token||!password||password.length<6) return res.status(400).json({error:'Invalid request'});
-    const row = await db.get('SELECT * FROM password_reset_tokens WHERE token=? AND used=0',[token]);
+    const row=await db.get('SELECT * FROM password_reset_tokens WHERE token=? AND used=0',[token]);
     if(!row||row.expires_at<Date.now()) return res.status(400).json({error:'Invalid or expired link'});
-    const hash = await bcrypt.hash(password, 10);
-    await db.run('UPDATE users SET password=? WHERE id=?',[hash, row.user_id]);
+    const hash=await bcrypt.hash(password,10);
+    await db.run('UPDATE users SET password=? WHERE id=?',[hash,row.user_id]);
     await db.run('UPDATE password_reset_tokens SET used=1 WHERE token=?',[token]);
     res.json({message:'Password updated!'});
   }catch(e){res.status(500).json({error:e.message});}
@@ -308,12 +312,12 @@ app.post('/api/auth/reset-password', async(req,res)=>{
 
 // ── USER ──
 app.get('/api/me', authMiddleware, async(req,res)=>{
-  const user = await db.get('SELECT id,name,email,role,credits,grade FROM users WHERE id=?',[req.user.id]);
+  const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list,bio FROM users WHERE id=?',[req.user.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   res.json(user);
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,email,role,credits,grade FROM users WHERE id!=?",[req.user.id]));
+  res.json(await db.all("SELECT id,name,email,role,credits,grade,on_email_list FROM users WHERE id!=?",[req.user.id]));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -334,15 +338,23 @@ app.post('/api/users/:id/remove-credits', authMiddleware, adminOnly, async(req,r
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/users/:id/make-admin', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can promote users'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can promote users'});
   await db.run("UPDATE users SET role='admin' WHERE id=?",[req.params.id]);
   res.json({success:true});
 });
 app.post('/api/users/:id/make-student', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can demote users'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can demote users'});
   if(req.params.id==='GROSE') return res.status(400).json({error:'Cannot demote primary admin'});
   await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
   res.json({success:true});
+});
+app.post('/api/users/:id/toggle-email-list', authMiddleware, adminOnly, async(req,res)=>{
+  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can manage email list'});
+  const user=await db.get('SELECT on_email_list FROM users WHERE id=?',[req.params.id]);
+  if(!user) return res.status(404).json({error:'User not found'});
+  const newVal=user.on_email_list?0:1;
+  await db.run('UPDATE users SET on_email_list=? WHERE id=?',[newVal,req.params.id]);
+  res.json({on_email_list:newVal});
 });
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   const {id}=req.params;
@@ -352,16 +364,30 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
   await db.run('DELETE FROM stripe_sessions WHERE user_id=?',[id]);
   await db.run('DELETE FROM messages WHERE sender_id=? OR recipient_id=?',[id,id]);
+  await db.run('DELETE FROM post_likes WHERE user_id=?',[id]);
+  await db.run('DELETE FROM post_reposts WHERE user_id=?',[id]);
   await db.run('DELETE FROM users WHERE id=?',[id]);
   res.json({success:true});
+});
+
+// ── PROFILE ──
+app.get('/api/users/:id/profile', authMiddleware, async(req,res)=>{
+  try{
+    const user=await db.get('SELECT id,name,grade,role,credits,bio,on_email_list FROM users WHERE id=? AND on_email_list=1',[req.params.id]);
+    if(!user) return res.status(404).json({error:'Profile not found'});
+    const betsWon=(await db.get("SELECT COUNT(*) as c FROM bets WHERE user_id=? AND status='won'",[req.params.id])).c;
+    const betsTotal=(await db.get("SELECT COUNT(*) as c FROM bets WHERE user_id=?",[req.params.id])).c;
+    const reposts=await db.all(`SELECT r.*,p.caption as original_caption,u.name as original_author FROM post_reposts r JOIN posts p ON r.post_id=p.id JOIN users u ON p.user_id=u.id WHERE r.user_id=? ORDER BY r.timestamp DESC`,[req.params.id]);
+    res.json({...user,betsWon,betsTotal,reposts});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
 // ── MARKETS ──
 app.get('/api/markets', authMiddleware, async(req,res)=>{
   const {category}=req.query;
   res.json(category
-    ? await db.all('SELECT * FROM markets WHERE category=? ORDER BY created_at DESC',[category])
-    : await db.all('SELECT * FROM markets ORDER BY created_at DESC'));
+    ?await db.all('SELECT * FROM markets WHERE category=? ORDER BY created_at DESC',[category])
+    :await db.all('SELECT * FROM markets ORDER BY created_at DESC'));
 });
 app.get('/api/markets/:id', authMiddleware, async(req,res)=>{
   const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
@@ -406,10 +432,10 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
 app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {actual}=req.body;
-    if(actual===undefined||actual===null) return res.status(400).json({error:'Actual result required'});
+    if(actual===undefined) return res.status(400).json({error:'Actual result required'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
     if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
-    const outcome = parseFloat(actual) > parseFloat(m.line) ? 'OVER' : 'UNDER';
+    const outcome=parseFloat(actual)>parseFloat(m.line)?'OVER':'UNDER';
     await db.run('UPDATE markets SET status=? WHERE id=?',[`resolved-${outcome.toLowerCase()}`,m.id]);
     const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
     const total=wins.reduce((s,b)=>s+b.amount,0);
@@ -455,15 +481,12 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
   }catch(e){res.status(400).json({error:e.message});}
 });
 app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
-  res.json(await db.all(`
-    SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,
-           m.b_param,m.market_type,m.line,m.over_shares,m.under_shares
-    FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]));
+  res.json(await db.all(`SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,m.b_param,m.market_type,m.line,m.over_shares,m.under_shares FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]));
 });
 
 // ── LEADERBOARD ──
 app.get('/api/leaderboard', authMiddleware, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,grade,credits FROM users WHERE role='student' ORDER BY credits DESC"));
+  res.json(await db.all("SELECT id,name,grade,credits,on_email_list FROM users WHERE role='student' ORDER BY credits DESC"));
 });
 
 // ── STORE ──
@@ -500,48 +523,123 @@ app.get('/api/store/redemptions/mine', authMiddleware, async(req,res)=>{
 // ── MESSAGES ──
 app.post('/api/messages', authMiddleware, async(req,res)=>{
   try{
-    const {recipientId, text} = req.body;
+    const {recipientId,text}=req.body;
     if(!recipientId||!text||!text.trim()) return res.status(400).json({error:'Missing fields'});
-    const recipient = await db.get('SELECT id FROM users WHERE id=?',[recipientId]);
+    const recipient=await db.get('SELECT id FROM users WHERE id=?',[recipientId]);
     if(!recipient) return res.status(404).json({error:'User not found'});
-    const id = generateId('msg');
+    const id=generateId('msg');
     await db.run('INSERT INTO messages (id,sender_id,recipient_id,text,is_read,timestamp) VALUES (?,?,?,?,0,?)',
-      [id, req.user.id, recipientId, text.trim(), Date.now()]);
-    res.json({id, success:true});
+      [id,req.user.id,recipientId,text.trim(),Date.now()]);
+    res.json({id,success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/messages/conversations', authMiddleware, async(req,res)=>{
   try{
-    const rows = await db.all(`SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id FROM messages WHERE sender_id=? OR recipient_id=?`,
-      [req.user.id, req.user.id, req.user.id]);
-    const conversations = [];
+    const rows=await db.all(`SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id FROM messages WHERE sender_id=? OR recipient_id=?`,
+      [req.user.id,req.user.id,req.user.id]);
+    const conversations=[];
     for(const row of rows){
-      const other = await db.get('SELECT id,name,grade,role FROM users WHERE id=?',[row.other_id]);
+      const other=await db.get('SELECT id,name,grade,role FROM users WHERE id=?',[row.other_id]);
       if(!other) continue;
-      const last = await db.get(`SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) ORDER BY timestamp DESC LIMIT 1`,
-        [req.user.id, row.other_id, row.other_id, req.user.id]);
-      const unread = await db.get(`SELECT COUNT(*) as c FROM messages WHERE sender_id=? AND recipient_id=? AND is_read=0`,[row.other_id, req.user.id]);
-      conversations.push({other, lastMessage: last, unreadCount: unread.c});
+      const last=await db.get(`SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) ORDER BY timestamp DESC LIMIT 1`,
+        [req.user.id,row.other_id,row.other_id,req.user.id]);
+      const unread=await db.get(`SELECT COUNT(*) as c FROM messages WHERE sender_id=? AND recipient_id=? AND is_read=0`,[row.other_id,req.user.id]);
+      conversations.push({other,lastMessage:last,unreadCount:unread.c});
     }
-    conversations.sort((a,b) => (b.lastMessage?.timestamp||0) - (a.lastMessage?.timestamp||0));
+    conversations.sort((a,b)=>(b.lastMessage?.timestamp||0)-(a.lastMessage?.timestamp||0));
     res.json(conversations);
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/messages/thread/:userId', authMiddleware, async(req,res)=>{
   try{
-    const other = req.params.userId;
-    const messages = await db.all(`SELECT m.*, u.name as sender_name FROM messages m JOIN users u ON m.sender_id=u.id WHERE (m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?) ORDER BY m.timestamp ASC`,
-      [req.user.id, other, other, req.user.id]);
-    await db.run('UPDATE messages SET is_read=1 WHERE sender_id=? AND recipient_id=?',[other, req.user.id]);
+    const other=req.params.userId;
+    const messages=await db.all(`SELECT m.*,u.name as sender_name FROM messages m JOIN users u ON m.sender_id=u.id WHERE (m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?) ORDER BY m.timestamp ASC`,
+      [req.user.id,other,other,req.user.id]);
+    await db.run('UPDATE messages SET is_read=1 WHERE sender_id=? AND recipient_id=?',[other,req.user.id]);
     res.json(messages);
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/messages/unread-count', authMiddleware, async(req,res)=>{
-  const row = await db.get('SELECT COUNT(*) as c FROM messages WHERE recipient_id=? AND is_read=0',[req.user.id]);
-  res.json({count: row.c});
+  const row=await db.get('SELECT COUNT(*) as c FROM messages WHERE recipient_id=? AND is_read=0',[req.user.id]);
+  res.json({count:row.c});
 });
 app.get('/api/messages/users', authMiddleware, async(req,res)=>{
   res.json(await db.all("SELECT id,name,grade,role FROM users WHERE id!=? ORDER BY name ASC",[req.user.id]));
+});
+
+// ── POSTS / FEED ──
+app.get('/api/feed', authMiddleware, async(req,res)=>{
+  try{
+    // Get original admin posts
+    const posts=await db.all(`SELECT p.*,u.name as author_name,u.role as author_role FROM posts p JOIN users u ON p.user_id=u.id ORDER BY p.timestamp DESC LIMIT 50`);
+    // Get reposts
+    const reposts=await db.all(`SELECT r.*,u.name as reposter_name,p.caption as original_caption,pu.name as original_author FROM post_reposts r JOIN users u ON r.user_id=u.id JOIN posts p ON r.post_id=p.id JOIN users pu ON p.user_id=pu.id ORDER BY r.timestamp DESC LIMIT 50`);
+    // Merge and sort
+    const feed=[
+      ...posts.map(p=>({...p,feed_type:'post',feed_time:p.timestamp})),
+      ...reposts.map(r=>({...r,feed_type:'repost',feed_time:r.timestamp})),
+    ].sort((a,b)=>b.feed_time-a.feed_time).slice(0,50);
+    // Add like counts and whether current user liked
+    for(const item of feed){
+      if(item.feed_type==='post'){
+        const likeCount=await db.get('SELECT COUNT(*) as c FROM post_likes WHERE post_id=?',[item.id]);
+        const userLiked=await db.get('SELECT id FROM post_likes WHERE post_id=? AND user_id=?',[item.id,req.user.id]);
+        item.like_count=likeCount.c;
+        item.user_liked=!!userLiked;
+        item.repost_count=(await db.get('SELECT COUNT(*) as c FROM post_reposts WHERE post_id=?',[item.id])).c;
+      } else {
+        const likeCount=await db.get('SELECT COUNT(*) as c FROM post_likes WHERE post_id=?',[item.post_id]);
+        const userLiked=await db.get('SELECT id FROM post_likes WHERE post_id=? AND user_id=?',[item.post_id,req.user.id]);
+        item.like_count=likeCount.c;
+        item.user_liked=!!userLiked;
+      }
+    }
+    res.json(feed);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/posts', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {caption}=req.body;
+    if(!caption||!caption.trim()) return res.status(400).json({error:'Caption required'});
+    const id=generateId('post');
+    await db.run('INSERT INTO posts (id,user_id,caption,timestamp,repost_count) VALUES (?,?,?,?,0)',
+      [id,req.user.id,caption.trim(),Date.now()]);
+    res.json(await db.get('SELECT * FROM posts WHERE id=?',[id]));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.delete('/api/posts/:id', authMiddleware, adminOnly, async(req,res)=>{
+  await db.run('DELETE FROM post_likes WHERE post_id=?',[req.params.id]);
+  await db.run('DELETE FROM post_reposts WHERE post_id=?',[req.params.id]);
+  await db.run('DELETE FROM posts WHERE id=?',[req.params.id]);
+  res.json({success:true});
+});
+
+app.post('/api/posts/:id/like', authMiddleware, async(req,res)=>{
+  try{
+    const existing=await db.get('SELECT id FROM post_likes WHERE post_id=? AND user_id=?',[req.params.id,req.user.id]);
+    if(existing){
+      await db.run('DELETE FROM post_likes WHERE post_id=? AND user_id=?',[req.params.id,req.user.id]);
+      res.json({liked:false});
+    } else {
+      await db.run('INSERT INTO post_likes (id,post_id,user_id,timestamp) VALUES (?,?,?,?)',
+        [generateId('lk'),req.params.id,req.user.id,Date.now()]);
+      res.json({liked:true});
+    }
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/posts/:id/repost', authMiddleware, async(req,res)=>{
+  try{
+    const {caption}=req.body;
+    const existing=await db.get('SELECT id FROM post_reposts WHERE post_id=? AND user_id=?',[req.params.id,req.user.id]);
+    if(existing) return res.status(409).json({error:'Already reposted'});
+    const id=generateId('rp');
+    await db.run('INSERT INTO post_reposts (id,post_id,user_id,caption,timestamp) VALUES (?,?,?,?,?)',
+      [id,req.params.id,req.user.id,caption||'',Date.now()]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
 // ── ADMIN ──
@@ -578,6 +676,40 @@ app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
   res.json({students,openMarkets,totalBets,pendingVol:0,totalCreditsInCirculation:circ});
 });
 
+app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const emailUsers=await db.all("SELECT email,name FROM users WHERE on_email_list=1 AND role='student'");
+    if(!emailUsers.length) return res.status(400).json({error:'No users on email list yet'});
+    const [leaderboard,markets,bigWins,creditsRow,accessRow]=await Promise.all([
+      db.all("SELECT id,name,credits FROM users WHERE role='student' ORDER BY credits DESC LIMIT 5"),
+      db.all("SELECT * FROM markets WHERE status='open' ORDER BY created_at DESC"),
+      db.all(`SELECT b.payout,u.name,m.question FROM bets b JOIN users u ON b.user_id=u.id JOIN markets m ON b.market_id=m.id WHERE b.status='won' AND b.payout>100 ORDER BY b.payout DESC LIMIT 3`),
+      db.get("SELECT SUM(amount) as s FROM transactions WHERE type='weekly_distribution'"),
+      db.get("SELECT value FROM settings WHERE key='access_password'"),
+    ]);
+    const newUsersCount=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c;
+    const payload={
+      emails:emailUsers.map(u=>({email:u.email,name:u.name})),
+      leaderboard,
+      markets:markets.map(m=>({
+        question:m.question,
+        pct:m.market_type==='overunder'?`OVER ${getOverPercent(m)}%`:`YES ${getYesPercent(m)}%`,
+        pool:m.pool||0,
+        closeDate:m.close_date,
+        line:m.line||null,
+        market_type:m.market_type,
+      })),
+      bigWins,
+      newUsers:newUsersCount||0,
+      creditsDistributed:creditsRow?.s||0,
+      accessPassword:accessRow?.value||'jewshi2025',
+      siteUrl:CLIENT_URL,
+    };
+    const sent=await sendViaAppsScript('weekly_digest',payload);
+    res.json({success:true,sent});
+  }catch(e){console.error('Digest error:',e);res.status(500).json({error:e.message});}
+});
+
 initDB().then(()=>{
-  app.listen(PORT,()=>{ console.log(`\n🚀 Jewshi Markets running at http://localhost:${PORT}\n`); });
+  app.listen(PORT,()=>{console.log(`\n🚀 Jewshi Markets running at http://localhost:${PORT}\n`);});
 }).catch(err=>{console.error('DB init failed:',err);process.exit(1);});
