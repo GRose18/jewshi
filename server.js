@@ -14,17 +14,12 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'jewshi-secret-change-in-production';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
-// ── EMAIL TRANSPORT (Resend) ──
-// Set in .env: RESEND_API_KEY and EMAIL_FROM
-// Sign up free at https://resend.com — 3,000 emails/month on free tier.
-// Without a custom domain you can send from: onboarding@resend.dev (testing only)
-// With a custom domain set: EMAIL_FROM=Jewshi <noreply@yourdomain.com>
 const resend = new Resend(process.env.RESEND_API_KEY || '');
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Jewshi <onboarding@resend.dev>';
 
 async function sendEmail(to, subject, html) {
   if (!process.env.RESEND_API_KEY) {
-    console.warn(`[Email] RESEND_API_KEY not set — would have sent to ${to}: ${subject}`);
+    console.warn(`[Email] No RESEND_API_KEY — skipping email to ${to}: ${subject}`);
     return;
   }
   const { error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html });
@@ -49,11 +44,30 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── TURSO DB ──
 let db;
 
 async function initDB() {
-  // Set DB_PATH to a persistent volume in production, e.g. /data/jewshi.db
-  db = await open({ filename: process.env.DB_PATH || 'ew-markets.db', driver: sqlite3.Database });
+  db = createClient({
+    url: process.env.TURSO_DATABASE_URL || 'file:local.db',
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+
+  // Helper wrappers to match old sqlite API style
+  db.run = async (sql, args=[]) => { await db.execute({ sql, args }); };
+  db.get = async (sql, args=[]) => {
+    const res = await db.execute({ sql, args });
+    return res.rows[0] || null;
+  };
+  db.all = async (sql, args=[]) => {
+    const res = await db.execute({ sql, args });
+    return res.rows;
+  };
+  db.exec = async (sql) => {
+    const statements = sql.split(';').map(s => s.trim()).filter(Boolean);
+    for (const s of statements) await db.execute(s);
+  };
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -87,23 +101,18 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS bets (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, market_id TEXT NOT NULL,
       side TEXT NOT NULL, amount REAL NOT NULL, shares REAL NOT NULL,
-      status TEXT DEFAULT 'active', payout REAL DEFAULT 0, timestamp INTEGER,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (market_id) REFERENCES markets(id)
+      status TEXT DEFAULT 'active', payout REAL DEFAULT 0, timestamp INTEGER
     );
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, amount REAL NOT NULL,
-      type TEXT NOT NULL, reference_id TEXT, description TEXT, timestamp INTEGER,
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      type TEXT NOT NULL, reference_id TEXT, description TEXT, timestamp INTEGER
     );
     CREATE TABLE IF NOT EXISTS store_items (
       id TEXT PRIMARY KEY, name TEXT, icon TEXT, cost INTEGER, description TEXT
     );
     CREATE TABLE IF NOT EXISTS redemptions (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, item_id TEXT NOT NULL,
-      cost INTEGER, timestamp INTEGER,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (item_id) REFERENCES store_items(id)
+      cost INTEGER, timestamp INTEGER
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE IF NOT EXISTS stripe_sessions (
@@ -112,18 +121,8 @@ async function initDB() {
       credits INTEGER NOT NULL,
       fulfilled INTEGER DEFAULT 0,
       created_at INTEGER
-    );
+    )
   `);
-
-  // Migrate existing users table if email column missing
-  const cols = await db.all("PRAGMA table_info(users)");
-  const colNames = cols.map(c => c.name);
-  if (!colNames.includes('email')) {
-    await db.exec("ALTER TABLE users ADD COLUMN email TEXT");
-  }
-  if (!colNames.includes('email_verified')) {
-    await db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0");
-  }
 
   await seedIfEmpty();
 }
@@ -133,14 +132,16 @@ async function seedIfEmpty() {
   if (row.c > 0) return;
   const users = [
     { id: 'GROSE',       name: 'Administrator', email: process.env.ADMIN_EMAIL || 'admin@jewshi.com',   password: 'BryceB0mb!', role: 'admin',   credits: 0,   grade: '' },
-    { id: 'STUDENT-001', name: 'Blake Gubitz',  email: 'blake@jewshi.com',   password: 'daren',          role: 'student', credits: 500, grade: '' },
-    { id: 'STUDENT-002', name: 'Student 002',   email: 'student2@jewshi.com', password: 'Hello123',      role: 'student', credits: 500, grade: '' },
-    { id: 'STUDENT-003', name: 'Student 003',   email: 'student3@jewshi.com', password: 'BigIce',        role: 'student', credits: 500, grade: '' },
+    { id: 'STUDENT-001', name: 'Blake Gubitz',  email: 'blake@jewshi.com',    password: 'daren',      role: 'student', credits: 500, grade: '' },
+    { id: 'STUDENT-002', name: 'Student 002',   email: 'student2@jewshi.com', password: 'Hello123',   role: 'student', credits: 500, grade: '' },
+    { id: 'STUDENT-003', name: 'Student 003',   email: 'student3@jewshi.com', password: 'BigIce',     role: 'student', credits: 500, grade: '' },
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
-      [u.id, u.name, u.email, hash, u.role, u.credits, u.grade]);
+    await db.run(
+      'INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
+      [u.id, u.name, u.email, hash, u.role, u.credits, u.grade]
+    );
   }
   const items = [
     ['s1','Café Sandwich','🥪',150,'Redeemable at school café'],
@@ -190,17 +191,7 @@ app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
     const credits = Math.floor(amountCents / 100) * 100;
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          unit_amount: amountCents,
-          product_data: {
-            name: `Jewshi Markets — ${credits.toLocaleString()} Credits`,
-            description: `${credits} credits added to your Jewshi account`,
-          },
-        },
-        quantity: 1,
-      }],
+      line_items: [{ price_data: { currency: 'usd', unit_amount: amountCents, product_data: { name: `Jewshi Markets — ${credits.toLocaleString()} Credits`, description: `${credits} credits added to your Jewshi account` } }, quantity: 1 }],
       mode: 'payment',
       success_url: `${CLIENT_URL}/payment-success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${CLIENT_URL}/?cancelled=1`,
@@ -209,36 +200,25 @@ app.post('/api/credits/checkout', authMiddleware, async (req, res) => {
     await db.run('INSERT INTO stripe_sessions (session_id,user_id,credits,fulfilled,created_at) VALUES (?,?,?,0,?)',
       [session.id, req.user.id, credits, Date.now()]);
     res.json({ url: session.url });
-  } catch(e) {
-    console.error('Checkout error:', e);
-    res.status(500).json({ error: e.message });
-  }
+  } catch(e) { console.error('Checkout error:', e); res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/stripe-webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch(e) {
-    return res.status(400).send(`Webhook Error: ${e.message}`);
-  }
+  try { event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET); }
+  catch(e) { return res.status(400).send(`Webhook Error: ${e.message}`); }
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const { user_id, credits } = session.metadata;
     const creditsNum = parseInt(credits);
     const existing = await db.get('SELECT fulfilled FROM stripe_sessions WHERE session_id=?', [session.id]);
     if (!existing || existing.fulfilled) return res.json({ received: true });
-    await db.run('BEGIN');
     try {
       await db.run('UPDATE users SET credits=credits+? WHERE id=?', [creditsNum, user_id]);
       await recordTx(user_id, creditsNum, 'purchase', session.id, `Purchased ${creditsNum} credits`);
       await db.run('UPDATE stripe_sessions SET fulfilled=1 WHERE session_id=?', [session.id]);
-      await db.run('COMMIT');
-    } catch(e) {
-      await db.run('ROLLBACK');
-      return res.status(500).json({ error: e.message });
-    }
+    } catch(e) { console.error('Fulfillment error:', e); return res.status(500).json({ error: e.message }); }
   }
   res.json({ received: true });
 });
@@ -251,8 +231,6 @@ app.get('/api/credits/verify/:sessionId', authMiddleware, async (req, res) => {
 });
 
 // ── AUTH ──
-
-// Login by email
 app.post('/api/auth/login', async(req,res)=>{
   try{
     const {email, password} = req.body;
@@ -260,55 +238,41 @@ app.post('/api/auth/login', async(req,res)=>{
     const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
     if(!user) return res.status(401).json({error:'Invalid email or password'});
     if(!await bcrypt.compare(password,user.password)) return res.status(401).json({error:'Invalid email or password'});
-    if(!user.email_verified) return res.status(403).json({error:'Please verify your email before signing in. Check your inbox.'});
+    if(!user.email_verified) return res.status(403).json({error:'Please verify your email before signing in.'});
     const token = jwt.sign({id:user.id,role:user.role}, JWT_SECRET, {expiresIn:'30d'});
     const {password:_,...safe} = user;
     res.json({token, user:safe});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// Register — sends verification email, does NOT log them in yet
 app.post('/api/auth/register', async(req,res)=>{
   try{
     const {name, email, password, grade} = req.body;
     if(!name||!email||!password) return res.status(400).json({error:'Missing fields'});
     const trimmedEmail = email.trim().toLowerCase();
-
-    // Check email not already used
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[trimmedEmail]))
       return res.status(409).json({error:'An account with that email already exists'});
-
     const hash = await bcrypt.hash(password, 10);
     const uid = generateId('U');
     await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,0)',
       [uid, name.trim(), trimmedEmail, hash, 'student', 200, grade||'']);
     await recordTx(uid, 200, 'signup_bonus', null, 'Welcome bonus');
-
-    // Create verification token (expires in 24 hours)
     const token = generateToken();
     await db.run('INSERT INTO email_verifications (token,user_id,expires_at,created_at) VALUES (?,?,?,?)',
       [token, uid, Date.now() + 24*60*60*1000, Date.now()]);
-
     const verifyUrl = `${CLIENT_URL}/verify-email.html?token=${token}`;
     await sendEmail(trimmedEmail, 'Verify your Jewshi account',
       emailHtml('Verify your email', `
-        <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Hi ${name.trim()}, welcome to Jewshi Markets! Click the button below to verify your email and activate your account.</p>
+        <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Hi ${name.trim()}, welcome to Jewshi! Click below to verify your email.</p>
         <a href="${verifyUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:16px;">Verify Email</a>
-        <p style="color:#55556a;font-size:12px;text-align:center;">Or copy this link: ${verifyUrl}</p>
-        <p style="color:#55556a;font-size:12px;text-align:center;margin-top:12px;">This link expires in 24 hours.</p>
+        <p style="color:#55556a;font-size:12px;text-align:center;">This link expires in 24 hours.</p>
       `)
     );
-
-    // If email not configured, log the link so dev can test
-    if (!process.env.EMAIL_USER) {
-      console.log(`\n[Dev] Email verify link for ${trimmedEmail}:\n${verifyUrl}\n`);
-    }
-
-    res.json({message:'Account created! Please check your email to verify your account before signing in.'});
+    console.log(`[Dev] Verify link for ${trimmedEmail}:\n${verifyUrl}`);
+    res.json({message:'Account created! Check your email to verify before signing in.'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// Verify email token
 app.get('/api/auth/verify-email', async(req,res)=>{
   try{
     const {token} = req.query;
@@ -317,12 +281,10 @@ app.get('/api/auth/verify-email', async(req,res)=>{
     if(!row) return res.status(400).json({error:'Invalid or expired verification link'});
     if(row.expires_at < Date.now()) {
       await db.run('DELETE FROM email_verifications WHERE token=?',[token]);
-      return res.status(400).json({error:'Verification link has expired. Please register again.'});
+      return res.status(400).json({error:'Verification link expired. Please register again.'});
     }
     await db.run('UPDATE users SET email_verified=1 WHERE id=?',[row.user_id]);
     await db.run('DELETE FROM email_verifications WHERE token=?',[token]);
-
-    // Return a token so they get auto-logged in after verifying
     const user = await db.get('SELECT * FROM users WHERE id=?',[row.user_id]);
     const jwtToken = jwt.sign({id:user.id,role:user.role}, JWT_SECRET, {expiresIn:'30d'});
     const {password:_,...safe} = user;
@@ -330,61 +292,51 @@ app.get('/api/auth/verify-email', async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// Resend verification email
 app.post('/api/auth/resend-verification', async(req,res)=>{
   try{
     const {email} = req.body;
     if(!email) return res.status(400).json({error:'Missing email'});
     const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
-    if(!user) return res.json({message:'If that email exists, a verification link has been sent.'});
-    if(user.email_verified) return res.json({message:'Your email is already verified. You can sign in.'});
-
+    if(!user||user.email_verified) return res.json({message:'If that email exists and is unverified, a link has been sent.'});
     await db.run('DELETE FROM email_verifications WHERE user_id=?',[user.id]);
     const token = generateToken();
     await db.run('INSERT INTO email_verifications (token,user_id,expires_at,created_at) VALUES (?,?,?,?)',
       [token, user.id, Date.now() + 24*60*60*1000, Date.now()]);
-
     const verifyUrl = `${CLIENT_URL}/verify-email.html?token=${token}`;
     await sendEmail(user.email, 'Verify your Jewshi account',
       emailHtml('Verify your email', `
-        <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Click below to verify your Jewshi email address.</p>
-        <a href="${verifyUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:16px;">Verify Email</a>
-        <p style="color:#55556a;font-size:12px;text-align:center;">This link expires in 24 hours.</p>
+        <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Click below to verify your Jewshi email.</p>
+        <a href="${verifyUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Verify Email</a>
       `)
     );
-    if (!process.env.EMAIL_USER) console.log(`\n[Dev] Resend verify link:\n${verifyUrl}\n`);
-    res.json({message:'Verification email sent! Check your inbox.'});
+    console.log(`[Dev] Resend verify link:\n${verifyUrl}`);
+    res.json({message:'Verification email sent!'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// Forgot password — send reset email
 app.post('/api/auth/forgot-password', async(req,res)=>{
   try{
     const {email} = req.body;
     if(!email) return res.status(400).json({error:'Missing email'});
-    // Always return success to avoid user enumeration
     const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
     if(user){
       await db.run('UPDATE password_reset_tokens SET used=1 WHERE user_id=?',[user.id]);
       const token = generateToken();
       await db.run('INSERT INTO password_reset_tokens (token,user_id,expires_at,used,created_at) VALUES (?,?,?,0,?)',
-        [token, user.id, Date.now() + 60*60*1000, Date.now()]); // 1 hour expiry
-
+        [token, user.id, Date.now() + 60*60*1000, Date.now()]);
       const resetUrl = `${CLIENT_URL}/reset-password.html?token=${token}`;
       await sendEmail(user.email, 'Reset your Jewshi password',
         emailHtml('Reset your password', `
-          <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">We received a request to reset your password. Click below to choose a new one.</p>
-          <a href="${resetUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:16px;">Reset Password</a>
-          <p style="color:#55556a;font-size:12px;text-align:center;">This link expires in 1 hour.</p>
+          <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Click below to reset your password. Link expires in 1 hour.</p>
+          <a href="${resetUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Reset Password</a>
         `)
       );
-      if (!process.env.EMAIL_USER) console.log(`\n[Dev] Password reset link:\n${resetUrl}\n`);
+      console.log(`[Dev] Reset link:\n${resetUrl}`);
     }
     res.json({message:'If that email has an account, a reset link has been sent.'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-// Reset password
 app.post('/api/auth/reset-password', async(req,res)=>{
   try{
     const {token, password} = req.body;
@@ -392,11 +344,11 @@ app.post('/api/auth/reset-password', async(req,res)=>{
     if(password.length < 6) return res.status(400).json({error:'Password must be at least 6 characters'});
     const row = await db.get('SELECT * FROM password_reset_tokens WHERE token=? AND used=0',[token]);
     if(!row) return res.status(400).json({error:'Invalid or expired reset link'});
-    if(row.expires_at < Date.now()) return res.status(400).json({error:'Reset link has expired. Please request a new one.'});
+    if(row.expires_at < Date.now()) return res.status(400).json({error:'Reset link expired.'});
     const hash = await bcrypt.hash(password, 10);
     await db.run('UPDATE users SET password=? WHERE id=?',[hash, row.user_id]);
     await db.run('UPDATE password_reset_tokens SET used=1 WHERE token=?',[token]);
-    res.json({message:'Password updated successfully! You can now sign in.'});
+    res.json({message:'Password updated! You can now sign in.'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -457,21 +409,17 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
     const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
     if(!m) return res.status(404).json({error:'Not found'});
     if(m.status!=='open') return res.status(400).json({error:'Not open'});
-    await db.run('BEGIN');
-    try{
-      await db.run('UPDATE markets SET status=? WHERE id=?',[outcome==='YES'?'resolved-yes':'resolved-no',m.id]);
-      const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
-      const total=wins.reduce((s,b)=>s+b.shares,0);
-      for(const b of wins){
-        const pay=total>0?Math.round((b.shares/total)*m.pool):0;
-        await db.run("UPDATE bets SET status='won',payout=? WHERE id=?",[pay,b.id]);
-        await db.run('UPDATE users SET credits=credits+? WHERE id=?',[pay,b.user_id]);
-        await recordTx(b.user_id,pay,'bet_won',b.id,`Won: ${m.question}`);
-      }
-      await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
-      await db.run('COMMIT');
-      res.json({success:true,outcome});
-    }catch(err){await db.run('ROLLBACK');throw err;}
+    await db.run('UPDATE markets SET status=? WHERE id=?',[outcome==='YES'?'resolved-yes':'resolved-no',m.id]);
+    const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
+    const total=wins.reduce((s,b)=>s+b.shares,0);
+    for(const b of wins){
+      const pay=total>0?Math.round((b.shares/total)*m.pool):0;
+      await db.run("UPDATE bets SET status='won',payout=? WHERE id=?",[pay,b.id]);
+      await db.run('UPDATE users SET credits=credits+? WHERE id=?',[pay,b.user_id]);
+      await recordTx(b.user_id,pay,'bet_won',b.id,`Won: ${m.question}`);
+    }
+    await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
+    res.json({success:true,outcome});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
@@ -485,23 +433,19 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
     const {marketId,side,amount}=req.body;
     if(!marketId||!side||!amount||amount<=0) return res.status(400).json({error:'Invalid bet'});
     if(!['YES','NO'].includes(side)) return res.status(400).json({error:'Bad side'});
-    await db.run('BEGIN');
-    try{
-      const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
-      if(user.credits<amount) throw new Error('Insufficient credits');
-      const m=await db.get('SELECT * FROM markets WHERE id=?',[marketId]);
-      if(!m||m.status!=='open') throw new Error('Market not available');
-      const shares=lmsrShares(m.yes_shares,m.no_shares,m.b_param,side,amount);
-      await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,user.id]);
-      if(side==='YES') await db.run('UPDATE markets SET yes_shares=yes_shares+?,pool=pool+? WHERE id=?',[shares,amount,m.id]);
-      else await db.run('UPDATE markets SET no_shares=no_shares+?,pool=pool+? WHERE id=?',[shares,amount,m.id]);
-      const betId=generateId('b');
-      await db.run("INSERT INTO bets (id,user_id,market_id,side,amount,shares,status,timestamp) VALUES (?,?,?,?,?,?,'active',?)",
-        [betId,user.id,marketId,side,amount,parseFloat(shares.toFixed(4)),Date.now()]);
-      await recordTx(user.id,-amount,'bet_placed',betId,`Bet ${side} on: ${m.question}`);
-      await db.run('COMMIT');
-      res.json({betId,shares:parseFloat(shares.toFixed(4)),newBalance:user.credits-amount});
-    }catch(err){await db.run('ROLLBACK');throw err;}
+    const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
+    if(user.credits<amount) return res.status(400).json({error:'Insufficient credits'});
+    const m=await db.get('SELECT * FROM markets WHERE id=?',[marketId]);
+    if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
+    const shares=lmsrShares(m.yes_shares,m.no_shares,m.b_param,side,amount);
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,user.id]);
+    if(side==='YES') await db.run('UPDATE markets SET yes_shares=yes_shares+?,pool=pool+? WHERE id=?',[shares,amount,m.id]);
+    else await db.run('UPDATE markets SET no_shares=no_shares+?,pool=pool+? WHERE id=?',[shares,amount,m.id]);
+    const betId=generateId('b');
+    await db.run("INSERT INTO bets (id,user_id,market_id,side,amount,shares,status,timestamp) VALUES (?,?,?,?,?,?,'active',?)",
+      [betId,user.id,marketId,side,amount,parseFloat(shares.toFixed(4)),Date.now()]);
+    await recordTx(user.id,-amount,'bet_placed',betId,`Bet ${side} on: ${m.question}`);
+    res.json({betId,shares:parseFloat(shares.toFixed(4)),newBalance:user.credits-amount});
   }catch(e){res.status(400).json({error:e.message});}
 });
 app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
@@ -531,19 +475,15 @@ app.delete('/api/store/:id', authMiddleware, adminOnly, async(req,res)=>{
 });
 app.post('/api/store/:id/redeem', authMiddleware, async(req,res)=>{
   try{
-    await db.run('BEGIN');
-    try{
-      const item=await db.get('SELECT * FROM store_items WHERE id=?',[req.params.id]);
-      if(!item) throw new Error('Item not found');
-      const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
-      if(user.credits<item.cost) throw new Error('Insufficient credits');
-      await db.run('UPDATE users SET credits=credits-? WHERE id=?',[item.cost,user.id]);
-      const rId=generateId('r');
-      await db.run('INSERT INTO redemptions (id,user_id,item_id,cost,timestamp) VALUES (?,?,?,?,?)',[rId,user.id,item.id,item.cost,Date.now()]);
-      await recordTx(user.id,-item.cost,'redemption',rId,`Redeemed: ${item.name}`);
-      await db.run('COMMIT');
-      res.json({newBalance:user.credits-item.cost});
-    }catch(err){await db.run('ROLLBACK');throw err;}
+    const item=await db.get('SELECT * FROM store_items WHERE id=?',[req.params.id]);
+    if(!item) return res.status(404).json({error:'Item not found'});
+    const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
+    if(user.credits<item.cost) return res.status(400).json({error:'Insufficient credits'});
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[item.cost,user.id]);
+    const rId=generateId('r');
+    await db.run('INSERT INTO redemptions (id,user_id,item_id,cost,timestamp) VALUES (?,?,?,?,?)',[rId,user.id,item.id,item.cost,Date.now()]);
+    await recordTx(user.id,-item.cost,'redemption',rId,`Redeemed: ${item.name}`);
+    res.json({newBalance:user.credits-item.cost});
   }catch(e){res.status(400).json({error:e.message});}
 });
 app.get('/api/store/redemptions/mine', authMiddleware, async(req,res)=>{
@@ -555,16 +495,12 @@ app.post('/api/admin/distribute-credits', authMiddleware, adminOnly, async(req,r
   try{
     const {amount}=req.body;
     if(!amount||amount<=0) return res.status(400).json({error:'Invalid amount'});
-    await db.run('BEGIN');
-    try{
-      const students=await db.all("SELECT id FROM users WHERE role='student'");
-      for(const s of students){
-        await db.run('UPDATE users SET credits=credits+? WHERE id=?',[amount,s.id]);
-        await recordTx(s.id,amount,'weekly_distribution',null,`Weekly: +${amount}`);
-      }
-      await db.run('COMMIT');
-      res.json({distributed:students.length});
-    }catch(err){await db.run('ROLLBACK');throw err;}
+    const students=await db.all("SELECT id FROM users WHERE role='student'");
+    for(const s of students){
+      await db.run('UPDATE users SET credits=credits+? WHERE id=?',[amount,s.id]);
+      await recordTx(s.id,amount,'weekly_distribution',null,`Weekly: +${amount}`);
+    }
+    res.json({distributed:students.length});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/admin/volunteer-rate', authMiddleware, adminOnly, async(req,res)=>{
