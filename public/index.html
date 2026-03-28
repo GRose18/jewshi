@@ -927,6 +927,13 @@ async function createPost(){
   }catch(e){alert(e.message);}
 }
 
+async function loadFeed(){
+  const posts=await api('GET','/feed');
+  const el=document.getElementById('feed-list');
+  if(!posts.length){el.innerHTML='<div class="empty-state"><div class="icon">📰</div><p>No posts yet.</p></div>';return;}
+  el.innerHTML=posts.map(p=>renderPost(p)).join('');
+}
+
 function renderPost(p){
   const av=initials(p.author_name);
   const isAdmin=p.author_role==='admin';
