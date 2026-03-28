@@ -170,7 +170,6 @@
   .loading { text-align: center; padding: 40px; color: var(--text3); font-size: 13px; }
   ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg2); } ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
 
-  /* Buy credits custom amount */
   .buy-input-wrap { position: relative; margin-bottom: 10px; }
   .buy-input-wrap .dollar { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text2); font-size: 16px; font-weight: 500; }
   .buy-input-wrap input { width: 100%; padding: 14px 14px 14px 30px; background: var(--bg3); border: 1px solid var(--border-hi); border-radius: var(--radius); font-size: 22px; font-weight: 700; font-family: 'Inter', sans-serif; color: var(--text); outline: none; }
@@ -185,6 +184,7 @@
 </head>
 <body>
 
+<!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">
@@ -193,7 +193,6 @@
       <div class="tagline">Prediction Markets</div>
     </div>
     <div id="auth-error" class="error-msg" style="display:none;"></div>
-    <div id="auth-success" class="notification success" style="display:none;"></div>
     <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
     <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">Sign In</button>
@@ -202,7 +201,7 @@
   </div>
 </div>
 
-<!-- FORGOT PASSWORD SCREEN -->
+<!-- FORGOT PASSWORD -->
 <div id="forgot-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="auth-card">
     <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Forgot Password</h2>
@@ -215,12 +214,12 @@
   </div>
 </div>
 
+<!-- REGISTER -->
 <div id="register-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:300; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
   <div class="auth-card" style="max-height:90vh; overflow-y:auto;">
     <h2 style="font-size:18px; font-weight:700; margin-bottom:6px; text-align:center; color:var(--text);">Create Account</h2>
-    <p style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;">We'll send a verification email to activate your account.</p>
+    <p style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;">Sign up to start trading on Jewshi.</p>
     <div id="reg-error" class="error-msg" style="display:none;"></div>
-    <div id="reg-success" class="notification success" style="display:none;"></div>
     <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
     <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
     <div class="form-group"><label>Grade</label>
@@ -235,6 +234,7 @@
   </div>
 </div>
 
+<!-- MAIN APP -->
 <div id="app">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:20px;">
@@ -437,8 +437,7 @@ async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-pass').value;
   const errEl = document.getElementById('auth-error');
-  const sucEl = document.getElementById('auth-success');
-  errEl.style.display='none'; sucEl.style.display='none';
+  errEl.style.display='none';
   try {
     const data = await api('POST', '/auth/login', { email, password });
     authToken = data.token;
@@ -462,29 +461,16 @@ async function doRegister() {
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
     const data = await api('POST', '/auth/register', {name, email, password, grade});
-    document.getElementById('reg-error').style.display='none';
-    document.getElementById('reg-success').textContent = data.message;
-    document.getElementById('reg-success').style.display='block';
-    btn.style.display='none';
-    // Show resend option after a delay
-    setTimeout(()=>{
-      const resend = document.createElement('div');
-      resend.className='auth-toggle';
-      resend.style.marginTop='8px';
-      resend.innerHTML=`Didn't get it? <a onclick="doResendVerification('${email}')">Resend email</a>`;
-      document.getElementById('reg-success').after(resend);
-    }, 3000);
+    authToken = data.token;
+    localStorage.setItem('ew_token', authToken);
+    currentUser = data.user;
+    hideRegister();
+    await enterApp();
+    showToast('Welcome to Jewshi! 🎉');
   } catch(e) {
     showRegError(e.message);
     btn.disabled=false; btn.textContent='Create Account';
   }
-}
-
-async function doResendVerification(email) {
-  try {
-    const data = await api('POST', '/auth/resend-verification', { email });
-    showToast(data.message);
-  } catch(e) { showToast('Could not resend: ' + e.message); }
 }
 
 async function doForgotPassword() {
@@ -513,7 +499,6 @@ function doLogout(){
   document.getElementById('login-email').value='';
   document.getElementById('login-pass').value='';
   document.getElementById('auth-error').style.display='none';
-  document.getElementById('auth-success').style.display='none';
 }
 
 async function enterApp(){
@@ -693,7 +678,7 @@ async function renderAdminTab(){
     <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
     <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${stats.totalBets}</div></div>
-    <div class="stat-card"><div class="stat-label">Pending Vol.</div><div class="stat-value">${stats.pendingVol}</div></div>`;
+    <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${stats.pendingVol}</div></div>`;
   document.getElementById('admin-markets-list').innerHTML=markets.map(m=>{
     const yesP=getYesProb(m);
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
@@ -706,9 +691,13 @@ async function renderAdminTab(){
     <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-size:20px;">${item.icon}</span><span style="flex:1;font-size:13px;color:var(--text)">${item.name} — ⬡${item.cost}</span>
       <button class="btn-admin btn-sm btn-danger" onclick="removeStoreItem('${item.id}')">Remove</button></div>`).join('')||'<p style="color:var(--text3);font-size:13px;">No items.</p>';
-  document.getElementById('admin-users-list').innerHTML=`<table class="portfolio-table"><thead><tr><th>Name</th><th>ID</th><th>Grade</th><th>Balance</th><th>Add Credits</th></tr></thead><tbody>${users.map(u=>`<tr>
+  document.getElementById('admin-users-list').innerHTML=`<table class="portfolio-table"><thead><tr><th>Name</th><th>ID</th><th>Grade</th><th>Balance</th><th>Adjust Credits</th></tr></thead><tbody>${users.map(u=>`<tr>
     <td style="color:var(--text)">${u.name||'—'}</td><td style="color:var(--text3)">${u.id}</td><td>${u.grade||'—'}</td><td style="color:var(--green)">⬡ ${u.credits.toLocaleString()}</td>
-    <td style="display:flex;gap:6px;align-items:center;"><input type="number" id="add-cred-${u.id}" placeholder="0" style="width:70px;padding:4px 8px;font-size:12px;"><button class="btn-admin btn-sm" onclick="addCreditsToUser('${u.id}')">Add</button></td>
+    <td style="display:flex;gap:6px;align-items:center;">
+      <input type="number" id="add-cred-${u.id}" placeholder="0" style="width:70px;padding:4px 8px;font-size:12px;">
+      <button class="btn-admin btn-sm btn-success" onclick="addCreditsToUser('${u.id}')">Add</button>
+      <button class="btn-admin btn-sm btn-danger" onclick="removeCreditsFromUser('${u.id}')">Remove</button>
+    </td>
   </tr>`).join('')}</tbody></table>`;
   document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
     :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
@@ -757,8 +746,13 @@ async function addCreditsToUser(userId){
   try{await api('POST','/users/'+userId+'/add-credits',{amount});await refreshUser();renderAdminTab();showToast(`Added ⬡${amount}`);}
   catch(e){alert(e.message);}
 }
+async function removeCreditsFromUser(userId){
+  const amount=parseInt(document.getElementById('add-cred-'+userId).value);if(!amount||amount<=0)return;
+  if(!confirm(`Remove ⬡${amount} from this user?`))return;
+  try{await api('POST','/users/'+userId+'/remove-credits',{amount});await refreshUser();renderAdminTab();showToast(`Removed ⬡${amount}`);}
+  catch(e){alert(e.message);}
+}
 
-// BUY CREDITS
 function openBuyCredits(){
   document.getElementById('buy-amount').value='';
   document.getElementById('buy-preview').style.display='none';
@@ -797,70 +791,7 @@ function showNotif(containerId,msg,type){
   setTimeout(()=>{el.innerHTML='';},5000);
 }
 
-function showResetPasswordModal(token) {
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="auth-card" style="max-width:400px;" onclick="event.stopPropagation()">
-      <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Reset Password</h2>
-      <p style="font-size:13px;color:var(--text3);margin-bottom:20px;">Choose a new password for your account.</p>
-      <div id="reset-error" class="error-msg" style="display:none;"></div>
-      <div id="reset-success" class="notification success" style="display:none;"></div>
-      <div class="form-group"><label>New Password</label><input type="password" id="reset-pass" placeholder="At least 6 characters"></div>
-      <div class="form-group"><label>Confirm Password</label><input type="password" id="reset-pass2" placeholder="Repeat password"></div>
-      <button class="btn-primary" id="reset-btn" onclick="doResetPassword('${token}')">Update Password</button>
-    </div>`;
-  document.body.appendChild(overlay);
-  window.history.replaceState({}, '', window.location.pathname);
-}
-
-async function doResetPassword(token) {
-  const pass = document.getElementById('reset-pass').value;
-  const pass2 = document.getElementById('reset-pass2').value;
-  const errEl = document.getElementById('reset-error');
-  const sucEl = document.getElementById('reset-success');
-  errEl.style.display='none';
-  if(pass.length < 6){ errEl.textContent='Password must be at least 6 characters.'; errEl.style.display='block'; return; }
-  if(pass !== pass2){ errEl.textContent='Passwords do not match.'; errEl.style.display='block'; return; }
-  const btn = document.getElementById('reset-btn');
-  btn.disabled=true; btn.textContent='Updating…';
-  try{
-    const data = await api('POST', '/auth/reset-password', { token, password: pass });
-    sucEl.textContent = data.message + ' You can now close this and sign in.';
-    sucEl.style.display='block';
-    btn.style.display='none';
-  }catch(e){ errEl.textContent=e.message; errEl.style.display='block'; btn.disabled=false; btn.textContent='Update Password'; }
-}
-
 window.onload=async()=>{
-  // Handle email verification token in URL (e.g. ?verify=TOKEN)
-  const params = new URLSearchParams(window.location.search);
-  const verifyToken = params.get('verify');
-  if(verifyToken){
-    try{
-      const data = await api('GET', '/auth/verify-email?token=' + encodeURIComponent(verifyToken));
-      authToken = data.token;
-      localStorage.setItem('ew_token', authToken);
-      currentUser = data.user;
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
-      await enterApp();
-      showToast('✅ Email verified! Welcome to Jewshi.');
-      return;
-    }catch(e){
-      // Show error on login screen
-      const errEl = document.getElementById('auth-error');
-      errEl.textContent = e.message || 'Verification failed. The link may have expired.';
-      errEl.style.display = 'block';
-    }
-  }
-  // Handle password reset token in URL (e.g. ?reset=TOKEN)
-  const resetToken = params.get('reset');
-  if(resetToken){
-    showResetPasswordModal(resetToken);
-    return;
-  }
   if(authToken){try{await enterApp();}catch(e){localStorage.removeItem('ew_token');authToken=null;}}
 };
 </script>

@@ -6,38 +6,13 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
-const { Resend } = require('resend');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'jewshi-secret-change-in-production';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
-
-const resend = new Resend(process.env.RESEND_API_KEY || '');
-const EMAIL_FROM = process.env.EMAIL_FROM || 'Jewshi <onboarding@resend.dev>';
-
-async function sendEmail(to, subject, html) {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn(`[Email] No RESEND_API_KEY — skipping email to ${to}: ${subject}`);
-    return;
-  }
-  const { error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html });
-  if (error) throw new Error(`Resend error: ${error.message}`);
-}
-
-function emailHtml(title, body) {
-  return `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#0a0a0f;color:#eeeef5;padding:40px;">
-  <div style="max-width:480px;margin:0 auto;background:#111118;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:36px;">
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="font-size:28px;font-weight:700;color:#eeeef5;">Jew<span style="color:#7c6af7;">shi</span></div>
-      <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#55556a;margin-top:4px;">Prediction Markets</div>
-    </div>
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;color:#eeeef5;">${title}</h2>
-    ${body}
-    <p style="font-size:11px;color:#55556a;margin-top:28px;text-align:center;">If you did not request this, you can safely ignore this email.</p>
-  </div></body></html>`;
-}
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -53,7 +28,6 @@ async function initDB() {
     authToken: process.env.TURSO_AUTH_TOKEN,
   });
 
-  // Helper wrappers to match old sqlite API style
   db.run = async (sql, args=[]) => { await db.execute({ sql, args }); };
   db.get = async (sql, args=[]) => {
     const res = await db.execute({ sql, args });
@@ -77,13 +51,7 @@ async function initDB() {
       role TEXT DEFAULT 'student',
       credits INTEGER DEFAULT 200,
       grade TEXT DEFAULT '',
-      email_verified INTEGER DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS email_verifications (
-      token TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      created_at INTEGER
+      email_verified INTEGER DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       token TEXT PRIMARY KEY,
@@ -157,6 +125,33 @@ async function seedIfEmpty() {
     ['m2','Will the school play open on time?','School','open','2025-05-15',65,35,100,400,Date.now()]);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
   console.log('Database seeded.');
+}
+
+// ── GOOGLE SHEETS ──
+async function appendToSheet(name, email, grade) {
+  try {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_SHEET_ID) {
+      console.log(`[Sheets] Not configured — skipping sheet append for ${email}`);
+      return;
+    }
+    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: 'Sheet1!A:D',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[name, email, grade, new Date().toLocaleString()]],
+      },
+    });
+    console.log(`[Sheets] Appended ${name} (${email}) to sheet`);
+  } catch(e) {
+    console.error('[Sheets] Error:', e.message);
+  }
 }
 
 function generateId(p='') { return p+Date.now()+Math.random().toString(36).slice(2,6); }
@@ -238,7 +233,6 @@ app.post('/api/auth/login', async(req,res)=>{
     const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
     if(!user) return res.status(401).json({error:'Invalid email or password'});
     if(!await bcrypt.compare(password,user.password)) return res.status(401).json({error:'Invalid email or password'});
-    if(!user.email_verified) return res.status(403).json({error:'Please verify your email before signing in.'});
     const token = jwt.sign({id:user.id,role:user.role}, JWT_SECRET, {expiresIn:'30d'});
     const {password:_,...safe} = user;
     res.json({token, user:safe});
@@ -254,63 +248,16 @@ app.post('/api/auth/register', async(req,res)=>{
       return res.status(409).json({error:'An account with that email already exists'});
     const hash = await bcrypt.hash(password, 10);
     const uid = generateId('U');
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,0)',
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified) VALUES (?,?,?,?,?,?,?,1)',
       [uid, name.trim(), trimmedEmail, hash, 'student', 200, grade||'']);
     await recordTx(uid, 200, 'signup_bonus', null, 'Welcome bonus');
-    const token = generateToken();
-    await db.run('INSERT INTO email_verifications (token,user_id,expires_at,created_at) VALUES (?,?,?,?)',
-      [token, uid, Date.now() + 24*60*60*1000, Date.now()]);
-    const verifyUrl = `${CLIENT_URL}/verify-email.html?token=${token}`;
-    await sendEmail(trimmedEmail, 'Verify your Jewshi account',
-      emailHtml('Verify your email', `
-        <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Hi ${name.trim()}, welcome to Jewshi! Click below to verify your email.</p>
-        <a href="${verifyUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:16px;">Verify Email</a>
-        <p style="color:#55556a;font-size:12px;text-align:center;">This link expires in 24 hours.</p>
-      `)
-    );
-    console.log(`[Dev] Verify link for ${trimmedEmail}:\n${verifyUrl}`);
-    res.json({message:'Account created! Check your email to verify before signing in.'});
-  }catch(e){res.status(500).json({error:e.message});}
-});
 
-app.get('/api/auth/verify-email', async(req,res)=>{
-  try{
-    const {token} = req.query;
-    if(!token) return res.status(400).json({error:'Missing token'});
-    const row = await db.get('SELECT * FROM email_verifications WHERE token=?',[token]);
-    if(!row) return res.status(400).json({error:'Invalid or expired verification link'});
-    if(row.expires_at < Date.now()) {
-      await db.run('DELETE FROM email_verifications WHERE token=?',[token]);
-      return res.status(400).json({error:'Verification link expired. Please register again.'});
-    }
-    await db.run('UPDATE users SET email_verified=1 WHERE id=?',[row.user_id]);
-    await db.run('DELETE FROM email_verifications WHERE token=?',[token]);
-    const user = await db.get('SELECT * FROM users WHERE id=?',[row.user_id]);
-    const jwtToken = jwt.sign({id:user.id,role:user.role}, JWT_SECRET, {expiresIn:'30d'});
-    const {password:_,...safe} = user;
-    res.json({token:jwtToken, user:safe});
-  }catch(e){res.status(500).json({error:e.message});}
-});
+    // Append to Google Sheet (non-blocking)
+    appendToSheet(name.trim(), trimmedEmail, grade||'');
 
-app.post('/api/auth/resend-verification', async(req,res)=>{
-  try{
-    const {email} = req.body;
-    if(!email) return res.status(400).json({error:'Missing email'});
-    const user = await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
-    if(!user||user.email_verified) return res.json({message:'If that email exists and is unverified, a link has been sent.'});
-    await db.run('DELETE FROM email_verifications WHERE user_id=?',[user.id]);
-    const token = generateToken();
-    await db.run('INSERT INTO email_verifications (token,user_id,expires_at,created_at) VALUES (?,?,?,?)',
-      [token, user.id, Date.now() + 24*60*60*1000, Date.now()]);
-    const verifyUrl = `${CLIENT_URL}/verify-email.html?token=${token}`;
-    await sendEmail(user.email, 'Verify your Jewshi account',
-      emailHtml('Verify your email', `
-        <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Click below to verify your Jewshi email.</p>
-        <a href="${verifyUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Verify Email</a>
-      `)
-    );
-    console.log(`[Dev] Resend verify link:\n${verifyUrl}`);
-    res.json({message:'Verification email sent!'});
+    const token = jwt.sign({id:uid,role:'student'}, JWT_SECRET, {expiresIn:'30d'});
+    const user = await db.get('SELECT id,name,email,role,credits,grade FROM users WHERE id=?',[uid]);
+    res.json({token, user, message:'Account created!'});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -324,14 +271,7 @@ app.post('/api/auth/forgot-password', async(req,res)=>{
       const token = generateToken();
       await db.run('INSERT INTO password_reset_tokens (token,user_id,expires_at,used,created_at) VALUES (?,?,?,0,?)',
         [token, user.id, Date.now() + 60*60*1000, Date.now()]);
-      const resetUrl = `${CLIENT_URL}/reset-password.html?token=${token}`;
-      await sendEmail(user.email, 'Reset your Jewshi password',
-        emailHtml('Reset your password', `
-          <p style="color:#8888a8;font-size:14px;margin-bottom:20px;">Click below to reset your password. Link expires in 1 hour.</p>
-          <a href="${resetUrl}" style="display:block;text-align:center;padding:14px;background:#7c6af7;color:white;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Reset Password</a>
-        `)
-      );
-      console.log(`[Dev] Reset link:\n${resetUrl}`);
+      console.log(`[Dev] Password reset link for ${user.email}:\n${CLIENT_URL}/reset-password.html?token=${token}`);
     }
     res.json({message:'If that email has an account, a reset link has been sent.'});
   }catch(e){res.status(500).json({error:e.message});}
