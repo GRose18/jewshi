@@ -42,6 +42,14 @@ async function initDB() {
   };
 
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      sender_id TEXT NOT NULL,
+      recipient_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      timestamp INTEGER
+    );
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT,
@@ -441,6 +449,78 @@ app.post('/api/store/:id/redeem', authMiddleware, async(req,res)=>{
 });
 app.get('/api/store/redemptions/mine', authMiddleware, async(req,res)=>{
   res.json(await db.all(`SELECT r.*,s.name,s.icon FROM redemptions r JOIN store_items s ON r.item_id=s.id WHERE r.user_id=? ORDER BY r.timestamp DESC`,[req.user.id]));
+});
+
+// ── MESSAGES ──
+app.post('/api/messages', authMiddleware, async(req,res)=>{
+  try{
+    const {recipientId, text} = req.body;
+    if(!recipientId||!text||!text.trim()) return res.status(400).json({error:'Missing fields'});
+    const recipient = await db.get('SELECT id,role FROM users WHERE id=?',[recipientId]);
+    if(!recipient) return res.status(404).json({error:'User not found'});
+    // Students can only DM other students and admins. Admins can DM anyone.
+    if(req.user.role==='student' && recipient.role==='admin') {
+      // allow — students can message admins
+    }
+    const id = generateId('msg');
+    await db.run('INSERT INTO messages (id,sender_id,recipient_id,text,is_read,timestamp) VALUES (?,?,?,?,0,?)',
+      [id, req.user.id, recipientId, text.trim(), Date.now()]);
+    res.json({id, success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/messages/conversations', authMiddleware, async(req,res)=>{
+  try{
+    // Get all users this person has exchanged messages with
+    const rows = await db.all(`
+      SELECT DISTINCT
+        CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id
+      FROM messages WHERE sender_id=? OR recipient_id=?
+    `,[req.user.id, req.user.id, req.user.id]);
+    const conversations = [];
+    for(const row of rows){
+      const other = await db.get('SELECT id,name,grade,role FROM users WHERE id=?',[row.other_id]);
+      if(!other) continue;
+      const last = await db.get(`
+        SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)
+        ORDER BY timestamp DESC LIMIT 1
+      `,[req.user.id, row.other_id, row.other_id, req.user.id]);
+      const unread = await db.get(`
+        SELECT COUNT(*) as c FROM messages WHERE sender_id=? AND recipient_id=? AND is_read=0
+      `,[row.other_id, req.user.id]);
+      conversations.push({other, lastMessage: last, unreadCount: unread.c});
+    }
+    conversations.sort((a,b) => (b.lastMessage?.timestamp||0) - (a.lastMessage?.timestamp||0));
+    res.json(conversations);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/messages/thread/:userId', authMiddleware, async(req,res)=>{
+  try{
+    const other = req.params.userId;
+    const messages = await db.all(`
+      SELECT m.*, u.name as sender_name FROM messages m
+      JOIN users u ON m.sender_id=u.id
+      WHERE (m.sender_id=? AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=?)
+      ORDER BY m.timestamp ASC
+    `,[req.user.id, other, other, req.user.id]);
+    // Mark received messages as read
+    await db.run('UPDATE messages SET is_read=1 WHERE sender_id=? AND recipient_id=?',[other, req.user.id]);
+    res.json(messages);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/messages/unread-count', authMiddleware, async(req,res)=>{
+  const row = await db.get('SELECT COUNT(*) as c FROM messages WHERE recipient_id=? AND is_read=0',[req.user.id]);
+  res.json({count: row.c});
+});
+
+app.get('/api/messages/users', authMiddleware, async(req,res)=>{
+  // Return users this person can DM
+  // Students can DM other students + admins
+  // Admins can DM everyone
+  const users = await db.all("SELECT id,name,grade,role FROM users WHERE id!=? ORDER BY name ASC",[req.user.id]);
+  res.json(users);
 });
 
 // ── ADMIN ──
