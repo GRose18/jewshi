@@ -85,6 +85,43 @@ async function initDB() {
       id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL,
       caption TEXT DEFAULT '', timestamp INTEGER
     )
+    ;CREATE TABLE IF NOT EXISTS shuk_markets (
+      id TEXT PRIMARY KEY, question TEXT NOT NULL, category TEXT,
+      status TEXT DEFAULT 'open', close_date TEXT,
+      yes_shares REAL DEFAULT 0, no_shares REAL DEFAULT 0,
+      b_param REAL DEFAULT 100, created_at INTEGER,
+      total_volume INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS shuk_positions (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, market_id TEXT NOT NULL,
+      side TEXT NOT NULL, contracts REAL NOT NULL,
+      avg_price REAL NOT NULL, timestamp INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS shuk_trades (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, market_id TEXT NOT NULL,
+      side TEXT NOT NULL, contracts REAL NOT NULL,
+      price REAL NOT NULL, type TEXT DEFAULT 'buy', timestamp INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS shuk_messages (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, text TEXT NOT NULL,
+      is_offer INTEGER DEFAULT 0, offer_data TEXT DEFAULT NULL,
+      is_censored INTEGER DEFAULT 0, timestamp INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS shuk_reactions (
+      id TEXT PRIMARY KEY, target_id TEXT NOT NULL,
+      target_type TEXT NOT NULL, user_id TEXT NOT NULL,
+      emoji TEXT NOT NULL, timestamp INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS shuk_offer_accepts (
+      id TEXT PRIMARY KEY, offer_message_id TEXT NOT NULL,
+      acceptor_id TEXT NOT NULL, timestamp INTEGER
+    )
+    ;CREATE TABLE IF NOT EXISTS pending_registrations (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
+      password TEXT NOT NULL, grade TEXT DEFAULT '',
+      code TEXT NOT NULL, expires_at INTEGER NOT NULL,
+      created_at INTEGER
+    )
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await seedIfEmpty();
@@ -170,8 +207,81 @@ async function adminOnly(req,res,next) {
   next();
 }
 function isGrose(req) { return req.user.id === 'GROSE'; }
+function lmsrCost(qYes, qNo, b) {
+  return b * Math.log(Math.exp(qYes/b) + Math.exp(qNo/b));
+}
+function lmsrYesPrice(qYes, qNo, b) {
+  const eY = Math.exp(qYes/b), eN = Math.exp(qNo/b);
+  return Math.round((eY/(eY+eN))*100);
+}
+function lmsrNoPrice(qYes, qNo, b) {
+  return 100 - lmsrYesPrice(qYes, qNo, b);
+}
+function lmsrBuyCost(qYes, qNo, b, side, contracts) {
+  const newY = side==='YES' ? qYes+contracts : qYes;
+  const newN = side==='NO' ? qNo+contracts : qNo;
+  return Math.round(lmsrCost(newY,newN,b) - lmsrCost(qYes,qNo,b));
+}
+function lmsrSellReturn(qYes, qNo, b, side, contracts) {
+  const newY = side==='YES' ? qYes-contracts : qYes;
+  const newN = side==='NO' ? qNo-contracts : qNo;
+  return Math.round(lmsrCost(qYes,qNo,b) - lmsrCost(newY,newN,b));
+}
+const BANNED_WORDS = [
+  'fuck','shit','ass','bitch','damn','crap','hell','bastard','dick','cunt',
+  'pussy','cock','piss','fag','faggot','nigger','nigga','retard','whore',
+  'slut','rape','homo','dyke','tranny','kike','spic','chink','gook','wetback',
+  'asshole','motherfucker','bullshit','jackass','dumbass','dipshit','shithead',
+  'douchebag','prick','twat','wanker','bollocks','bloody','arse','tosser',
+  'fucker','slutty','bitchy','crackhead','druggie','stoner','junkie','pussy','penis','cum',
+];
+function censorText(text) {
+  let t = text;
+  BANNED_WORDS.forEach(w => {
+    const re = new RegExp(w, 'gi');
+    t = t.replace(re, '*'.repeat(w.length));
+  });
+  return t;
+}
 function getYesPercent(m) { const t=(m.yes_shares||0)+(m.no_shares||0); return t===0?50:Math.round((m.yes_shares/t)*100); }
 function getOverPercent(m) { const t=(m.over_shares||0)+(m.under_shares||0); return t===0?50:Math.round((m.over_shares/t)*100); }
+// ── EMAIL VERIFICATION ──
+app.post('/api/auth/verify-code', async(req,res)=>{
+  try{
+    const {pendingId,code}=req.body;
+    if(!pendingId||!code) return res.status(400).json({error:'Missing fields'});
+    const pending=await db.get('SELECT * FROM pending_registrations WHERE id=?',[pendingId]);
+    if(!pending) return res.status(400).json({error:'Registration not found. Please register again.'});
+    if(pending.expires_at<Date.now()){
+      await db.run('DELETE FROM pending_registrations WHERE id=?',[pendingId]);
+      return res.status(400).json({error:'Code expired. Please register again.'});
+    }
+    if(pending.code!==code.trim()) return res.status(400).json({error:'Invalid code. Try again.'});
+    if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[pending.email]))
+      return res.status(409).json({error:'An account with that email already exists'});
+    const uid=generateId('U');
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list) VALUES (?,?,?,?,?,?,?,1,0)',
+      [uid,pending.name,pending.email,pending.password,'student',200,pending.grade]);
+    await db.run('DELETE FROM pending_registrations WHERE id=?',[pendingId]);
+    await recordTx(uid,200,'signup_bonus',null,'Welcome bonus');
+    appendToSheet(pending.name,pending.email,pending.grade);
+    const token=jwt.sign({id:uid,role:'student'},JWT_SECRET,{expiresIn:'30d'});
+    const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list FROM users WHERE id=?',[uid]);
+    res.json({token,user,message:'Account created!'});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/auth/resend-code', async(req,res)=>{
+  try{
+    const {pendingId}=req.body;
+    const pending=await db.get('SELECT * FROM pending_registrations WHERE id=?',[pendingId]);
+    if(!pending) return res.status(400).json({error:'Registration not found. Please register again.'});
+    const code=Math.floor(100000+Math.random()*900000).toString();
+    await db.run('UPDATE pending_registrations SET code=?,expires_at=? WHERE id=?',[code,Date.now()+600000,pendingId]);
+    await sendViaAppsScript('verify_code',{email:pending.email,name:pending.name,code,siteUrl:CLIENT_URL});
+    res.json({message:'New code sent!'});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 
 // ── ACCESS PASSWORD ──
 app.post('/api/access/verify', async(req,res)=>{
@@ -272,15 +382,15 @@ app.post('/api/auth/register', async(req,res)=>{
     const trimmedEmail=email.trim().toLowerCase();
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[trimmedEmail]))
       return res.status(409).json({error:'An account with that email already exists'});
+    if(password.length<6) return res.status(400).json({error:'Password must be at least 6 characters'});
     const hash=await bcrypt.hash(password,10);
-    const uid=generateId('U');
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list) VALUES (?,?,?,?,?,?,?,1,0)',
-      [uid,name.trim(),trimmedEmail,hash,'student',200,grade||'']);
-    await recordTx(uid,200,'signup_bonus',null,'Welcome bonus');
-    appendToSheet(name.trim(),trimmedEmail,grade||'');
-    const token=jwt.sign({id:uid,role:'student'},JWT_SECRET,{expiresIn:'30d'});
-    const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list FROM users WHERE id=?',[uid]);
-    res.json({token,user,message:'Account created!'});
+    const code=Math.floor(100000+Math.random()*900000).toString();
+    const id=generateId('pending');
+    await db.run('DELETE FROM pending_registrations WHERE email=?',[trimmedEmail]);
+    await db.run('INSERT INTO pending_registrations (id,name,email,password,grade,code,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?)',
+      [id,name.trim(),trimmedEmail,hash,grade||'',code,Date.now()+600000,Date.now()]);
+    await sendViaAppsScript('verify_code',{email:trimmedEmail,name:name.trim(),code,siteUrl:CLIENT_URL});
+    res.json({message:'Verification code sent to your email.',pendingId:id});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -663,6 +773,190 @@ app.post('/api/posts/:id/repost', authMiddleware, async(req,res)=>{
     const id=generateId('rp');
     await db.run('INSERT INTO post_reposts (id,post_id,user_id,caption,timestamp) VALUES (?,?,?,?,?)',
       [id,req.params.id,req.user.id,caption||'',Date.now()]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+// ── THE SHUK ──
+
+app.get('/api/shuk/markets', authMiddleware, async(req,res)=>{
+  try{
+    const markets = await db.all('SELECT * FROM shuk_markets ORDER BY created_at DESC');
+    const result = markets.map(m=>({
+      ...m,
+      yes_price: lmsrYesPrice(m.yes_shares,m.no_shares,m.b_param),
+      no_price: lmsrNoPrice(m.yes_shares,m.no_shares,m.b_param),
+    }));
+    res.json(result);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/shuk/markets/:id', authMiddleware, async(req,res)=>{
+  try{
+    const m = await db.get('SELECT * FROM shuk_markets WHERE id=?',[req.params.id]);
+    if(!m) return res.status(404).json({error:'Not found'});
+    const history = await db.all('SELECT price,side,timestamp FROM shuk_trades WHERE market_id=? ORDER BY timestamp ASC',[req.params.id]);
+    res.json({
+      ...m,
+      yes_price: lmsrYesPrice(m.yes_shares,m.no_shares,m.b_param),
+      no_price: lmsrNoPrice(m.yes_shares,m.no_shares,m.b_param),
+      history
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/shuk/markets', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {question,category,closeDate,b_param}=req.body;
+    if(!question||!closeDate) return res.status(400).json({error:'Missing fields'});
+    const id=generateId('sm');
+    const b=b_param||100;
+    await db.run('INSERT INTO shuk_markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,created_at,total_volume) VALUES (?,?,?,?,?,0,0,?,?,0)',
+      [id,question,category||'General',closeDate,b,Date.now()]);
+    const m=await db.get('SELECT * FROM shuk_markets WHERE id=?',[id]);
+    res.json({...m,yes_price:50,no_price:50});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/shuk/buy', authMiddleware, async(req,res)=>{
+  try{
+    const {marketId,side,contracts}=req.body;
+    if(!marketId||!side||!contracts||contracts<=0) return res.status(400).json({error:'Invalid'});
+    if(!['YES','NO'].includes(side)) return res.status(400).json({error:'Side must be YES or NO'});
+    const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
+    const m=await db.get('SELECT * FROM shuk_markets WHERE id=?',[marketId]);
+    if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
+    const cost=lmsrBuyCost(m.yes_shares,m.no_shares,m.b_param,side,contracts);
+    if(user.credits<cost) return res.status(400).json({error:'Insufficient credits'});
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[cost,user.id]);
+    if(side==='YES') await db.run('UPDATE shuk_markets SET yes_shares=yes_shares+?,total_volume=total_volume+? WHERE id=?',[contracts,cost,marketId]);
+    else await db.run('UPDATE shuk_markets SET no_shares=no_shares+?,total_volume=total_volume+? WHERE id=?',[contracts,cost,marketId]);
+    const existing=await db.get('SELECT * FROM shuk_positions WHERE user_id=? AND market_id=? AND side=?',[req.user.id,marketId,side]);
+    if(existing){
+      const newContracts=existing.contracts+contracts;
+      const newAvg=Math.round((existing.avg_price*existing.contracts+cost)/newContracts);
+      await db.run('UPDATE shuk_positions SET contracts=?,avg_price=? WHERE id=?',[newContracts,newAvg,existing.id]);
+    } else {
+      await db.run('INSERT INTO shuk_positions (id,user_id,market_id,side,contracts,avg_price,timestamp) VALUES (?,?,?,?,?,?,?)',
+        [generateId('sp'),req.user.id,marketId,side,contracts,Math.round(cost/contracts),Date.now()]);
+    }
+    const updated=await db.get('SELECT * FROM shuk_markets WHERE id=?',[marketId]);
+    const price=side==='YES'?lmsrYesPrice(updated.yes_shares,updated.no_shares,updated.b_param):lmsrNoPrice(updated.yes_shares,updated.no_shares,updated.b_param);
+    await db.run('INSERT INTO shuk_trades (id,user_id,market_id,side,contracts,price,type,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [generateId('st'),req.user.id,marketId,side,contracts,price,'buy',Date.now()]);
+    await recordTx(req.user.id,-cost,'shuk_buy',marketId,`Bought ${contracts} ${side} contracts`);
+    res.json({success:true,cost,newBalance:user.credits-cost,yes_price:lmsrYesPrice(updated.yes_shares,updated.no_shares,updated.b_param),no_price:lmsrNoPrice(updated.yes_shares,updated.no_shares,updated.b_param)});
+  }catch(e){res.status(400).json({error:e.message});}
+});
+
+app.post('/api/shuk/sell', authMiddleware, async(req,res)=>{
+  try{
+    const {marketId,side,contracts}=req.body;
+    if(!marketId||!side||!contracts||contracts<=0) return res.status(400).json({error:'Invalid'});
+    const user=await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
+    const m=await db.get('SELECT * FROM shuk_markets WHERE id=?',[marketId]);
+    if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
+    const pos=await db.get('SELECT * FROM shuk_positions WHERE user_id=? AND market_id=? AND side=?',[req.user.id,marketId,side]);
+    if(!pos||pos.contracts<contracts) return res.status(400).json({error:'Insufficient contracts'});
+    const returnAmt=lmsrSellReturn(m.yes_shares,m.no_shares,m.b_param,side,contracts);
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[returnAmt,user.id]);
+    if(side==='YES') await db.run('UPDATE shuk_markets SET yes_shares=yes_shares-? WHERE id=?',[contracts,marketId]);
+    else await db.run('UPDATE shuk_markets SET no_shares=no_shares-? WHERE id=?',[contracts,marketId]);
+    const newContracts=pos.contracts-contracts;
+    if(newContracts<=0) await db.run('DELETE FROM shuk_positions WHERE id=?',[pos.id]);
+    else await db.run('UPDATE shuk_positions SET contracts=? WHERE id=?',[newContracts,pos.id]);
+    const updated=await db.get('SELECT * FROM shuk_markets WHERE id=?',[marketId]);
+    const price=side==='YES'?lmsrYesPrice(updated.yes_shares,updated.no_shares,updated.b_param):lmsrNoPrice(updated.yes_shares,updated.no_shares,updated.b_param);
+    await db.run('INSERT INTO shuk_trades (id,user_id,market_id,side,contracts,price,type,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [generateId('st'),req.user.id,marketId,side,contracts,price,'sell',Date.now()]);
+    await recordTx(req.user.id,returnAmt,'shuk_sell',marketId,`Sold ${contracts} ${side} contracts`);
+    res.json({success:true,returned:returnAmt,newBalance:user.credits+returnAmt});
+  }catch(e){res.status(400).json({error:e.message});}
+});
+
+app.post('/api/shuk/resolve', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {marketId,outcome}=req.body;
+    if(!['YES','NO'].includes(outcome)) return res.status(400).json({error:'Bad outcome'});
+    const m=await db.get('SELECT * FROM shuk_markets WHERE id=?',[marketId]);
+    if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
+    await db.run("UPDATE shuk_markets SET status=? WHERE id=?",[`resolved-${outcome.toLowerCase()}`,marketId]);
+    const winners=await db.all('SELECT * FROM shuk_positions WHERE market_id=? AND side=?',[marketId,outcome]);
+    for(const p of winners){
+      const payout=Math.round(p.contracts*100);
+      await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,p.user_id]);
+      await recordTx(p.user_id,payout,'shuk_won',marketId,`Won: ${p.contracts} ${outcome} contracts @ 100¢`);
+    }
+    await db.run('DELETE FROM shuk_positions WHERE market_id=?',[marketId]);
+    res.json({success:true,outcome,winnersCount:winners.length});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/shuk/positions/mine', authMiddleware, async(req,res)=>{
+  try{
+    const positions=await db.all(`SELECT p.*,m.question,m.yes_shares,m.no_shares,m.b_param,m.status FROM shuk_positions p JOIN shuk_markets m ON p.market_id=m.id WHERE p.user_id=? ORDER BY p.timestamp DESC`,[req.user.id]);
+    const result=positions.map(p=>({
+      ...p,
+      current_price:p.side==='YES'?lmsrYesPrice(p.yes_shares,p.no_shares,p.b_param):lmsrNoPrice(p.yes_shares,p.no_shares,p.b_param),
+      pnl:Math.round((p.side==='YES'?lmsrYesPrice(p.yes_shares,p.no_shares,p.b_param):lmsrNoPrice(p.yes_shares,p.no_shares,p.b_param))*p.contracts - p.avg_price*p.contracts)
+    }));
+    res.json(result);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/shuk/chat', authMiddleware, async(req,res)=>{
+  try{
+    const msgs=await db.all(`SELECT m.*,u.name as author_name,u.role as author_role FROM shuk_messages m JOIN users u ON m.user_id=u.id WHERE m.is_censored=0 ORDER BY m.timestamp DESC LIMIT 50`);
+    const withReactions=await Promise.all(msgs.map(async msg=>{
+      const reactions=await db.all('SELECT emoji,COUNT(*) as count,GROUP_CONCAT(user_id) as users FROM shuk_reactions WHERE target_id=? AND target_type=? GROUP BY emoji',[msg.id,'message']);
+      return {...msg,reactions};
+    }));
+    res.json(withReactions.reverse());
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/shuk/chat', authMiddleware, async(req,res)=>{
+  try{
+    const {text,is_offer,offer_data}=req.body;
+    if(!text||!text.trim()) return res.status(400).json({error:'Empty message'});
+    if(text.length>500) return res.status(400).json({error:'Message too long'});
+    const censored=censorText(text.trim());
+    const id=generateId('sc');
+    await db.run('INSERT INTO shuk_messages (id,user_id,text,is_offer,offer_data,is_censored,timestamp) VALUES (?,?,?,?,?,0,?)',
+      [id,req.user.id,censored,is_offer?1:0,offer_data?JSON.stringify(offer_data):null,Date.now()]);
+    res.json({success:true,id});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.delete('/api/shuk/chat/:id', authMiddleware, adminOnly, async(req,res)=>{
+  await db.run('UPDATE shuk_messages SET is_censored=1 WHERE id=?',[req.params.id]);
+  res.json({success:true});
+});
+
+app.post('/api/shuk/react', authMiddleware, async(req,res)=>{
+  try{
+    const {targetId,targetType,emoji}=req.body;
+    const existing=await db.get('SELECT id FROM shuk_reactions WHERE target_id=? AND user_id=? AND emoji=?',[targetId,req.user.id,emoji]);
+    if(existing){
+      await db.run('DELETE FROM shuk_reactions WHERE id=?',[existing.id]);
+      res.json({added:false});
+    } else {
+      await db.run('INSERT INTO shuk_reactions (id,target_id,target_type,user_id,emoji,timestamp) VALUES (?,?,?,?,?,?)',
+        [generateId('sr'),targetId,targetType,req.user.id,emoji,Date.now()]);
+      res.json({added:true});
+    }
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/shuk/offer/accept', authMiddleware, async(req,res)=>{
+  try{
+    const {messageId}=req.body;
+    const msg=await db.get('SELECT * FROM shuk_messages WHERE id=? AND is_offer=1',[messageId]);
+    if(!msg) return res.status(404).json({error:'Offer not found'});
+    if(msg.user_id===req.user.id) return res.status(400).json({error:'Cannot accept your own offer'});
+    const existing=await db.get('SELECT id FROM shuk_offer_accepts WHERE offer_message_id=?',[messageId]);
+    if(existing) return res.status(400).json({error:'Offer already accepted'});
+    await db.run('INSERT INTO shuk_offer_accepts (id,offer_message_id,acceptor_id,timestamp) VALUES (?,?,?,?)',
+      [generateId('sa'),messageId,req.user.id,Date.now()]);
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
