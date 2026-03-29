@@ -282,6 +282,7 @@
     <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">Sign In</button>
     <div class="auth-toggle" style="margin-top:12px;"><a onclick="showForgotPassword()" style="color:var(--text3);font-size:12px;">Forgot password?</a></div>
+    <div class="auth-toggle">No account? <a onclick="showRegister()">Register</a></div>
     
   </div>
 </div>
@@ -331,7 +332,7 @@
       <div class="access-hint">Enter access code to trade</div>
       <input class="access-input" type="password" id="access-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')tryAccess()">
       <div class="access-error" id="access-error" style="display:none;">Invalid code.</div>
-      <div class="access-hint" style="margin-top:16px;">No account? <a onclick="showRegister()" style="color:#7c6af7;cursor:pointer;">Register</a></div>
+     
     </div>
   </div>
 </div>
@@ -661,7 +662,7 @@ async function tryAccess(){
     sessionStorage.setItem('access_granted','1');
     clearInterval(liveInterval);clearInterval(countdownInterval);
     document.getElementById('live-screen').style.display='none';
-    enterApp();
+document.getElementById('auth-screen').style.display='flex';
   }catch(e){errEl.style.display='block';document.getElementById('access-input').value='';setTimeout(()=>errEl.style.display='none',2000);}
 }
 
@@ -690,7 +691,7 @@ async function doRegister(){
   try{
     const data=await api('POST','/auth/register',{name,email,password,grade});
     authToken=data.token;localStorage.setItem('ew_token',authToken);currentUser=data.user;
-    hideRegister();showLiveScreen();
+    hideRegister();enterApp();
   }catch(e){showRegError(e.message);btn.disabled=false;btn.textContent='Create Account';}
 }
 async function doForgotPassword(){
@@ -703,6 +704,7 @@ async function doForgotPassword(){
 }
 function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
 function showRegister(){document.getElementById('register-screen').style.display='flex';}
+function showAuthScreen(){document.getElementById('live-screen').style.display='none';document.getElementById('auth-screen').style.display='flex';}
 function hideRegister(){document.getElementById('register-screen').style.display='none';}
 function showForgotPassword(){document.getElementById('forgot-screen').style.display='flex';}
 function hideForgotPassword(){document.getElementById('forgot-screen').style.display='none';}
@@ -1410,7 +1412,7 @@ function showNotif(containerId,msg,type='success'){
       document.getElementById('auth-screen').style.display='flex';
     }
   } else {
-    document.getElementById('auth-screen').style.display='flex';
+    showLiveScreen();
   }
 })();
 </script>
