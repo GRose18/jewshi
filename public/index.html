@@ -491,6 +491,17 @@
           <div id="grose-only-panel"></div>
         </div>
       </div>
+      <div class="panel">
+  <div class="panel-title">Create Shuk Market</div>
+  <div class="form-group"><label>Question</label><input type="text" id="new-shuk-q" placeholder="Will Rockets make the playoffs?"></div>
+  <div class="admin-form-row">
+    <div class="form-group"><label>Category</label>
+      <select id="new-shuk-cat"><option>Sports</option><option>School</option><option>Fun</option><option>Current Events</option></select>
+    </div>
+    <div class="form-group"><label>Closes</label><input type="date" id="new-shuk-close"></div>
+  </div>
+  <button class="btn-admin" onclick="createShukMarket()">Create Shuk Market</button>
+</div>
       <div class="panel"><div class="panel-title">Resolve Markets</div><div id="admin-markets-list"></div></div>
       <div class="panel">
         <div class="panel-title">Manage Store</div>
@@ -1588,7 +1599,7 @@ async function loadShukChat(){
         <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap;">
           ${reactions.map(r=>`<span onclick="reactShuk('${m.id}','message','${r.emoji}')" style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:1px 6px;font-size:11px;cursor:pointer;">${r.emoji} ${r.count}</span>`).join('')}
           <span onclick="showEmojiPicker('${m.id}','message')" style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:1px 6px;font-size:11px;cursor:pointer;color:var(--text3);">+</span>
-          ${currentUser.role==='admin'&&!isMe?`<span onclick="deleteShukMsg('${m.id}')" style="font-size:10px;color:var(--red);cursor:pointer;padding:2px 4px;">delete</span>`:''}
+          ${currentUser.role==='admin'?`<span onclick="deleteShukMsg('${m.id}')" style="font-size:10px;color:var(--red);cursor:pointer;padding:2px 4px;">delete</span>`:''}
         </div>
       </div>`;
     }).join('');
@@ -1772,6 +1783,19 @@ async function resolveOU(id){
   catch(e){alert(e.message);}
 }
 async function closeMarket(id){await api('POST','/markets/'+id+'/close');renderAdminTab();}
+async function createShukMarket(){
+  const question=document.getElementById('new-shuk-q').value.trim();
+  const category=document.getElementById('new-shuk-cat').value;
+  const closeDate=document.getElementById('new-shuk-close').value;
+  if(!question||!closeDate){alert('Fill in all fields.');return;}
+  try{
+    await api('POST','/shuk/markets',{question,category,closeDate});
+    document.getElementById('new-shuk-q').value='';
+    document.getElementById('new-shuk-close').value='';
+    renderAdminTab();
+    showToast('Shuk market created!');
+  }catch(e){alert(e.message);}
+}
 
 async function deleteMarket(id){
   if(!confirm('Delete this market? All active bets will be refunded.'))return;
