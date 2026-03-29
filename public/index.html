@@ -282,7 +282,7 @@
     <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">Sign In</button>
     <div class="auth-toggle" style="margin-top:12px;"><a onclick="showForgotPassword()" style="color:var(--text3);font-size:12px;">Forgot password?</a></div>
-    <div class="auth-toggle">No account? <a onclick="showRegister()">Register</a></div>
+    
   </div>
 </div>
 
@@ -331,6 +331,7 @@
       <div class="access-hint">Enter access code to trade</div>
       <input class="access-input" type="password" id="access-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')tryAccess()">
       <div class="access-error" id="access-error" style="display:none;">Invalid code.</div>
+      <div class="access-hint" style="margin-top:16px;">No account? <a onclick="showRegister()" style="color:#7c6af7;cursor:pointer;">Register</a></div>
     </div>
   </div>
 </div>
@@ -701,15 +702,7 @@ async function doForgotPassword(){
   catch(e){errEl.textContent=e.message;errEl.style.display='block';}
 }
 function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
-function showRegister(){
-  const pw=prompt('Enter access code to create an account:');
-  if(!pw){return;}
-  api('POST','/access/verify',{password:pw}).then(()=>{
-    document.getElementById('register-screen').style.display='flex';
-  }).catch(()=>{
-    alert('Invalid access code.');
-  });
-}
+function showRegister(){document.getElementById('register-screen').style.display='flex';}
 function hideRegister(){document.getElementById('register-screen').style.display='none';}
 function showForgotPassword(){document.getElementById('forgot-screen').style.display='flex';}
 function hideForgotPassword(){document.getElementById('forgot-screen').style.display='none';}
