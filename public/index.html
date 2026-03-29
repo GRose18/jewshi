@@ -701,7 +701,15 @@ async function doForgotPassword(){
   catch(e){errEl.textContent=e.message;errEl.style.display='block';}
 }
 function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
-function showRegister(){document.getElementById('register-screen').style.display='flex';}
+function showRegister(){
+  const pw=prompt('Enter access code to create an account:');
+  if(!pw){return;}
+  api('POST','/access/verify',{password:pw}).then(()=>{
+    document.getElementById('register-screen').style.display='flex';
+  }).catch(()=>{
+    alert('Invalid access code.');
+  });
+}
 function hideRegister(){document.getElementById('register-screen').style.display='none';}
 function showForgotPassword(){document.getElementById('forgot-screen').style.display='flex';}
 function hideForgotPassword(){document.getElementById('forgot-screen').style.display='none';}
