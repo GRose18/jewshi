@@ -593,6 +593,10 @@ function getMyPercent(m,side){
   if(m.market_type==='overunder') return side==='OVER'?getOverPercent(m):100-getOverPercent(m);
   return side==='YES'?getYesPercent(m):100-getYesPercent(m);
 }
+function esc(str){
+  if(!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 function initials(name){return name?name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'??';}
 function timeAgo(ts){
   const diff=Date.now()-ts;
@@ -761,7 +765,7 @@ async function renderMarkets(){
     return `<div class="market-card ${m.status!=='open'?'resolved':''}" onclick="${m.status==='open'?`openBetModal('${m.id}')`:'' }">
       ${isOU?`<span class="market-type-badge" style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-dim);">Over/Under</span>`:''}
       <div class="market-category">${m.category}</div>
-      <div class="market-title">${m.question}</div>
+      <div class="market-title">${esc(m.question)}</div>
       ${isOU?`<div class="market-line">Line: ${m.line}</div>`:''}
       ${oddsHtml}
       <div class="market-meta"><span>⬡ ${(m.pool||0).toLocaleString()} pool</span>${statusTag}</div>
@@ -875,11 +879,11 @@ async function loadJewGram(){
     if(!withProfile.length){bar.style.display='none';return;}
     bar.style.display='flex';
     bar.innerHTML=withProfile.map(u=>`
-      <div class="jewgram-story" onclick="openProfile('${u.id}')">
+      <div class="jewgram-story" onclick="openProfile('${esc(u.id)}')">
         <div class="jewgram-ring">
-          <div class="jewgram-avatar">${initials(u.name)}</div>
+          <div class="jewgram-avatar">${initials(esc(u.name))}</div>
         </div>
-        <div class="jewgram-name">${u.name.split(' ')[0]}</div>
+        <div class="jewgram-name">${esc(u.name.split(' ')[0])}</div>
       </div>`).join('');
   }catch(e){}
 }
@@ -941,13 +945,13 @@ function renderPost(p){
     <div class="feed-post-header">
       <div class="feed-avatar ${isAdmin?'':'feed-avatar-student'}">${av}</div>
       <div style="flex:1;">
-        <div class="feed-author">${p.author_name}${isAdmin?`<span class="feed-admin-badge">admin</span>`:''}</div>
+        <div class="feed-author">${esc(p.author_name)}${isAdmin?`<span class="feed-admin-badge">admin</span>`:''}</div>
         <div class="feed-time">${timeAgo(p.timestamp)}</div>
       </div>
       ${currentUser.role==='admin'?`<button class="btn-admin btn-sm btn-danger" onclick="deletePost('${p.id}')">Delete</button>`:''}
     </div>
     ${p.image?`<img class="feed-post-image" src="${p.image}" alt="post image">`:''}
-    <div class="feed-caption">${p.caption}</div>
+    <div class="feed-caption">${esc(p.caption)}</div>
     <div class="feed-actions">
       <button class="feed-action-btn ${p.user_liked?'liked':''}" onclick="toggleLike('${p.id}',this)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="${p.user_liked?'#ff4560':'none'}" stroke="${p.user_liked?'#ff4560':'#55556a'}" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -1002,7 +1006,7 @@ async function openProfile(userId){
     document.getElementById('profile-content').innerHTML=`
       <div class="profile-header">
         <div class="profile-big-avatar">${av}</div>
-        <div class="profile-name">${p.name}</div>
+        <div class="profile-name">${esc(p.name)}</div>
         <div class="profile-grade">${p.grade||''}</div>
         <div style="margin-top:10px;">
           <button class="btn-admin btn-sm" onclick="startDMFromProfile('${p.id}','${p.name.replace(/'/g,"\\'")}' )">Message</button>
@@ -1015,7 +1019,7 @@ async function openProfile(userId){
       </div>
       ${p.reposts&&p.reposts.length?`
         <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Reposts</div>
-        ${p.reposts.map(r=>`<div style="background:var(--bg3);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;font-size:13px;color:var(--text2);">${r.original_caption}</div>`).join('')}
+        ${p.reposts.map(r=>`<div style="background:var(--bg3);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;font-size:13px;color:var(--text2);">${esc(r.original_caption)}</div>`).join('')}
       `:'<p style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0;">No reposts yet.</p>'}`;
   }catch(e){document.getElementById('profile-content').innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">Profile not available.</p>';}
 }
@@ -1058,7 +1062,7 @@ async function renderLeaderboard(){
     return `<div class="leaderboard-row" style="${isMe?'background:var(--accent-bg);border-radius:var(--radius);padding:12px 10px;':''}" onclick="${hasProfile&&!isMe?`openProfile('${u.id}')`:'' }">
       <span class="lb-rank" style="${i<3?'font-size:18px;':''}">${i<3?medals[i]:'#'+(i+1)}</span>
       <div class="lb-avatar">${ini}</div>
-      <div style="flex:1;"><div class="lb-name">${u.name||u.id} ${isMe?'<span style="font-size:11px;color:var(--accent)">(you)</span>':''}</div><div class="lb-id">${u.grade||''} · ${u.id}</div></div>
+      <div style="flex:1;"><div class="lb-name">${esc(u.name)||u.id} ${isMe?'<span style="font-size:11px;color:var(--accent)">(you)</span>':''}</div><div class="lb-id">${esc(u.grade||'')} · ${esc(u.id)}</div></div>
       <div style="font-size:14px;font-weight:700;color:var(--green)">⬡ ${u.credits.toLocaleString()}</div>
     </div>`;
   }).join('');
@@ -1102,11 +1106,11 @@ async function loadConversations(){
     return `<div onclick="openThread('${c.other.id}','${c.other.name.replace(/'/g,"\\'")}' )"
       style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);background:${isActive?'var(--accent-bg)':'transparent'};">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-        <span style="font-size:13px;font-weight:${unread?'600':'400'};color:${unread?'var(--text)':'var(--text2)'};">${c.other.name}</span>
+       <span style="font-size:13px;font-weight:${unread?'600':'400'};color:${unread?'var(--text)':'var(--text2)'};">${esc(c.other.name)}</span>
         ${unread?`<span style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;">${c.unreadCount}</span>`:''}
       </div>
       <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">
-        ${c.lastMessage?(c.lastMessage.sender_id===currentUser.id?'You: ':'')+c.lastMessage.text:''}
+        ${c.lastMessage?(c.lastMessage.sender_id===currentUser.id?'You: ':'')+esc(c.lastMessage.text):''}
       </div>
     </div>`;
   }).join('');
@@ -1131,7 +1135,7 @@ async function loadThread(){
     const isMe=m.sender_id===currentUser.id;
     const time=new Date(m.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};">
-      <div style="max-width:72%;padding:9px 13px;font-size:13px;line-height:1.45;" class="${isMe?'msg-bubble-me':'msg-bubble-them'}">${m.text}</div>
+      <div style="max-width:72%;padding:9px 13px;font-size:13px;line-height:1.45;" class="${isMe?'msg-bubble-me':'msg-bubble-them'}">${esc(m.text)}</div>
       <span style="font-size:10px;color:var(--text3);margin-top:3px;">${time}</span>
     </div>`;
   }).join('');
@@ -1187,7 +1191,7 @@ async function renderAdminTab(){
     const pctDisplay=isOU?`OVER ${getOverPercent(m)}%`:`YES ${getYesPercent(m)}%`;
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
       <div style="flex:1;min-width:200px;">
-        <div style="font-size:13px;font-weight:600;color:var(--text)">${m.question}${isOU?` <span style="color:var(--gold);font-size:11px;">(Line: ${m.line})</span>`:''}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(m.question)}${isOU?` <span style="color:var(--gold);font-size:11px;">(Line: ${m.line})</span>`:''}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px;">${m.category} · ${pctDisplay} · Pool ⬡${m.pool||0}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1220,8 +1224,8 @@ async function renderAdminTab(){
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.on_email_list?'checked':''} onchange="toggleEmailList('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">`:'—'}
         </td>
-        <td style="color:var(--text)">${u.name||'—'}</td>
-        <td style="color:var(--text3);font-size:12px;">${u.email||'—'}</td>
+        <td style="color:var(--text)">${esc(u.name)||'—'}</td>
+        <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
         <td>${u.grade||'—'}</td>
         <td><span class="history-pill" style="background:${u.role==='admin'?'var(--accent-bg)':'var(--bg4)'};color:${u.role==='admin'?'var(--accent)':'var(--text3)'}">${u.role}</span></td>
         <td style="color:var(--green)">⬡ ${u.credits.toLocaleString()}</td>
@@ -1239,10 +1243,10 @@ async function renderAdminTab(){
 
   document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
     :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
-      <td style="color:var(--text)">${t.user_name||t.user_id}</td>
+      <td style="color:var(--text)">${esc(t.user_name||t.user_id)}</td>
       <td style="${t.amount>0?'color:var(--green)':'color:var(--red)'};font-weight:600;">${t.amount>0?'+':''}${t.amount}</td>
       <td><span class="history-pill" style="background:var(--bg4);color:var(--text3)">${t.type}</span></td>
-      <td style="color:var(--text3)">${t.description||'—'}</td>
+      <td style="color:var(--text3)">${esc(t.description)||'—'}</td>
       <td style="color:var(--text3)">${new Date(t.timestamp).toLocaleString()}</td>
     </tr>`).join('')}</tbody></table>`;
 }
