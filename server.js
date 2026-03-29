@@ -811,7 +811,7 @@ app.post('/api/shuk/markets', authMiddleware, adminOnly, async(req,res)=>{
     const id=generateId('sm');
     const b=b_param||100;
     await db.run('INSERT INTO shuk_markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,created_at,total_volume) VALUES (?,?,?,?,?,0,0,?,?,0)',
-      [id,question,category||'General',closeDate,b,Date.now()]);
+      [id,question,category||'General','open',closeDate,b,Date.now()]);
     const m=await db.get('SELECT * FROM shuk_markets WHERE id=?',[id]);
     res.json({...m,yes_price:50,no_price:50});
   }catch(e){res.status(500).json({error:e.message});}
