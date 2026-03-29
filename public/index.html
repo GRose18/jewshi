@@ -658,11 +658,17 @@ async function tryAccess(){
   const errEl=document.getElementById('access-error');
   errEl.style.display='none';
   try{
-    await api('POST','/access/verify',{password:pw});
+    const res=await fetch(API+'/access/verify',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:pw})
+    });
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||'Wrong password');
     sessionStorage.setItem('access_granted','1');
     clearInterval(liveInterval);clearInterval(countdownInterval);
     document.getElementById('live-screen').style.display='none';
-document.getElementById('auth-screen').style.display='flex';
+    document.getElementById('auth-screen').style.display='flex';
   }catch(e){errEl.style.display='block';document.getElementById('access-input').value='';setTimeout(()=>errEl.style.display='none',2000);}
 }
 

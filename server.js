@@ -174,7 +174,7 @@ function getYesPercent(m) { const t=(m.yes_shares||0)+(m.no_shares||0); return t
 function getOverPercent(m) { const t=(m.over_shares||0)+(m.under_shares||0); return t===0?50:Math.round((m.over_shares/t)*100); }
 
 // ── ACCESS PASSWORD ──
-app.post('/api/access/verify', authMiddleware, async(req,res)=>{
+app.post('/api/access/verify', async(req,res)=>{
   const {password}=req.body;
   const row=await db.get("SELECT value FROM settings WHERE key='access_password'");
   if(password===(row?.value||'jewshi2025')) res.json({success:true});
