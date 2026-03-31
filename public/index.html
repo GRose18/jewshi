@@ -775,6 +775,7 @@ async function enterApp(){
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='block');
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
+  setInterval(pollResolutions,8000);pollResolutions();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeRepostModal();closeProfileModal();}});
 }
 function updateTopbar(){
@@ -1218,6 +1219,26 @@ async function pollUnreadCount(){
     if(count>0){badge.textContent=count;badge.style.display='inline';}else{badge.style.display='none';}
   }catch(e){}
 }
+async function pollResolutions(){
+  try{
+    const bets=await api('GET','/bets/mine');
+    const key='seen_resolved_bets';
+    const seen=new Set(JSON.parse(localStorage.getItem(key)||'[]'));
+    const newlyResolved=bets.filter(b=>(b.status==='won'||b.status==='lost')&&!seen.has(b.id));
+    if(newlyResolved.length){
+      const b=newlyResolved[0];
+      seen.add(b.id);
+      localStorage.setItem(key,JSON.stringify([...seen].slice(-200)));
+      showResultPopup({
+        won:b.status==='won',
+        question:b.question,
+        side:b.side,
+        betAmount:b.amount,
+        payout:b.payout||0
+      });
+    }
+  }catch(e){}
+}
 
 // ── THE SHUK ──
 let shukMarkets=[],shukSelectedMarket=null,shukChart=null,shukMiniCharts={};
@@ -1405,7 +1426,7 @@ function renderShukDetail(m){
       <div style="height:180px;margin-bottom:16px;"><canvas id="shuk-main-chart"></canvas></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
         <div style="background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);padding:14px;">
-          <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--green);margin-bottom:10px;">Buy YES @ ${m.yes_price}¢</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--green);margin-bottom:10px;">Buy YES · current ${m.yes_price}¢</div>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
             <input type="number" id="shuk-yes-qty" value="10" min="1" style="flex:1;padding:8px;font-size:14px;font-weight:600;" oninput="updateShukSummary('YES')">
             <span style="font-size:11px;color:var(--text3);">contracts</span>
@@ -1414,7 +1435,7 @@ function renderShukDetail(m){
           <button onclick="buyShukContract('YES')" style="width:100%;padding:10px;background:var(--green);color:#000;border:none;border-radius:var(--radius);font-weight:700;font-size:13px;cursor:pointer;">Buy YES</button>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);padding:14px;">
-          <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--red);margin-bottom:10px;">Buy NO @ ${m.no_price}¢</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--red);margin-bottom:10px;">Buy NO · current ${m.no_price}¢</div>
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
             <input type="number" id="shuk-no-qty" value="10" min="1" style="flex:1;padding:8px;font-size:14px;font-weight:600;" oninput="updateShukSummary('NO')">
             <span style="font-size:11px;color:var(--text3);">contracts</span>
@@ -1447,15 +1468,36 @@ function updateDetailPrices(){
   if(nEl)nEl.textContent=shukSelectedMarket.no_price+'¢';
 }
 
+function lmsrCostClient(qYes,qNo,b){return b*Math.log(Math.exp(qYes/b)+Math.exp(qNo/b));}
+function lmsrBuyCostClient(qYes,qNo,b,side,contracts){
+  const newY=side==='YES'?qYes+contracts:qYes;
+  const newN=side==='NO'?qNo+contracts:qNo;
+  return Math.round(lmsrCostClient(newY,newN,b)-lmsrCostClient(qYes,qNo,b));
+}
+function lmsrSellReturnClient(qYes,qNo,b,side,contracts){
+  const newY=side==='YES'?qYes-contracts:qYes;
+  const newN=side==='NO'?qNo-contracts:qNo;
+  return Math.round(lmsrCostClient(qYes,qNo,b)-lmsrCostClient(newY,newN,b));
+}
 function updateShukSummary(side){
   if(!shukSelectedMarket)return;
   const qty=parseInt(document.getElementById(`shuk-${side.toLowerCase()}-qty`)?.value)||0;
-  const price=side==='YES'?shukSelectedMarket.yes_price:shukSelectedMarket.no_price;
-  const cost=qty*price;
-  const payout=qty*100;
-  const profit=payout-cost;
+  if(!qty||qty<=0){
+    const el=document.getElementById(`shuk-${side.toLowerCase()}-summary`);
+    if(el)el.innerHTML='';
+    return;
+  }
+  const {yes_shares,no_shares,b_param}=shukSelectedMarket;
+  const cost=lmsrBuyCostClient(yes_shares,no_shares,b_param,side,qty);
+  const sellNow=lmsrSellReturnClient(yes_shares,no_shares,b_param,side,qty);
+  const holdPayout=qty*100;
+  const holdProfit=holdPayout-cost;
+  const sellProfit=sellNow-cost;
   const el=document.getElementById(`shuk-${side.toLowerCase()}-summary`);
-  if(el)el.innerHTML=`Cost: <strong style="color:var(--text)">⬡ ${cost}</strong> · If wins: <strong style="color:var(--green)">+⬡ ${profit}</strong>`;
+  if(el)el.innerHTML=`
+    <div style="margin-bottom:3px;">Cost: <strong style="color:var(--text)">⬡ ${cost}</strong> · Avg: <strong style="color:var(--text2)">${Math.round(cost/qty)}¢/contract</strong></div>
+    <div style="margin-bottom:3px;">If wins & holds: <strong style="color:var(--green)">+⬡ ${holdProfit}</strong> (⬡${holdPayout} payout)</div>
+    <div>Sell immediately: <strong style="color:${sellProfit>=0?'var(--green)':'var(--red)'}">⬡ ${sellNow}</strong> <span style="color:var(--text3);font-size:10px;">(instant ${sellProfit>=0?'+':''}⬡${sellProfit})</span></div>`;
 }
 
 function drawMainChart(m){
@@ -1499,8 +1541,10 @@ async function buyShukContract(side){
   if(!shukSelectedMarket){return;}
   const qty=parseInt(document.getElementById(`shuk-${side.toLowerCase()}-qty`).value);
   if(!qty||qty<=0){alert('Enter a valid quantity.');return;}
-  const price=side==='YES'?shukSelectedMarket.yes_price:shukSelectedMarket.no_price;
-  const cost=qty*price;
+  const {yes_shares,no_shares,b_param}=shukSelectedMarket;
+  const cost=lmsrBuyCostClient(yes_shares,no_shares,b_param,side,qty);
+  if(cost<=0){alert('Order too small — try more contracts.');return;}
+  if(currentUser.credits<cost){alert('Insufficient credits!');return;}
   if(!confirm(`Buy ${qty} ${side} contracts for ⬡ ${cost}?`))return;
   try{
     const res=await api('POST','/shuk/buy',{marketId:shukSelectedMarket.id,side,contracts:qty});
@@ -1509,7 +1553,7 @@ async function buyShukContract(side){
     shukSelectedMarket.no_price=res.no_price;
     updateDetailPrices();
     await loadShukPositions();
-    showToast(`Bought ${qty} ${side} @ ${price}¢ — ⬡ ${cost} spent`);
+    showToast(`Bought ${qty} ${side} — ⬡ ${cost} spent`);
     selectShukMarket(shukSelectedMarket.id);
   }catch(e){alert(e.message);}
 }
@@ -1881,12 +1925,104 @@ async function startCheckout(){
   catch(e){alert('Could not start checkout: '+e.message);}
 }
 
+if(!document.getElementById('result-popup-styles')){
+  const s=document.createElement('style');
+  s.id='result-popup-styles';
+  s.textContent=`
+    @keyframes resultBackdropIn{from{opacity:0}to{opacity:1}}
+    @keyframes resultBounceIn{0%{opacity:0;transform:scale(0.7)}60%{transform:scale(1.06)}80%{transform:scale(0.97)}100%{opacity:1;transform:scale(1)}}
+    @keyframes resultSlideUp{from{opacity:0;transform:translateY(40px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes resultCountUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  `;
+  document.head.appendChild(s);
+}
+
 function showToast(msg){
   const t=document.createElement('div');
   t.textContent=msg;
   t.style.cssText='position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e1e2a;border:1px solid rgba(255,255,255,0.14);color:#eeeef5;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,0.5);pointer-events:none;transition:opacity 0.3s;';
   document.body.appendChild(t);
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2200);
+}
+
+// ── RESULT POPUP ──
+const CONFETTI_COLORS=['#00d084','#7c6af7','#f0c040','#ff8c42','#3b9eff','#eeeef5'];
+function launchConfetti(canvasId,sceneId){
+  const canvas=document.getElementById(canvasId);
+  const scene=document.getElementById(sceneId);
+  if(!canvas||!scene)return;
+  canvas.width=scene.offsetWidth;
+  canvas.height=scene.offsetHeight;
+  const ctx=canvas.getContext('2d');
+  const particles=[];
+  for(let i=0;i<90;i++){
+    particles.push({
+      x:canvas.width*0.5+(Math.random()-0.5)*80,
+      y:canvas.height*0.38,
+      vx:(Math.random()-0.5)*7,
+      vy:-(Math.random()*8+4),
+      w:Math.random()*8+4,
+      h:Math.random()*4+3,
+      color:CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)],
+      rot:Math.random()*360,
+      rspeed:(Math.random()-0.5)*12,
+      gravity:0.28,
+      opacity:1,
+      shape:Math.random()>0.5?'rect':'circle'
+    });
+  }
+  let frame=0;
+  let animId;
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;p.rot+=p.rspeed;
+      p.opacity=Math.max(0,p.opacity-0.008);
+      ctx.save();ctx.globalAlpha=p.opacity;
+      ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle=p.color;
+      if(p.shape==='circle'){ctx.beginPath();ctx.arc(0,0,p.w/2,0,Math.PI*2);ctx.fill();}
+      else{ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);}
+      ctx.restore();
+    });
+    frame++;
+    if(frame<180)animId=requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  draw();
+}
+
+function showResultPopup({won,question,side,betAmount,payout}){
+  const existing=document.getElementById('result-popup-overlay');
+  if(existing)existing.remove();
+  const profit=payout-betAmount;
+  const overlay=document.createElement('div');
+  overlay.id='result-popup-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:resultBackdropIn 0.3s ease;';
+  overlay.innerHTML=`
+    <div id="result-popup-scene" style="position:relative;">
+      ${won?`<canvas id="result-confetti" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;"></canvas>`:''}
+      <div id="result-popup-card" style="background:var(--bg2);border:1px solid ${won?'rgba(0,208,132,0.25)':'rgba(255,69,96,0.2)'};border-radius:18px;padding:28px 24px;width:300px;text-align:center;position:relative;overflow:hidden;z-index:2;animation:${won?'resultBounceIn 0.55s cubic-bezier(0.34,1.56,0.64,1)':'resultSlideUp 0.4s cubic-bezier(0.22,1,0.36,1)'} forwards;">
+        <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${won?'var(--green)':'var(--red)'};border-radius:18px 18px 0 0;"></div>
+        <div style="width:52px;height:52px;border-radius:50%;background:${won?'var(--green-bg)':'var(--red-bg)'};display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          ${won
+            ?`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+            :`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+          }
+        </div>
+        <p style="font-size:11px;font-weight:600;color:var(--text3);margin:0 0 4px;text-transform:uppercase;letter-spacing:0.1em;">Market resolved</p>
+        <p style="font-size:14px;font-weight:600;color:var(--text);margin:0 0 16px;line-height:1.4;">${esc(question)}</p>
+        <div style="background:${won?'var(--green-bg)':'var(--red-bg)'};border:1px solid ${won?'var(--green-dim)':'var(--red-dim)'};border-radius:12px;padding:16px;margin-bottom:16px;">
+          <p style="font-size:11px;color:${won?'var(--green)':'var(--red)'};margin:0 0 4px;text-transform:uppercase;letter-spacing:0.05em;">${won?'You won':'You lost'}</p>
+          <p id="result-amount" style="font-size:30px;font-weight:700;color:${won?'var(--green)':'var(--red)'};margin:0;letter-spacing:-0.02em;animation:resultCountUp 0.4s ease ${won?'0.4s':'0.2s'} both;">${won?`⬡ ${payout}`:`-⬡ ${betAmount}`}</p>
+          <p style="font-size:12px;color:var(--text2);margin:5px 0 0;">${won?`+⬡ ${profit} profit · bet ⬡ ${betAmount} on ${side}`:`Your bet on ${side} did not win`}</p>
+        </div>
+        <button onclick="document.getElementById('result-popup-overlay').remove()" style="width:100%;padding:12px;background:${won?'var(--green)':'var(--bg4)'};color:${won?'#000':'var(--text2)'};border:${won?'none':'1px solid var(--border-hi)'};border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">${won?'Collect winnings':'Close'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  if(won)setTimeout(()=>launchConfetti('result-confetti','result-popup-scene'),250);
 }
 
 function showNotif(containerId,msg,type='success'){

@@ -537,7 +537,7 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
       await recordTx(b.user_id,pay,'bet_won',b.id,`Won: ${m.question}`);
     }
     await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
-    res.json({success:true,outcome});
+    res.json({success:true,outcome,pool:m.pool,wins:wins.map(b=>({id:b.id,user_id:b.user_id,amount:b.amount,payout:Math.round((b.amount/total)*m.pool)}))});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(req,res)=>{
@@ -866,6 +866,7 @@ app.post('/api/shuk/sell', authMiddleware, async(req,res)=>{
     const pos=await db.get('SELECT * FROM shuk_positions WHERE user_id=? AND market_id=? AND side=?',[req.user.id,marketId,side]);
     if(!pos||pos.contracts<contracts) return res.status(400).json({error:'Insufficient contracts'});
     const returnAmt=lmsrSellReturn(m.yes_shares,m.no_shares,m.b_param,side,contracts);
+    if(returnAmt<=0) return res.status(400).json({error:'Cannot sell — position value is zero'});
     await db.run('UPDATE users SET credits=credits+? WHERE id=?',[returnAmt,user.id]);
     if(side==='YES') await db.run('UPDATE shuk_markets SET yes_shares=yes_shares-? WHERE id=?',[contracts,marketId]);
     else await db.run('UPDATE shuk_markets SET no_shares=no_shares-? WHERE id=?',[contracts,marketId]);
