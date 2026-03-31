@@ -777,25 +777,6 @@ app.post('/api/posts/:id/repost', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.delete('/api/reposts/:id', authMiddleware, async (req, res) => {
-  try {
-    const repost = await db.get('SELECT * FROM post_reposts WHERE id=?', [req.params.id]);
-    if (!repost) return res.status(404).json({ error: 'Repost not found' });
-
-    const me = await db.get('SELECT role FROM users WHERE id=?', [req.user.id]);
-    const isAdmin = me?.role === 'admin';
-
-    if (repost.user_id !== req.user.id && !isAdmin) {
-      return res.status(403).json({ error: 'Not allowed to delete this repost' });
-    }
-
-    await db.run('DELETE FROM post_reposts WHERE id=?', [req.params.id]);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // ── THE SHUK ──
 
 app.get('/api/shuk/markets', authMiddleware, async(req,res)=>{
