@@ -745,10 +745,18 @@ app.post('/api/posts', authMiddleware, adminOnly, async(req,res)=>{
 });
 
 app.delete('/api/posts/:id', authMiddleware, adminOnly, async(req,res)=>{
-  await db.run('DELETE FROM post_likes WHERE post_id=?',[req.params.id]);
-  await db.run('DELETE FROM post_reposts WHERE post_id=?',[req.params.id]);
-  await db.run('DELETE FROM posts WHERE id=?',[req.params.id]);
-  res.json({success:true});
+  try{
+    const id=req.params.id;
+    const isRepost=await db.get('SELECT id FROM post_reposts WHERE id=?',[id]);
+    if(isRepost){
+      await db.run('DELETE FROM post_reposts WHERE id=?',[id]);
+    } else {
+      await db.run('DELETE FROM post_likes WHERE post_id=?',[id]);
+      await db.run('DELETE FROM post_reposts WHERE post_id=?',[id]);
+      await db.run('DELETE FROM posts WHERE id=?',[id]);
+    }
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.post('/api/posts/:id/like', authMiddleware, async(req,res)=>{
