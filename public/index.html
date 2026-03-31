@@ -548,6 +548,7 @@
     <div class="bet-summary" id="bet-summary"></div>
     <button class="btn-bet" id="btn-place-bet" onclick="placeBet()">Place Bet</button>
     <p style="font-size:12px;color:var(--text3);margin-top:10px;text-align:center;">Balance after: <strong id="balance-after" style="color:var(--text);">—</strong></p>
+<p style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;line-height:1.5;">You have <strong style="color:var(--text);">5 minutes</strong> to cancel this bet. Cancellations keep a <strong style="color:var(--text);">5% fee</strong> for the pot.</p>
   </div>
 </div>
 
@@ -776,7 +777,7 @@ async function enterApp(){
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
   setInterval(pollResolutions,8000);pollResolutions();
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeRepostModal();closeProfileModal();}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeRepostModal();closeProfileModal();closeSpinModal();}});
 }
 function updateTopbar(){
   if(!currentUser)return;
@@ -1094,10 +1095,21 @@ async function renderPortfolio(){
     <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value">⬡ ${totalWagered.toLocaleString()}</div></div>`;
   document.getElementById('active-positions').innerHTML=!active.length
     ?'<div class="empty-state"><div class="icon">📈</div><p>No active positions.</p></div>'
-    :`<table class="portfolio-table"><thead><tr><th>Market</th><th>Side</th><th>Wagered</th><th>Type</th></tr></thead><tbody>${active.map(b=>{
-        const sc=b.side==='YES'||b.side==='OVER'?'var(--green)':'var(--red)';
-        return `<tr><td style="color:var(--text)">${b.question}</td><td><span class="history-pill" style="background:${sc.replace(')','-bg)')};color:${sc}">${b.side}</span></td><td>⬡ ${b.amount}</td><td style="color:var(--text3)">${b.market_type==='overunder'?'O/U':'YES/NO'}</td></tr>`;
-      }).join('')}</tbody></table>`;
+    :`<table class="portfolio-table"><thead><tr><th>Market</th><th>Side</th><th>Wagered</th><th>Type</th><th></th></tr></thead><tbody>${active.map(b=>{
+    const sc=b.side==='YES'||b.side==='OVER'?'var(--green)':'var(--red)';
+    const age=Date.now()-b.timestamp;
+    const canCancel=age<300000&&b.market_status==='open';
+    const secsLeft=Math.max(0,Math.ceil((300000-age)/1000));
+    const minsLeft=Math.floor(secsLeft/60),secsRemain=secsLeft%60;
+    const timeStr=canCancel?`${minsLeft}:${String(secsRemain).padStart(2,'0')}`:null;
+    return `<tr>
+      <td style="color:var(--text)">${esc(b.question)}</td>
+      <td><span class="history-pill" style="background:${sc.replace(')','-bg)')};color:${sc}">${b.side}</span></td>
+      <td>⬡ ${b.amount}</td>
+      <td style="color:var(--text3)">${b.market_type==='overunder'?'O/U':'YES/NO'}</td>
+      <td>${canCancel?`<button class="btn-admin btn-sm btn-danger" onclick="cancelBet('${b.id}',${b.amount})">Cancel <span style="font-size:10px;opacity:0.7;">${timeStr}</span></button>`:'<span style="font-size:11px;color:var(--text3);">—</span>'}</td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
   const history=bets.filter(b=>b.status!=='active');
   document.getElementById('bet-history').innerHTML=!history.length
     ?'<p style="color:var(--text3);font-size:13px;">No completed bets yet.</p>'
@@ -1944,7 +1956,18 @@ function showToast(msg){
   document.body.appendChild(t);
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2200);
 }
-
+// ── CANCEL BET ──
+async function cancelBet(betId,amount){
+  const fee=Math.round(amount*0.05);
+  const refund=amount-fee;
+  if(!confirm(`Cancel this bet?\n\nYou'll receive ⬡ ${refund} back (⬡ ${fee} fee kept for the pot).`))return;
+  try{
+    const data=await api('POST','/bets/'+betId+'/cancel');
+    showToast(`Bet cancelled — ⬡ ${data.refund} refunded`);
+    await refreshUser();
+    renderPortfolio();
+  }catch(e){alert(e.message);}
+}
 // ── RESULT POPUP ──
 const CONFETTI_COLORS=['#00d084','#7c6af7','#f0c040','#ff8c42','#3b9eff','#eeeef5'];
 function launchConfetti(canvasId,sceneId){

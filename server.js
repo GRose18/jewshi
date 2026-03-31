@@ -818,8 +818,8 @@ app.post('/api/shuk/markets', authMiddleware, adminOnly, async(req,res)=>{
     if(!question||!closeDate) return res.status(400).json({error:'Missing fields'});
     const id=generateId('sm');
     const b=b_param||100;
-    await db.run('INSERT INTO shuk_markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,created_at,total_volume) VALUES (?,?,?,?,?,0,0,?,?,0)',
-      [id,question,category||'General','open',closeDate,b,Date.now()]);
+    await db.run('INSERT INTO shuk_markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,created_at,total_volume) VALUES (?,?,?,?,?,?,?,?,?,0)',
+  [id,question,category||'General','open',closeDate,b,b,b,Date.now()]);
     const m=await db.get('SELECT * FROM shuk_markets WHERE id=?',[id]);
     res.json({...m,yes_price:50,no_price:50});
   }catch(e){res.status(500).json({error:e.message});}
@@ -1036,6 +1036,32 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
     const sent=await sendViaAppsScript('weekly_digest',payload);
     res.json({success:true,sent});
   }catch(e){console.error('Digest error:',e);res.status(500).json({error:e.message});}
+});
+
+// ── CANCEL BET ──
+app.post('/api/bets/:id/cancel', authMiddleware, async(req,res)=>{
+  try{
+    const bet=await db.get('SELECT * FROM bets WHERE id=? AND user_id=?',[req.params.id,req.user.id]);
+    if(!bet) return res.status(404).json({error:'Bet not found'});
+    if(bet.status!=='active') return res.status(400).json({error:'Bet is no longer active'});
+    const age=Date.now()-bet.timestamp;
+    if(age>300000) return res.status(400).json({error:'Cancellation window has expired (5 minutes)'});
+    const m=await db.get('SELECT * FROM markets WHERE id=?',[bet.market_id]);
+    if(!m||m.status!=='open') return res.status(400).json({error:'Market is no longer open'});
+    const fee=Math.round(bet.amount*0.05);
+    const refund=bet.amount-fee;
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[refund,req.user.id]);
+    await db.run("UPDATE bets SET status='cancelled' WHERE id=?",[bet.id]);
+    if(m.market_type==='overunder'){
+      if(bet.side==='OVER') await db.run('UPDATE markets SET over_shares=over_shares-?,pool=pool-? WHERE id=?',[bet.amount,refund,m.id]);
+      else await db.run('UPDATE markets SET under_shares=under_shares-?,pool=pool-? WHERE id=?',[bet.amount,refund,m.id]);
+    } else {
+      if(bet.side==='YES') await db.run('UPDATE markets SET yes_shares=yes_shares-?,pool=pool-? WHERE id=?',[bet.amount,refund,m.id]);
+      else await db.run('UPDATE markets SET no_shares=no_shares-?,pool=pool-? WHERE id=?',[bet.amount,refund,m.id]);
+    }
+    await recordTx(req.user.id,refund,'bet_cancelled',bet.id,`Cancelled bet on: ${m.question} (5% fee kept)`);
+    res.json({success:true,refund,fee});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
 initDB().then(()=>{
