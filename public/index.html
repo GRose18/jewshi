@@ -344,10 +344,13 @@
     </div>
     <div class="live-markets" id="live-markets"></div>
     <div class="access-gate">
-      <div class="access-hint">Enter access code to trade</div>
-      <input class="access-input" type="password" id="access-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')tryAccess()">
-      <div class="access-error" id="access-error" style="display:none;">Invalid code.</div>
-     
+      <div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#444;margin-bottom:12px;">Go follow the Jewshi instagram.</div>
+      <a href="https://www.instagram.com/jewshi.official/" target="_blank" style="display:flex;align-items:center;gap:8px;color:#fff;text-decoration:none;font-size:15px;font-weight:600;margin-bottom:28px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+        @jewshi.official
+      </a>
+      <button onclick="goToMarkets()" style="background:#7c6af7;color:#fff;border:none;padding:14px 40px;border-radius:10px;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.02em;">Go to Markets →</button>
+    </div>
     </div>
   </div>
 </div>
@@ -681,23 +684,11 @@ function updateCountdowns(){
     else el.textContent=`${m}m ${s}s`;
   });
 }
-async function tryAccess(){
-  const pw=document.getElementById('access-input').value;
-  const errEl=document.getElementById('access-error');
-  errEl.style.display='none';
-  try{
-    const res=await fetch(API+'/access/verify',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({password:pw})
-    });
-    const data=await res.json();
-    if(!res.ok) throw new Error(data.error||'Wrong password');
-    sessionStorage.setItem('access_granted','1');
-    clearInterval(liveInterval);clearInterval(countdownInterval);
-    document.getElementById('live-screen').style.display='none';
-    document.getElementById('auth-screen').style.display='flex';
-  }catch(e){errEl.style.display='block';document.getElementById('access-input').value='';setTimeout(()=>errEl.style.display='none',2000);}
+function goToMarkets(){
+  sessionStorage.setItem('access_granted','1');
+  clearInterval(liveInterval);clearInterval(countdownInterval);
+  document.getElementById('live-screen').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
 }
 
 // ── AUTH ──
@@ -1918,10 +1909,11 @@ function showNotif(containerId,msg,type='success'){
   if(authToken){
     try{
       currentUser=await api('GET','/me');
-      if(currentUser.role==='admin'||sessionStorage.getItem('access_granted')) enterApp();
-      else showLiveScreen();
+      enterApp();
     }catch(e){
-      localStorage.removeItem('ew_token');
+      if(e.message==='Invalid token'||e.message==='No token'){
+        localStorage.removeItem('ew_token');
+      }
       document.getElementById('auth-screen').style.display='flex';
     }
   } else {
