@@ -122,6 +122,12 @@ async function initDB() {
       code TEXT NOT NULL, expires_at INTEGER NOT NULL,
       created_at INTEGER
     )
+    ;CREATE TABLE IF NOT EXISTS spin_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      credits_won INTEGER NOT NULL,
+      timestamp INTEGER NOT NULL
+    )
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await seedIfEmpty();
@@ -1062,6 +1068,46 @@ app.post('/api/bets/:id/cancel', authMiddleware, async(req,res)=>{
     }
     await recordTx(req.user.id,refund,'bet_cancelled',bet.id,`Cancelled bet on: ${m.question} (5% fee kept)`);
     res.json({success:true,refund,fee});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+// ── DAILY SPIN ROUTES ──
+app.get('/api/spin/status', authMiddleware, async(req,res)=>{
+  try{
+    const last=await db.get('SELECT timestamp FROM spin_log WHERE user_id=? ORDER BY timestamp DESC LIMIT 1',[req.user.id]);
+    if(!last) return res.json({canSpin:true,nextSpin:null});
+    const midnight=new Date();
+    midnight.setUTCHours(0,0,0,0);
+    const canSpin=last.timestamp<midnight.getTime();
+    const next=canSpin?null:new Date(midnight.getTime()+86400000).getTime();
+    res.json({canSpin,nextSpin:next});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/spin', authMiddleware, async(req,res)=>{
+  try{
+    const midnight=new Date();
+    midnight.setUTCHours(0,0,0,0);
+    const last=await db.get('SELECT timestamp FROM spin_log WHERE user_id=? ORDER BY timestamp DESC LIMIT 1',[req.user.id]);
+    if(last&&last.timestamp>=midnight.getTime())
+      return res.status(400).json({error:'Already spun today'});
+    const prizes=[
+      {credits:5,   weight:35},
+      {credits:10,  weight:28},
+      {credits:25,  weight:18},
+      {credits:50,  weight:10},
+      {credits:100, weight:6},
+      {credits:200, weight:3},
+    ];
+    const total=prizes.reduce((s,p)=>s+p.weight,0);
+    let r=Math.random()*total,winner=prizes[0];
+    for(const p of prizes){r-=p.weight;if(r<=0){winner=p;break;}}
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[winner.credits,req.user.id]);
+    await db.run('INSERT INTO spin_log (id,user_id,credits_won,timestamp) VALUES (?,?,?,?)',
+      [generateId('spin'),req.user.id,winner.credits,Date.now()]);
+    await recordTx(req.user.id,winner.credits,'daily_spin',null,`Daily spin: won ${winner.credits} credits`);
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({credits:winner.credits,newBalance:user.credits});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
