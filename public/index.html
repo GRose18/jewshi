@@ -541,33 +541,6 @@
   </div>
 </div>
 
-<!-- BUY CREDITS MODAL -->
-<div class="modal-overlay" id="buy-modal" style="display:none;" onclick="closeBuyModal(event)">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
-    <div class="modal-header">
-      <h3 style="font-size:16px;font-weight:700;">Buy Credits</h3>
-      <button class="modal-close" onclick="closeBuyModal()">✕</button>
-    </div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:18px;">100 credits per $1.00.</p>
-    <div class="buy-input-wrap">
-      <span class="dollar">$</span>
-      <input type="number" id="buy-amount" placeholder="0.00" min="1" step="1" oninput="updateBuyPreview()">
-    </div>
-    <div class="buy-quick">
-      <button onclick="setBuyAmount(5)">$5</button>
-      <button onclick="setBuyAmount(10)">$10</button>
-      <button onclick="setBuyAmount(20)">$20</button>
-      <button onclick="setBuyAmount(50)">$50</button>
-    </div>
-    <div class="buy-preview" id="buy-preview" style="display:none;">
-      <span class="label">You'll receive</span>
-      <span class="credits" id="buy-credits-preview">⬡ 0</span>
-    </div>
-    <button class="btn-primary" onclick="startCheckout()" style="margin-bottom:12px;">Continue to Payment</button>
-    <p style="font-size:11px;color:var(--text3);text-align:center;">Secured by Stripe · Apple Pay &amp; Google Pay supported</p>
-  </div>
-</div>
-
 <!-- REPOST MODAL -->
 <div class="modal-overlay" id="repost-modal" style="display:none;" onclick="closeRepostModal(event)">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
