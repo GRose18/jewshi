@@ -400,6 +400,12 @@
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Roll over or under your target</div>
             <span class="status-tag status-open">Individual</span>
           </div>
+          <div class="market-card" onclick="openPlinko()" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">🔻</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Plinko</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Drop a ball through pegs for multipliers</div>
+            <span class="status-tag status-open">Animated</span>
+          </div>
           <div class="market-card" onclick="openBlackjack()" style="text-align:center;padding:24px 18px;">
             <div style="font-size:36px;margin-bottom:10px;">🃏</div>
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Blackjack</div>
@@ -554,6 +560,66 @@
           <div style="margin-top:24px;">
             <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Rolls</div>
             <div id="dice-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLINKO GAME -->
+      <div id="casino-plinko" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closePlinko()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Plinko</h2>
+        </div>
+
+        <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,0.85fr);gap:18px;align-items:start;">
+          <div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+              <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="plinko-balance">⬡ 0</div></div>
+              <div class="stat-card"><div class="stat-label">Best Hit</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="plinko-best">6.00x</div></div>
+              <div class="stat-card"><div class="stat-label">Last Payout</div><div class="stat-value" style="color:var(--accent);font-size:20px;" id="plinko-last-payout">⬡ 0</div></div>
+            </div>
+
+            <div class="panel" style="padding:18px 18px 16px;background:linear-gradient(180deg,rgba(124,106,247,0.08),rgba(10,10,15,0.92));border-color:rgba(124,106,247,0.28);overflow:hidden;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Board</div>
+                  <div style="font-size:13px;color:var(--text2);margin-top:4px;">Nine slots, center is safer, edges are spicy.</div>
+                </div>
+                <div id="plinko-result-pill" style="padding:8px 14px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text3);">Waiting for drop</div>
+              </div>
+              <div style="position:relative;background:radial-gradient(circle at top,rgba(124,106,247,0.12),transparent 40%),linear-gradient(180deg,#161524,#0e0d14);border:1px solid rgba(124,106,247,0.18);border-radius:20px;padding:12px;">
+                <canvas id="plinko-canvas" width="620" height="720" style="width:100%;height:auto;display:block;"></canvas>
+                <div id="plinko-glow" style="position:absolute;inset:auto 12px 12px 12px;height:62px;background:linear-gradient(180deg,transparent,rgba(124,106,247,0.08));pointer-events:none;border-radius:0 0 16px 16px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Drop Controls</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+                <input type="number" id="plinko-bet-input" placeholder="0" min="1" step="1" oninput="onPlinkoBetInput()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                <button onclick="setPlinkoBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+                <button onclick="setPlinkoBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <button onclick="setPlinkoBet(10)" class="quick-btn">10</button>
+                <button onclick="setPlinkoBet(25)" class="quick-btn">25</button>
+                <button onclick="setPlinkoBet(50)" class="quick-btn">50</button>
+                <button onclick="setPlinkoBet(100)" class="quick-btn">100</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;" id="plinko-mult-grid"></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;">
+                <span style="color:var(--text3);">Potential top hit</span>
+                <span id="plinko-max-win" style="font-size:16px;font-weight:700;color:var(--green);">⬡ 0</span>
+              </div>
+              <button id="plinko-drop-btn" onclick="dropPlinko()" style="width:100%;padding:15px;background:linear-gradient(135deg,var(--accent),#9d8fff);color:#fff;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.02em;margin-top:14px;">Drop Ball</button>
+            </div>
+
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Drops</div>
+              <div id="plinko-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -2011,10 +2077,17 @@ let diceDirection='over';
 let diceTarget=50;
 let diceRolling=false;
 let diceHistory=[];
+const PLINKO_ROWS=8;
+const PLINKO_MULTIPLIERS=[6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6];
+let plinkoDropping=false;
+let plinkoHistory=[];
+let plinkoBestMultiplier=Math.max(...PLINKO_MULTIPLIERS);
 
 function initCasino(){
   document.getElementById('casino-lobby').style.display='block';
   document.getElementById('casino-dice').style.display='none';
+  document.getElementById('casino-blackjack').style.display='none';
+  document.getElementById('casino-plinko').style.display='none';
 }
 
 function openDice(){
@@ -2166,6 +2239,279 @@ function renderDiceHistory(){
       <span style="font-size:14px;font-weight:700;color:${b.won?'var(--green)':'var(--red)'};">${b.roll.toFixed(2)}</span>
       <span style="font-size:12px;color:var(--text3);">${b.direction==='over'?'over':'under'} ${b.target} · ${b.mult.toFixed(2)}x</span>
       <span style="font-size:13px;font-weight:600;color:${b.won?'var(--green)':'var(--red)'};">${b.won?'+⬡ '+b.profit:'-⬡ '+b.betAmount}</span>
+    </div>`).join('');
+}
+
+function openPlinko(){
+  document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-plinko').style.display='block';
+  document.getElementById('plinko-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  document.getElementById('plinko-best').textContent=plinkoBestMultiplier.toFixed(2)+'x';
+  document.getElementById('plinko-last-payout').textContent='⬡ 0';
+  renderPlinkoMultiplierGrid();
+  updatePlinkoMaxWin();
+  drawPlinkoBoard();
+  plinkoHistory=[];
+  loadPlinkoHistory();
+}
+
+function closePlinko(){
+  document.getElementById('casino-plinko').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function onPlinkoBetInput(){
+  const input=document.getElementById('plinko-bet-input');
+  let val=Math.floor(Number(input.value));
+  if(val<0)val=0;
+  input.value=val||'';
+  updatePlinkoMaxWin();
+}
+
+function setPlinkoBet(amount){
+  const floored=Math.floor(amount);
+  document.getElementById('plinko-bet-input').value=floored>0?floored:'';
+  updatePlinkoMaxWin();
+}
+
+function updatePlinkoMaxWin(){
+  const bet=Math.floor(Number(document.getElementById('plinko-bet-input')?.value)||0);
+  const top=bet>0?Math.floor(bet*plinkoBestMultiplier):0;
+  const maxWin=document.getElementById('plinko-max-win');
+  if(maxWin) maxWin.textContent='⬡ '+top.toLocaleString();
+}
+
+function renderPlinkoMultiplierGrid(activeSlot=null){
+  const grid=document.getElementById('plinko-mult-grid');
+  if(!grid)return;
+  grid.innerHTML=PLINKO_MULTIPLIERS.map((mult,idx)=>{
+    const hot=idx===activeSlot;
+    const isEdge=idx===0||idx===PLINKO_MULTIPLIERS.length-1;
+    const isCenter=idx===Math.floor(PLINKO_MULTIPLIERS.length/2);
+    const bg=hot?'rgba(124,106,247,0.22)':isEdge?'rgba(240,192,64,0.12)':isCenter?'rgba(255,69,96,0.10)':'var(--bg3)';
+    const border=hot?'1px solid rgba(124,106,247,0.7)':isEdge?'1px solid rgba(240,192,64,0.26)':isCenter?'1px solid rgba(255,69,96,0.26)':'1px solid var(--border)';
+    const color=isEdge?'var(--gold)':isCenter?'var(--red)':'var(--text)';
+    return `<div style="padding:10px 8px;border-radius:12px;background:${bg};border:${border};text-align:center;transition:all 0.2s;">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;">Slot ${idx+1}</div>
+      <div style="font-size:16px;font-weight:700;color:${color};margin-top:2px;">${mult.toFixed(mult%1?1:0)}x</div>
+    </div>`;
+  }).join('');
+}
+
+function getPlinkoBoardMetrics(canvas){
+  const w=canvas.width,h=canvas.height;
+  const top=70;
+  const rowGap=56;
+  const pegGap=56;
+  const centerX=w/2;
+  const slots=PLINKO_MULTIPLIERS.length;
+  const bottomY=top+PLINKO_ROWS*rowGap+110;
+  return {w,h,top,rowGap,pegGap,centerX,slots,bottomY};
+}
+
+function drawPlinkoBoard(ball=null,activeSlot=null,trail=[]){
+  const canvas=document.getElementById('plinko-canvas');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const {w,h,top,rowGap,pegGap,centerX,slots,bottomY}=getPlinkoBoardMetrics(canvas);
+  ctx.clearRect(0,0,w,h);
+
+  const slotWidth=pegGap;
+  const slotStartX=centerX-((slots-1)*pegGap)/2-slotWidth/2;
+
+  const bg=ctx.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,'#161524');
+  bg.addColorStop(1,'#0c0b12');
+  ctx.fillStyle=bg;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.strokeStyle='rgba(124,106,247,0.14)';
+  ctx.lineWidth=1;
+  for(let i=0;i<=slots;i++){
+    const x=slotStartX+i*slotWidth;
+    ctx.beginPath();
+    ctx.moveTo(x,bottomY-36);
+    ctx.lineTo(x,bottomY+32);
+    ctx.stroke();
+  }
+
+  PLINKO_MULTIPLIERS.forEach((mult,idx)=>{
+    const x=slotStartX+idx*slotWidth;
+    const isActive=idx===activeSlot;
+    ctx.fillStyle=isActive?'rgba(124,106,247,0.26)':idx===0||idx===slots-1?'rgba(240,192,64,0.16)':idx===Math.floor(slots/2)?'rgba(255,69,96,0.14)':'rgba(30,30,46,0.95)';
+    ctx.fillRect(x,bottomY-4,slotWidth-2,44);
+    ctx.strokeStyle=isActive?'rgba(124,106,247,0.8)':'rgba(255,255,255,0.08)';
+    ctx.strokeRect(x,bottomY-4,slotWidth-2,44);
+    ctx.fillStyle=isActive?'#eeeef5':idx===0||idx===slots-1?'#f0c040':idx===Math.floor(slots/2)?'#ff4560':'#c4b9ff';
+    ctx.font='700 16px Inter,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(mult.toFixed(mult%1?1:0)+'x',x+(slotWidth-2)/2,bottomY+23);
+  });
+
+  for(let row=0;row<PLINKO_ROWS;row++){
+    const pegs=row+1;
+    const y=top+row*rowGap;
+    const rowStartX=centerX-((pegs-1)*pegGap)/2;
+    for(let col=0;col<pegs;col++){
+      const x=rowStartX+col*pegGap;
+      const glow=ctx.createRadialGradient(x,y,0,x,y,12);
+      glow.addColorStop(0,'rgba(196,184,255,0.28)');
+      glow.addColorStop(1,'rgba(196,184,255,0)');
+      ctx.fillStyle=glow;
+      ctx.beginPath();
+      ctx.arc(x,y,12,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle='#d8d0ff';
+      ctx.beginPath();
+      ctx.arc(x,y,4.6,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  trail.forEach((pt,idx)=>{
+    ctx.fillStyle=`rgba(124,106,247,${0.18+(idx/trail.length)*0.24})`;
+    ctx.beginPath();
+    ctx.arc(pt.x,pt.y,5+idx*0.18,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  if(ball){
+    const g=ctx.createRadialGradient(ball.x-4,ball.y-6,2,ball.x,ball.y,18);
+    g.addColorStop(0,'#ffffff');
+    g.addColorStop(0.35,'#c4b8ff');
+    g.addColorStop(1,'#7c6af7');
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.arc(ball.x,ball.y,11,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.5)';
+    ctx.lineWidth=1.2;
+    ctx.stroke();
+  } else {
+    ctx.fillStyle='rgba(124,106,247,0.25)';
+    ctx.beginPath();
+    ctx.arc(centerX,32,10,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function plinkoPathToPoints(path){
+  const canvas=document.getElementById('plinko-canvas');
+  const {top,rowGap,pegGap,centerX,bottomY}=getPlinkoBoardMetrics(canvas);
+  const points=[{x:centerX,y:32}];
+  let x=centerX;
+  for(let i=0;i<path.length;i++){
+    x+=path[i]?pegGap/2:-pegGap/2;
+    points.push({x,y:top+i*rowGap+18});
+  }
+  points.push({x,y:bottomY+10});
+  return points;
+}
+
+async function dropPlinko(){
+  if(plinkoDropping)return;
+  const betAmount=Math.floor(Number(document.getElementById('plinko-bet-input').value));
+  if(!betAmount||betAmount<1){showToast('Enter a bet amount.');return;}
+  if(betAmount>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  plinkoDropping=true;
+  const btn=document.getElementById('plinko-drop-btn');
+  const pill=document.getElementById('plinko-result-pill');
+  btn.disabled=true;btn.textContent='Dropping…';
+  pill.textContent='Ball in play';
+  pill.style.background='rgba(124,106,247,0.18)';
+  pill.style.border='1px solid rgba(124,106,247,0.35)';
+  pill.style.color='var(--accent)';
+  renderPlinkoMultiplierGrid();
+  try{
+    const data=await api('POST','/casino/plinko',{betAmount});
+    await animatePlinkoDrop(data);
+    currentUser.credits=data.newBalance;
+    document.getElementById('plinko-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+    document.getElementById('plinko-last-payout').textContent='⬡ '+data.payout.toLocaleString();
+    updateTopbar();
+    renderPlinkoMultiplierGrid(data.slotIndex);
+    pill.textContent=data.won?`Hit ${data.multiplier.toFixed(data.multiplier%1?1:0)}x`:`House edge · ${data.multiplier.toFixed(1)}x`;
+    pill.style.background=data.won?'rgba(0,208,132,0.14)':'rgba(255,69,96,0.12)';
+    pill.style.border=`1px solid ${data.won?'rgba(0,208,132,0.35)':'rgba(255,69,96,0.28)'}`;
+    pill.style.color=data.won?'var(--green)':'var(--red)';
+    addPlinkoHistoryRow(data,betAmount);
+    if(data.multiplier>=2.5) launchSpinConfetti();
+  }catch(e){
+    showToast(e.message);
+  }finally{
+    plinkoDropping=false;
+    btn.disabled=false;btn.textContent='Drop Ball';
+  }
+}
+
+function animatePlinkoDrop(data){
+  return new Promise(resolve=>{
+    const points=plinkoPathToPoints(data.path);
+    const segments=[];
+    for(let i=0;i<points.length-1;i++){
+      segments.push({from:points[i],to:points[i+1]});
+    }
+    const totalDuration=2100;
+    const start=performance.now();
+    function ease(t){return 1-Math.pow(1-t,3);}
+    function frame(now){
+      const elapsed=Math.min(now-start,totalDuration);
+      const overall=elapsed/totalDuration;
+      const raw=overall*segments.length;
+      const segIndex=Math.min(segments.length-1,Math.floor(raw));
+      const localT=ease(raw-segIndex);
+      const seg=segments[segIndex];
+      const x=seg.from.x+(seg.to.x-seg.from.x)*localT;
+      const y=seg.from.y+(seg.to.y-seg.from.y)*localT+Math.sin(localT*Math.PI)*7;
+      const traveled=Math.max(1,Math.floor(raw)+1);
+      drawPlinkoBoard({x,y}, elapsed>totalDuration-260?data.slotIndex:null, points.slice(0,traveled));
+      if(elapsed<totalDuration){
+        requestAnimationFrame(frame);
+      } else {
+        drawPlinkoBoard({x:points[points.length-1].x,y:points[points.length-1].y},data.slotIndex,points);
+        setTimeout(()=>{
+          drawPlinkoBoard(null,data.slotIndex,[]);
+          resolve();
+        },420);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+function addPlinkoHistoryRow(data,betAmount){
+  plinkoHistory.unshift({
+    slotIndex:data.slotIndex,
+    multiplier:data.multiplier,
+    payout:data.payout,
+    profit:data.profit,
+    betAmount,
+  });
+  if(plinkoHistory.length>10)plinkoHistory.pop();
+  renderPlinkoHistory();
+}
+
+async function loadPlinkoHistory(){
+  try{
+    const bets=await api('GET','/casino/my-bets');
+    const plinkoBets=bets.filter(b=>b.game==='plinko').slice(0,10);
+    document.getElementById('plinko-history').innerHTML=plinkoBets.length
+      ?plinkoBets.map(b=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
+          <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${Number(b.payout/b.bet_amount||0).toFixed(1)}x</span>
+          <span style="font-size:13px;color:var(--text2);">⬡ ${b.bet_amount} bet</span>
+          <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+        </div>`).join('')
+      :'<p style="font-size:13px;color:var(--text3);">No plinko drops yet.</p>';
+  }catch(e){}
+}
+
+function renderPlinkoHistory(){
+  document.getElementById('plinko-history').innerHTML=plinkoHistory.map(b=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
+      <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">Slot ${b.slotIndex+1}</span>
+      <span style="font-size:12px;color:var(--text3);">${b.multiplier.toFixed(b.multiplier%1?1:0)}x · ⬡ ${b.betAmount}</span>
+      <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.betAmount}</span>
     </div>`).join('');
 }
 // ── CANCEL BET ──

@@ -20,6 +20,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db;
+const blackjackGames = new Map();
 
 async function initDB() {
   db = createClient({
@@ -167,6 +168,105 @@ async function sendViaAppsScript(type, payload) {
 
 function generateId(p='') { return p+Date.now()+Math.random().toString(36).slice(2,6); }
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
+function shuffle(arr){
+  const copy=[...arr];
+  for(let i=copy.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [copy[i],copy[j]]=[copy[j],copy[i]];
+  }
+  return copy;
+}
+function makeDeck(){
+  const suits=['♠','♥','♦','♣'];
+  const vals=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  return shuffle(suits.flatMap(s=>vals.map(v=>({v,s}))));
+}
+function cardPoints(card){
+  if(card.v==='A') return 11;
+  if(['J','Q','K'].includes(card.v)) return 10;
+  return parseInt(card.v,10);
+}
+function handTotal(cards){
+  let total=0, aces=0;
+  for(const card of cards){
+    total+=cardPoints(card);
+    if(card.v==='A') aces++;
+  }
+  while(total>21 && aces>0){ total-=10; aces--; }
+  return total;
+}
+function isBlackjack(cards){ return cards.length===2 && handTotal(cards)===21; }
+function canSplitHand(hand){
+  if(hand.length!==2) return false;
+  return cardPoints(hand[0])===cardPoints(hand[1]);
+}
+function getVisibleBlackjackState(game){
+  return {
+    dealerCards: game.done ? game.dealerCards : [game.dealerCards[0], {v:'?',s:'?'}],
+    playerHands: game.playerHands,
+    activeHand: game.activeHand,
+    results: game.results,
+    done: game.done,
+    bets: game.bets,
+  };
+}
+function getCurrentHand(game){ return game.playerHands[game.activeHand]; }
+async function finishBlackjackGame(userId){
+  const game=blackjackGames.get(userId);
+  if(!game) throw new Error('No active blackjack game');
+
+  while(handTotal(game.dealerCards)<17){
+    game.dealerCards.push(game.deck.pop());
+  }
+
+  const dealerTotal=handTotal(game.dealerCards);
+  let totalPayout=0;
+  let totalBet=0;
+  const results=game.playerHands.map((hand,idx)=>{
+    const bet=game.bets[idx];
+    const total=handTotal(hand);
+    totalBet+=bet;
+    if(total>21) return 'bust';
+    if(isBlackjack(hand)){
+      const payout=Math.floor(bet*2.5);
+      totalPayout+=payout;
+      return 'blackjack';
+    }
+    if(dealerTotal>21 || total>dealerTotal){
+      const payout=bet*2;
+      totalPayout+=payout;
+      return 'win';
+    }
+    if(total===dealerTotal){
+      totalPayout+=bet;
+      return 'push';
+    }
+    return 'loss';
+  });
+
+  if(totalPayout>0){
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[totalPayout,userId]);
+  }
+
+  const profit=totalPayout-totalBet;
+  const outcome=profit>0?'win':profit<0?'loss':'push';
+  const betId=generateId('cbj');
+  await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+    [betId,userId,'blackjack',totalBet,outcome,totalPayout,profit,Date.now()]);
+  await recordTx(userId, profit, 'casino_blackjack', betId, `Blackjack: ${outcome} on ⬡${totalBet}`);
+
+  game.done=true;
+  game.results=results;
+  blackjackGames.delete(userId);
+  const updated=await db.get('SELECT credits FROM users WHERE id=?',[userId]);
+  return {
+    state:getVisibleBlackjackState(game),
+    result:results.includes('blackjack')?'blackjack':outcome,
+    profit,
+    dealerTotal,
+    newBalance:Math.floor(updated.credits),
+  };
+}
 
 async function recordTx(userId, amount, type, refId=null, desc='') {
   await db.run('INSERT INTO transactions (id,user_id,amount,type,reference_id,description,timestamp) VALUES (?,?,?,?,?,?,?)',
@@ -842,6 +942,147 @@ app.get('/api/spin/status', authMiddleware, async(req,res)=>{
 });
 
 // ── CASINO ──
+app.post('/api/casino/blackjack/deal', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const amount=Math.floor(Number(req.body.betAmount));
+    if(!amount || amount<1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits)<amount) return res.status(400).json({error:'Insufficient credits'});
+
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
+    const deck=makeDeck();
+    const playerHand=[deck.pop(),deck.pop()];
+    const dealerCards=[deck.pop(),deck.pop()];
+    const game={
+      deck,
+      dealerCards,
+      playerHands:[playerHand],
+      bets:[amount],
+      activeHand:0,
+      results:[],
+      done:false,
+    };
+    blackjackGames.set(req.user.id,game);
+
+    const updated=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(isBlackjack(playerHand)){
+      const result=await finishBlackjackGame(req.user.id);
+      return res.json(result);
+    }
+
+    res.json({
+      state:getVisibleBlackjackState(game),
+      canSplit:canSplitHand(playerHand),
+      canDouble:Math.floor(updated.credits)>=amount,
+      newBalance:Math.floor(updated.credits),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/blackjack/hit', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const game=blackjackGames.get(req.user.id);
+    if(!game) return res.status(400).json({error:'No active blackjack game'});
+
+    const hand=getCurrentHand(game);
+    hand.push(game.deck.pop());
+    if(handTotal(hand)>21){
+      game.results[game.activeHand]='bust';
+      while(game.activeHand<game.playerHands.length && game.results[game.activeHand]) game.activeHand++;
+      if(game.activeHand>=game.playerHands.length){
+        return res.json(await finishBlackjackGame(req.user.id));
+      }
+    }
+
+    res.json({state:getVisibleBlackjackState(game)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/blackjack/stand', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const game=blackjackGames.get(req.user.id);
+    if(!game) return res.status(400).json({error:'No active blackjack game'});
+
+    while(game.activeHand<game.playerHands.length && game.results[game.activeHand]) game.activeHand++;
+    if(game.activeHand<game.playerHands.length) game.activeHand++;
+    while(game.activeHand<game.playerHands.length && game.results[game.activeHand]) game.activeHand++;
+
+    if(game.activeHand>=game.playerHands.length){
+      return res.json(await finishBlackjackGame(req.user.id));
+    }
+
+    const currentBet=game.bets[game.activeHand];
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      state:getVisibleBlackjackState(game),
+      nextHand:true,
+      canSplit:canSplitHand(getCurrentHand(game)),
+      canDouble:Math.floor(user.credits)>=currentBet,
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/blackjack/double', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const game=blackjackGames.get(req.user.id);
+    if(!game) return res.status(400).json({error:'No active blackjack game'});
+    const hand=getCurrentHand(game);
+    const extraBet=game.bets[game.activeHand];
+    if(hand.length!==2) return res.status(400).json({error:'Can only double on first two cards'});
+
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits)<extraBet) return res.status(400).json({error:'Insufficient credits'});
+
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[extraBet,req.user.id]);
+    game.bets[game.activeHand]+=extraBet;
+    hand.push(game.deck.pop());
+    if(handTotal(hand)>21) game.results[game.activeHand]='bust';
+    game.activeHand++;
+    while(game.activeHand<game.playerHands.length && game.results[game.activeHand]) game.activeHand++;
+
+    if(game.activeHand>=game.playerHands.length){
+      return res.json(await finishBlackjackGame(req.user.id));
+    }
+
+    const updated=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      state:getVisibleBlackjackState(game),
+      newBalance:Math.floor(updated.credits),
+      canSplit:canSplitHand(getCurrentHand(game)),
+      canDouble:Math.floor(updated.credits)>=game.bets[game.activeHand],
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/blackjack/split', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const game=blackjackGames.get(req.user.id);
+    if(!game) return res.status(400).json({error:'No active blackjack game'});
+    const hand=getCurrentHand(game);
+    if(!canSplitHand(hand)) return res.status(400).json({error:'Hand cannot be split'});
+    if(game.playerHands.length>=4) return res.status(400).json({error:'Maximum number of split hands reached'});
+
+    const extraBet=game.bets[game.activeHand];
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits)<extraBet) return res.status(400).json({error:'Insufficient credits'});
+
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[extraBet,req.user.id]);
+    const [first,second]=hand;
+    const newHandA=[first, game.deck.pop()];
+    const newHandB=[second, game.deck.pop()];
+    game.playerHands.splice(game.activeHand,1,newHandA,newHandB);
+    game.bets.splice(game.activeHand,1,extraBet,extraBet);
+    game.results.splice(game.activeHand,1,'','');
+
+    const updated=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      state:getVisibleBlackjackState(game),
+      newBalance:Math.floor(updated.credits),
+      canSplit:canSplitHand(getCurrentHand(game)),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 app.post('/api/casino/dice', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {betAmount, target, direction} = req.body;
@@ -865,6 +1106,49 @@ app.post('/api/casino/dice', authMiddleware, adminOnly, async(req,res)=>{
     await recordTx(req.user.id, profit, 'casino_dice', betId, `Dice: ${direction} ${target} — ${won?'won':'lost'} ⬡${amount}`);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({roll, won, payout, profit, multiplier:parseFloat(multiplier.toFixed(4)), newBalance:Math.floor(updated.credits)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/plinko', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {betAmount} = req.body;
+    const amount = Math.floor(Number(betAmount));
+    if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+
+    const multipliers = [6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6];
+    const path = [];
+    let slotIndex = 0;
+    for(let i=0;i<8;i++){
+      const goRight = Math.random() < 0.5;
+      path.push(goRight ? 1 : 0);
+      if(goRight) slotIndex++;
+    }
+
+    const multiplier = multipliers[slotIndex];
+    const payout = Math.floor(amount * multiplier);
+    const profit = payout - amount;
+    const won = profit >= 0;
+
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
+    if(payout > 0) await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,req.user.id]);
+
+    const betId = generateId('cbp');
+    await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [betId,req.user.id,'plinko',amount,won?'win':'loss',payout,profit,Date.now()]);
+    await recordTx(req.user.id, profit, 'casino_plinko', betId, `Plinko: slot ${slotIndex+1} at ${multiplier}x on ⬡${amount}`);
+
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      path,
+      slotIndex,
+      multiplier,
+      payout,
+      profit,
+      won,
+      newBalance: Math.floor(updated.credits)
+    });
   }catch(e){res.status(500).json({error:e.message});}
 });
 
