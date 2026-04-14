@@ -357,7 +357,7 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
-    <div class="nav-tab" data-tab="casino" onclick="switchTab('casino')">Casino</div>
+    <div class="nav-tab admin-only" data-tab="casino" onclick="switchTab('casino')" style="display:none;">Casino</div>
     <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
@@ -403,6 +403,81 @@
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Dice</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Roll over or under your target</div>
             <span class="status-tag status-open">Individual</span>
+          </div>
+          <div class="market-card" onclick="openBlackjack()" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">🃏</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Blackjack</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Beat the dealer to 21</div>
+            <span class="status-tag status-open">Individual</span>
+          </div>
+      </div>
+
+      <!-- BLACKJACK GAME -->
+      <div id="casino-blackjack" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closeBlackjack()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Blackjack</h2>
+        </div>
+        <div style="max-width:560px;margin:0 auto;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="bj-balance">⬡ 0</div></div>
+            <div class="stat-card"><div class="stat-label">Current Bet</div><div class="stat-value" style="color:var(--accent);font-size:20px;" id="bj-bet-display">⬡ 0</div></div>
+          </div>
+
+          <!-- TABLE -->
+          <div class="panel" style="background:#1a1a2e;border-color:#534AB7;padding:24px;margin-bottom:16px;">
+
+            <!-- DEALER -->
+            <div style="margin-bottom:20px;">
+              <div style="font-size:11px;color:rgba(196,185,255,0.5);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Dealer <span id="bj-dealer-total" style="color:#c4b9ff;margin-left:6px;"></span></div>
+              <div id="bj-dealer-cards" style="display:flex;gap:8px;flex-wrap:wrap;min-height:72px;"></div>
+            </div>
+
+            <!-- RESULT BANNER -->
+            <div id="bj-result-banner" style="display:none;text-align:center;padding:12px;border-radius:var(--radius);margin-bottom:16px;font-size:15px;font-weight:700;"></div>
+
+            <!-- PLAYER HANDS -->
+            <div id="bj-player-hands" style="display:flex;gap:20px;flex-wrap:wrap;"></div>
+          </div>
+
+          <!-- BET AREA (shown when no active game) -->
+          <div id="bj-bet-area" style="display:block;">
+            <div class="panel" style="margin-bottom:16px;">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">Bet Amount</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+                <input type="number" id="bj-bet-input" placeholder="0" min="1" step="1" oninput="onBjBetInput()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                <button onclick="setBjBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+                <button onclick="setBjBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button onclick="setBjBet(10)" class="quick-btn">10</button>
+                <button onclick="setBjBet(25)" class="quick-btn">25</button>
+                <button onclick="setBjBet(50)" class="quick-btn">50</button>
+                <button onclick="setBjBet(100)" class="quick-btn">100</button>
+              </div>
+            </div>
+            <button id="bj-deal-btn" onclick="bjDeal()" style="width:100%;padding:15px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Deal</button>
+          </div>
+
+          <!-- ACTION BUTTONS (shown during active game) -->
+          <div id="bj-action-area" style="display:none;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="bj-hit-btn" onclick="bjHit()" style="flex:1;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Hit</button>
+              <button id="bj-stand-btn" onclick="bjStand()" style="flex:1;padding:13px;background:var(--bg3);border:1px solid var(--border-hi);color:var(--text);border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Stand</button>
+              <button id="bj-double-btn" onclick="bjDouble()" style="flex:1;padding:13px;background:rgba(240,192,64,0.15);border:1px solid rgba(240,192,64,0.4);color:var(--gold);border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Double</button>
+              <button id="bj-split-btn" onclick="bjSplit()" style="flex:1;padding:13px;background:rgba(59,158,255,0.12);border:1px solid rgba(59,158,255,0.3);color:var(--blue);border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:none;">Split</button>
+            </div>
+          </div>
+
+          <!-- PLAY AGAIN (shown after hand ends) -->
+          <div id="bj-again-area" style="display:none;margin-top:12px;">
+            <button onclick="bjPlayAgain()" style="width:100%;padding:13px;background:var(--green);color:#000;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Deal Again</button>
+          </div>
+
+          <!-- HISTORY -->
+          <div style="margin-top:24px;">
+            <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Hands</div>
+            <div id="bj-history" style="display:flex;flex-direction:column;gap:6px;"></div>
           </div>
         </div>
       </div>
@@ -1376,6 +1451,7 @@ async function renderAdminTab(){
           ${isGrose?(u.role==='student'
             ?`<button class="btn-admin btn-sm btn-warning" onclick="makeAdmin('${u.id}')">Make Admin</button>`
             :`<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="makeStudent('${u.id}')">Demote</button>`):''}
+          <button class="btn-admin btn-sm btn-warning" onclick="roundCredits('${u.id}')">Floor</button>
           <button class="btn-admin btn-sm btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
         </div></td>
       </tr>`).join('')}</tbody>
@@ -1506,6 +1582,14 @@ async function makeStudent(userId){
   if(!confirm(`Demote ${userId}?`))return;
   try{await api('POST','/users/'+userId+'/make-student');renderAdminTab();showToast(`${userId} demoted.`);}
   catch(e){alert(e.message);}
+}
+async function roundCredits(userId){
+  try{
+    const res=await api('POST','/users/'+userId+'/round-credits');
+    if(res.before===res.after){showToast('Already a whole number.');return;}
+    showToast(`Floored ⬡${res.before} → ⬡${res.after}`);
+    renderAdminTab();
+  }catch(e){alert(e.message);}
 }
 async function deleteUser(userId){
   if(!confirm(`Permanently delete ${userId}?`))return;
@@ -1716,6 +1800,246 @@ async function doWheelSpin(){
       showToast(e.message);
     }
   }
+}
+
+// ── BLACKJACK ──
+let bjState=null;
+let bjBusy=false;
+
+function openBlackjack(){
+  document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-blackjack').style.display='block';
+  document.getElementById('bj-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  bjResetUI();
+  loadBjHistory();
+}
+
+function closeBlackjack(){
+  document.getElementById('casino-blackjack').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function bjResetUI(){
+  document.getElementById('bj-dealer-cards').innerHTML='';
+  document.getElementById('bj-dealer-total').textContent='';
+  document.getElementById('bj-player-hands').innerHTML='';
+  document.getElementById('bj-result-banner').style.display='none';
+  document.getElementById('bj-bet-area').style.display='block';
+  document.getElementById('bj-action-area').style.display='none';
+  document.getElementById('bj-again-area').style.display='none';
+  document.getElementById('bj-bet-input').value='';
+  document.getElementById('bj-bet-display').textContent='⬡ 0';
+  bjState=null;
+}
+
+function onBjBetInput(){
+  const input=document.getElementById('bj-bet-input');
+  let val=Math.floor(Number(input.value));
+  if(val<0)val=0;
+  input.value=val||'';
+}
+
+function setBjBet(amount){
+  document.getElementById('bj-bet-input').value=Math.floor(amount)>0?Math.floor(amount):'';
+}
+
+function cardColor(suit){return suit==='♥'||suit==='♦'?'#e06c75':'#c4b9ff';}
+
+function renderCard(card,hidden=false){
+  if(hidden||card.v==='?'){
+    return `<div style="width:48px;height:68px;background:#26215C;border:1px solid #534AB7;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#534AB7;">?</div>`;
+  }
+  return `<div style="width:48px;height:68px;background:#1e1e2e;border:1px solid #534AB7;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
+    <span style="font-size:15px;font-weight:700;color:${cardColor(card.s)};">${card.v}</span>
+    <span style="font-size:13px;color:${cardColor(card.s)};">${card.s}</span>
+  </div>`;
+}
+
+function renderDealerCards(cards){
+  document.getElementById('bj-dealer-cards').innerHTML=cards.map(c=>renderCard(c)).join('');
+}
+
+function renderPlayerHands(hands,activeHand,results=[]){
+  const el=document.getElementById('bj-player-hands');
+  el.innerHTML=hands.map((hand,i)=>{
+    const total=handTotal(hand);
+    const isActive=i===activeHand&&!results.length;
+    const result=results[i];
+    let resultColor='',resultLabel='';
+    if(result==='win'||result==='blackjack'){resultColor='var(--green)';resultLabel=result==='blackjack'?'Blackjack!':'Win';}
+    else if(result==='loss'||result==='bust'){resultColor='var(--red)';resultLabel=result==='bust'?'Bust':'Loss';}
+    else if(result==='push'){resultColor='var(--gold)';resultLabel='Push';}
+    return `<div style="flex:1;min-width:120px;">
+      <div style="font-size:11px;color:${isActive?'var(--accent)':'rgba(196,185,255,0.4)'};font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+        <span>${hands.length>1?'Hand '+(i+1):'Your hand'} ${isActive?'◀':''}</span>
+        ${result?`<span style="color:${resultColor};font-size:12px;">${resultLabel}</span>`:`<span style="color:#c4b9ff;">${total}</span>`}
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">${hand.map(c=>renderCard(c)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function handTotal(cards){
+  let total=0,aces=0;
+  for(const c of cards){
+    if(c.v==='?') continue;
+    if(c.v==='A'){total+=11;aces++;}
+    else if(['J','Q','K'].includes(c.v)){total+=10;}
+    else{total+=parseInt(c.v);}
+  }
+  while(total>21&&aces>0){total-=10;aces--;}
+  return total;
+}
+
+async function bjDeal(){
+  if(bjBusy)return;
+  const bet=Math.floor(Number(document.getElementById('bj-bet-input').value));
+  if(!bet||bet<1){showToast('Enter a bet amount.');return;}
+  if(bet>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  bjBusy=true;
+  const btn=document.getElementById('bj-deal-btn');
+  btn.disabled=true;btn.textContent='Dealing…';
+  try{
+    const data=await api('POST','/casino/blackjack/deal',{betAmount:bet});
+    bjState=data.state;
+    document.getElementById('bj-bet-display').textContent='⬡ '+bet.toLocaleString();
+    currentUser.credits=data.newBalance;
+    document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+    updateTopbar();
+    renderDealerCards(bjState.dealerCards);
+    renderPlayerHands(bjState.playerHands,bjState.activeHand);
+    if(data.state.done){
+      bjShowResult(data);
+    } else {
+      document.getElementById('bj-bet-area').style.display='none';
+      document.getElementById('bj-action-area').style.display='block';
+      bjUpdateActionButtons(data);
+    }
+  }catch(e){showToast(e.message);}
+  finally{bjBusy=false;btn.disabled=false;btn.textContent='Deal';}
+}
+
+function bjUpdateActionButtons(data){
+  const canSplit=data.canSplit&&bjState.playerHands.length<4;
+  const canDouble=data.canDouble!==false;
+  const activeHand=bjState.activeHand;
+  const hand=bjState.playerHands[activeHand];
+  const isFirstTwo=hand&&hand.length===2;
+  document.getElementById('bj-double-btn').style.opacity=isFirstTwo&&canDouble?'1':'0.3';
+  document.getElementById('bj-double-btn').disabled=!(isFirstTwo&&canDouble);
+  document.getElementById('bj-split-btn').style.display=canSplit&&isFirstTwo?'block':'none';
+}
+
+async function bjHit(){
+  if(bjBusy)return;bjBusy=true;
+  try{
+    const data=await api('POST','/casino/blackjack/hit');
+    bjState=data.state;
+    renderDealerCards(bjState.dealerCards);
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[]);
+    if(data.state.done){bjShowResult(data);}
+    else{
+      bjUpdateActionButtons({canSplit:bjState.playerHands[bjState.activeHand]?.length===2&&bjState.playerHands[bjState.activeHand][0]?.v===bjState.playerHands[bjState.activeHand][1]?.v});
+    }
+  }catch(e){showToast(e.message);}
+  finally{bjBusy=false;}
+}
+
+async function bjStand(){
+  if(bjBusy)return;bjBusy=true;
+  try{
+    const data=await api('POST','/casino/blackjack/stand');
+    bjState=data.state;
+    renderDealerCards(bjState.dealerCards);
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[]);
+    if(data.state.done){bjShowResult(data);}
+    else if(data.nextHand){
+      bjUpdateActionButtons({canSplit:bjState.playerHands[bjState.activeHand]?.length===2&&bjState.playerHands[bjState.activeHand][0]?.v===bjState.playerHands[bjState.activeHand][1]?.v});
+    }
+  }catch(e){showToast(e.message);}
+  finally{bjBusy=false;}
+}
+
+async function bjDouble(){
+  if(bjBusy)return;bjBusy=true;
+  try{
+    const data=await api('POST','/casino/blackjack/double');
+    bjState=data.state;
+    currentUser.credits=data.newBalance;
+    document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+    updateTopbar();
+    renderDealerCards(bjState.dealerCards);
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[]);
+    if(data.state.done){bjShowResult(data);}
+  }catch(e){showToast(e.message);}
+  finally{bjBusy=false;}
+}
+
+async function bjSplit(){
+  if(bjBusy)return;bjBusy=true;
+  try{
+    const data=await api('POST','/casino/blackjack/split');
+    bjState=data.state;
+    currentUser.credits=data.newBalance;
+    document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+    updateTopbar();
+    renderDealerCards(bjState.dealerCards);
+    renderPlayerHands(bjState.playerHands,bjState.activeHand);
+    bjUpdateActionButtons({canSplit:data.canSplit,canDouble:true});
+  }catch(e){showToast(e.message);}
+  finally{bjBusy=false;}
+}
+
+function bjShowResult(data){
+  document.getElementById('bj-action-area').style.display='none';
+  document.getElementById('bj-again-area').style.display='block';
+  currentUser.credits=data.newBalance;
+  document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+  updateTopbar();
+  renderDealerCards(data.state.dealerCards);
+  renderPlayerHands(data.state.playerHands,data.state.activeHand,data.state.results||[data.result]);
+  const dealerTotal=data.dealerTotal||handTotal(data.state.dealerCards);
+  document.getElementById('bj-dealer-total').textContent=dealerTotal;
+  const results=data.state.results||[data.result];
+  const hasWin=results.some(r=>r==='win'||r==='blackjack');
+  const allLoss=results.every(r=>r==='loss'||r==='bust');
+  const banner=document.getElementById('bj-result-banner');
+  banner.style.display='block';
+  if(data.result==='blackjack'||results.includes('blackjack')){
+    banner.style.background='rgba(0,208,132,0.15)';banner.style.border='1px solid rgba(0,208,132,0.4)';banner.style.color='var(--green)';
+    banner.textContent='Blackjack! +⬡ '+data.profit;
+    launchSpinConfetti();
+  } else if(hasWin){
+    banner.style.background='rgba(0,208,132,0.15)';banner.style.border='1px solid rgba(0,208,132,0.4)';banner.style.color='var(--green)';
+    banner.textContent='You win! +⬡ '+data.profit;
+    launchSpinConfetti();
+  } else if(results.every(r=>r==='push')){
+    banner.style.background='rgba(240,192,64,0.1)';banner.style.border='1px solid rgba(240,192,64,0.3)';banner.style.color='var(--gold)';
+    banner.textContent='Push — bet returned';
+  } else {
+    banner.style.background='rgba(255,69,96,0.1)';banner.style.border='1px solid rgba(255,69,96,0.3)';banner.style.color='var(--red)';
+    banner.textContent='Dealer wins. -⬡ '+(Math.abs(data.profit));
+  }
+  loadBjHistory();
+}
+
+function bjPlayAgain(){
+  bjResetUI();
+}
+
+async function loadBjHistory(){
+  try{
+    const bets=await api('GET','/casino/my-bets');
+    const bjBets=bets.filter(b=>b.game==='blackjack').slice(0,8);
+    document.getElementById('bj-history').innerHTML=bjBets.length
+      ?bjBets.map(b=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+          <span style="font-size:13px;font-weight:600;color:${b.outcome==='win'?'var(--green)':'var(--red)'};">${b.outcome==='win'?'WIN':'LOSS'}</span>
+          <span style="font-size:13px;color:var(--text2);">⬡ ${b.bet_amount} bet</span>
+          <span style="font-size:13px;font-weight:600;color:${b.outcome==='win'?'var(--green)':'var(--red)'};">${b.outcome==='win'?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+        </div>`).join('')
+      :'<p style="font-size:13px;color:var(--text3);">No blackjack history yet.</p>';
+  }catch(e){}
 }
 
 // ── CASINO ──
