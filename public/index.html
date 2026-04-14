@@ -715,8 +715,8 @@
             <div class="panel-title">Positive Message</div>
             <div class="form-group">
               <label>Recipients</label>
-              <select id="popup-recipient" multiple size="8" style="min-height:200px;"></select>
-              <p style="font-size:12px;color:var(--text3);margin-top:6px;">Hold `Command` on Mac or `Ctrl` on Windows to select multiple people.</p>
+              <div id="popup-recipient-list" style="min-height:200px;max-height:260px;overflow:auto;padding:10px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);display:flex;flex-direction:column;gap:8px;"></div>
+              <p style="font-size:12px;color:var(--text3);margin-top:6px;">Each person is selected individually with a checkbox.</p>
             </div>
             <div class="form-group"><label>Title</label><input type="text" id="popup-title" placeholder="Positive message"></div>
             <div class="form-group"><label>Message</label><input type="text" id="popup-message" placeholder="You are doing great today."></div>
@@ -738,7 +738,7 @@
               <span style="font-size:12px;color:var(--text3);" id="popup-send-status"></span>
             </div>
           </div>
-          <div class="panel">
+          <div class="panel" id="popup-password-panel">
             <div class="panel-title">Tab Password</div>
             <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Change the extra password required to open this tab on your machine.</p>
             <div class="form-group"><label>Current Password</label><input type="password" id="popup-current-password" placeholder="Current Pop-up password"></div>
@@ -747,7 +747,10 @@
           </div>
         </div>
         <div class="panel" style="margin-top:18px;">
-          <div class="panel-title">Active Messages</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+            <div class="panel-title" style="margin:0;">Active Messages</div>
+            <button class="btn-admin btn-sm btn-danger" onclick="stopAllPopupMessages()">Stop All Messages</button>
+          </div>
           <div id="popup-active-list"><p style="font-size:13px;color:var(--text3);">No active pop-ups right now.</p></div>
         </div>
       </div>
@@ -1653,9 +1656,11 @@ function renderPopupTab(){
   const authPanel=document.getElementById('popup-auth-panel');
   const controlPanel=document.getElementById('popup-control-panel');
   const lockBtn=document.getElementById('popup-lock-btn');
+  const passwordPanel=document.getElementById('popup-password-panel');
   if(authPanel) authPanel.style.display=popupTabUnlocked?'none':'block';
   if(controlPanel) controlPanel.style.display=popupTabUnlocked?'block':'none';
   if(lockBtn) lockBtn.style.display=popupTabUnlocked?'inline-flex':'none';
+  if(passwordPanel) passwordPanel.style.display=currentUser.id==='GROSE'?'block':'none';
   if(popupTabUnlocked){
     populatePopupRecipientSelect();
     loadActivePopups();
@@ -1663,17 +1668,25 @@ function renderPopupTab(){
 }
 
 async function populatePopupRecipientSelect(){
-  const select=document.getElementById('popup-recipient');
-  if(!select) return;
+  const list=document.getElementById('popup-recipient-list');
+  if(!list) return;
   try{
     const users=await api('GET','/users');
     const students=users.filter(u=>u.role!=='admin');
-    select.innerHTML=students.length
-      ?students.map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.id)} (${esc(u.id)})</option>`).join('')
-      :'<option value="">No recipients available</option>';
+    list.innerHTML=students.length
+      ?students.map(u=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer;color:var(--text2);font-size:13px;">
+          <input type="checkbox" class="popup-recipient-checkbox" value="${esc(u.id)}" style="width:16px;height:16px;accent-color:var(--accent);">
+          <span>${esc(u.name||u.id)} <span style="color:var(--text3);">(${esc(u.id)})</span></span>
+        </label>`).join('')
+      :'<p style="font-size:13px;color:var(--text3);">No recipients available</p>';
   }catch(e){
-    select.innerHTML='<option value="">Failed to load users</option>';
+    list.innerHTML='<p style="font-size:13px;color:var(--red);">Failed to load users</p>';
   }
+}
+
+function getSelectedPopupRecipientIds(){
+  return [...document.querySelectorAll('.popup-recipient-checkbox:checked')].map(el=>el.value).filter(Boolean);
 }
 
 async function unlockPopupTab(){
@@ -1735,8 +1748,7 @@ async function fileToDataUrl(file){
 
 async function sendPopupMessage(){
   if(!popupTabUnlocked||!popupUnlockToken){alert('Unlock the Pop-up tab first.');return;}
-  const recipientSelect=document.getElementById('popup-recipient');
-  const recipientIds=[...recipientSelect.selectedOptions].map(opt=>opt.value).filter(Boolean);
+  const recipientIds=getSelectedPopupRecipientIds();
   const title=document.getElementById('popup-title').value.trim();
   const message=document.getElementById('popup-message').value.trim();
   const alertText=document.getElementById('popup-alert-text').value.trim();
@@ -1773,7 +1785,7 @@ async function sendPopupMessage(){
     document.getElementById('popup-alert-text').value='';
     document.getElementById('popup-media-file').value='';
     document.getElementById('popup-audio-file').value='';
-    [...recipientSelect.options].forEach(opt=>{opt.selected=false;});
+    document.querySelectorAll('.popup-recipient-checkbox').forEach(el=>{el.checked=false;});
     document.getElementById('popup-rave-enabled').checked=false;
     document.getElementById('popup-alert-enabled').checked=false;
     if(status) status.textContent='Sent.';
@@ -1818,6 +1830,21 @@ async function stopPopupMessage(id){
   try{
     await api('POST',`/admin/popups/${id}/stop`,{},popupHeaders());
     showToast('Message stopped.');
+    loadActivePopups();
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+      return;
+    }
+    alert(e.message);
+  }
+}
+
+async function stopAllPopupMessages(){
+  if(!confirm('Stop all active Pop-up messages right now?')) return;
+  try{
+    const res=await api('POST','/admin/popups/stop-all',{},popupHeaders());
+    showToast(`Stopped ${res.stopped||0} message${res.stopped===1?'':'s'}.`);
     loadActivePopups();
   }catch(e){
     if(String(e.message||'').includes('locked')){

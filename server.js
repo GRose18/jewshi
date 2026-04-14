@@ -553,6 +553,14 @@ app.get('/api/admin/popups/active', authMiddleware, requirePopupAdminUnlocked, a
   }catch(e){res.status(500).json({error:e.message});}
 });
 
+app.post('/api/admin/popups/stop-all', authMiddleware, requirePopupAdminUnlocked, async(req,res)=>{
+  try{
+    const row = await db.get("SELECT COUNT(*) as c FROM popups WHERE status IN ('pending','active')");
+    await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE status IN ('pending','active')",[Date.now()]);
+    res.json({success:true,stopped:row?.c||0});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 app.post('/api/admin/popups/:id/stop', authMiddleware, requirePopupAdminUnlocked, async(req,res)=>{
   try{
     const popup = await db.get('SELECT * FROM popups WHERE id=?',[req.params.id]);
