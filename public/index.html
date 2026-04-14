@@ -2367,7 +2367,7 @@ function getPlinkoBoardMetrics(canvas){
   const rowGap=56;
   const pegGap=56;
   const centerX=w/2;
-  const slots=PLINKO_MULTIPLIERS.length;
+  const slots=getPlinkoMultipliers().length;
   const bottomY=top+PLINKO_ROWS*rowGap+110;
   return {w,h,top,rowGap,pegGap,centerX,slots,bottomY};
 }
