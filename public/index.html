@@ -1590,9 +1590,10 @@ async function makeStudent(userId){
 }
 async function roundCredits(userId){
   try{
-    const res=await api('POST','/users/'+userId+'/round-credits');
+    const res=await api('POST','/admin/users/'+userId+'/round-credits');
     if(res.before===res.after){showToast('Already a whole number.');return;}
     showToast(`Floored ⬡${res.before} → ⬡${res.after}`);
+    await refreshUser();
     renderAdminTab();
   }catch(e){alert(e.message);}
 }
