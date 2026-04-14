@@ -125,6 +125,7 @@ async function initDB() {
       media_url TEXT DEFAULT NULL,
       audio_url TEXT DEFAULT NULL,
       rave_enabled INTEGER DEFAULT 0,
+      alert_enabled INTEGER DEFAULT 0,
       status TEXT DEFAULT 'pending',
       created_at INTEGER NOT NULL,
       shown_at INTEGER DEFAULT NULL,
@@ -134,6 +135,7 @@ async function initDB() {
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
+  await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
   fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
   await ensureProtectedSettings();
   await seedIfEmpty();
@@ -503,21 +505,32 @@ app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=
 
 app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
   try{
-    const {recipientId,title,message,mediaDataUrl,mediaName,audioDataUrl,audioName,raveEnabled}=req.body;
-    if(!recipientId) return res.status(400).json({error:'Recipient required'});
-    const recipient = await db.get('SELECT id,name FROM users WHERE id=?',[recipientId]);
-    if(!recipient) return res.status(404).json({error:'Recipient not found'});
-    if(recipient.id==='GROSE') return res.status(400).json({error:'Pick another recipient'});
+    const {recipientId,recipientIds,title,message,mediaDataUrl,mediaName,audioDataUrl,audioName,raveEnabled,alertEnabled}=req.body;
+    const targets = [...new Set(
+      (Array.isArray(recipientIds) ? recipientIds : [recipientId]).filter(Boolean)
+    )];
+    if(!targets.length) return res.status(400).json({error:'At least one recipient is required'});
     if(!title?.trim() && !message?.trim() && !mediaDataUrl && !audioDataUrl) return res.status(400).json({error:'Add a title, message, media, or audio first'});
     const mediaUrl = mediaDataUrl ? saveDataUrlToFile(mediaDataUrl, mediaName, ['image','video']) : null;
     const audioUrl = audioDataUrl ? saveDataUrlToFile(audioDataUrl, audioName, ['audio','audio/mpeg','audio/mp3']) : null;
     const mediaType = mediaDataUrl ? String(mediaDataUrl).slice(5, String(mediaDataUrl).indexOf(';')) : null;
-    await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE recipient_id=? AND status IN ('pending','active')",[Date.now(),recipientId]);
-    const id = generateId('popup');
-    await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,media_type,media_url,audio_url,rave_enabled,status,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [id,req.user.id,recipientId,title?.trim()||'',message?.trim()||'',mediaType,mediaUrl,audioUrl,raveEnabled?1:0,'pending',Date.now()]);
-    res.json(await db.get('SELECT * FROM popups WHERE id=?',[id]));
+    const recipients = [];
+    for(const targetId of targets){
+      const recipient = await db.get('SELECT id,name FROM users WHERE id=?',[targetId]);
+      if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
+      if(recipient.id==='GROSE') return res.status(400).json({error:'Pick another recipient'});
+      recipients.push(recipient);
+    }
+    const created = [];
+    for(const recipient of recipients){
+      await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE recipient_id=? AND status IN ('pending','active')",[Date.now(),recipient.id]);
+      const id = generateId('popup');
+      await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,media_type,media_url,audio_url,rave_enabled,alert_enabled,status,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id,req.user.id,recipient.id,title?.trim()||'',message?.trim()||'',mediaType,mediaUrl,audioUrl,raveEnabled?1:0,alertEnabled?1:0,'pending',Date.now()]);
+      created.push(await db.get('SELECT * FROM popups WHERE id=?',[id]));
+    }
+    res.json({count:created.length,popups:created});
   }catch(e){res.status(500).json({error:e.message});}
 });
 

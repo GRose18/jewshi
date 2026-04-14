@@ -714,8 +714,9 @@
           <div class="panel">
             <div class="panel-title">Positive Message</div>
             <div class="form-group">
-              <label>Recipient</label>
-              <select id="popup-recipient"></select>
+              <label>Recipients</label>
+              <select id="popup-recipient" multiple size="8" style="min-height:200px;"></select>
+              <p style="font-size:12px;color:var(--text3);margin-top:6px;">Hold `Command` on Mac or `Ctrl` on Windows to select multiple people.</p>
             </div>
             <div class="form-group"><label>Title</label><input type="text" id="popup-title" placeholder="Positive message"></div>
             <div class="form-group"><label>Message</label><input type="text" id="popup-message" placeholder="You are doing great today."></div>
@@ -726,6 +727,10 @@
             <label style="display:flex;align-items:center;gap:10px;margin:8px 0 4px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
               <input type="checkbox" id="popup-rave-enabled" style="width:16px;height:16px;accent-color:var(--accent);">
               Light rave mode
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;margin:6px 0 4px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
+              <input type="checkbox" id="popup-alert-enabled" style="width:16px;height:16px;accent-color:var(--red);">
+              Alert mode
             </label>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;">
               <button class="btn-admin" id="popup-send-btn" onclick="sendPopupMessage()">Send Positive Message</button>
@@ -845,6 +850,7 @@
 
 <div id="incoming-popup-overlay" style="display:none;position:fixed;inset:0;background:rgba(8,7,14,0.96);z-index:5000;align-items:center;justify-content:center;padding:24px;">
   <div style="width:min(960px,100%);max-height:100%;overflow:auto;background:linear-gradient(180deg,#1b1830,#100f1d);border:1px solid rgba(124,106,247,0.28);border-radius:24px;box-shadow:0 30px 90px rgba(0,0,0,0.5);padding:24px;">
+    <div id="incoming-popup-alert-banner" style="display:none;margin:-24px -24px 18px -24px;padding:12px 24px;background:repeating-linear-gradient(135deg,#ffcc00 0 22px,#171717 22px 44px);border-radius:24px 24px 0 0;border-bottom:2px solid rgba(255,69,96,0.35);font-size:13px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#161616;text-align:center;">Alert Mode Active</div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
       <div>
         <h2 id="incoming-popup-title" style="font-size:28px;font-weight:800;letter-spacing:-0.03em;color:#fff;margin:0 0 6px;">A message for you</h2>
@@ -869,6 +875,9 @@ let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
 let activeIncomingPopupId=null;
 let popupRaveInterval=null;
+let popupAlertInterval=null;
+let popupSirenAudioCtx=null;
+let popupSirenNodes=null;
 async function api(method,path,body,extraHeaders={}){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),8000);
@@ -1713,13 +1722,15 @@ async function fileToDataUrl(file){
 
 async function sendPopupMessage(){
   if(!popupTabUnlocked||!popupUnlockToken){alert('Unlock the Pop-up tab first.');return;}
-  const recipientId=document.getElementById('popup-recipient').value;
+  const recipientSelect=document.getElementById('popup-recipient');
+  const recipientIds=[...recipientSelect.selectedOptions].map(opt=>opt.value).filter(Boolean);
   const title=document.getElementById('popup-title').value.trim();
   const message=document.getElementById('popup-message').value.trim();
   const mediaFile=document.getElementById('popup-media-file').files[0];
   const audioFile=document.getElementById('popup-audio-file').files[0];
   const raveEnabled=document.getElementById('popup-rave-enabled').checked;
-  if(!recipientId){alert('Pick a recipient first.');return;}
+  const alertEnabled=document.getElementById('popup-alert-enabled').checked;
+  if(!recipientIds.length){alert('Pick at least one recipient first.');return;}
   if(!title&&!message&&!mediaFile&&!audioFile){alert('Add a title, message, media, or audio first.');return;}
   const btn=document.getElementById('popup-send-btn');
   const status=document.getElementById('popup-send-status');
@@ -1732,7 +1743,7 @@ async function sendPopupMessage(){
       fileToDataUrl(audioFile),
     ]);
     await api('POST','/admin/popups',{
-      recipientId,
+      recipientIds,
       title,
       message,
       mediaDataUrl,
@@ -1740,14 +1751,17 @@ async function sendPopupMessage(){
       audioDataUrl,
       audioName:audioFile?.name||'',
       raveEnabled,
+      alertEnabled,
     }, popupHeaders());
     document.getElementById('popup-title').value='';
     document.getElementById('popup-message').value='';
     document.getElementById('popup-media-file').value='';
     document.getElementById('popup-audio-file').value='';
+    [...recipientSelect.options].forEach(opt=>{opt.selected=false;});
     document.getElementById('popup-rave-enabled').checked=false;
+    document.getElementById('popup-alert-enabled').checked=false;
     if(status) status.textContent='Sent.';
-    showToast('Positive message sent.');
+    showToast(`Positive message sent to ${recipientIds.length} recipient${recipientIds.length!==1?'s':''}.`);
     loadActivePopups();
   }catch(e){
     if(String(e.message||'').includes('locked')){
@@ -1821,6 +1835,7 @@ function hideIncomingPopup(){
   const audioStatus=document.getElementById('incoming-popup-audio-status');
   if(overlay) overlay.style.display='none';
   stopPopupRave();
+  stopPopupAlert();
   if(wrap){wrap.style.display='none';wrap.innerHTML='';}
   if(audio){
     audio.pause();
@@ -1858,8 +1873,74 @@ function stopPopupRave(){
   if(overlay){
     overlay.style.transition='';
     overlay.style.background='rgba(8,7,14,0.96)';
+  }
+}
+
+function startPopupAlert(){
+  const overlay=document.getElementById('incoming-popup-overlay');
+  const banner=document.getElementById('incoming-popup-alert-banner');
+  if(!overlay||!banner) return;
+  stopPopupAlert();
+  banner.style.display='block';
+  const colors=['rgba(65,10,10,0.97)','rgba(130,16,16,0.97)','rgba(38,8,8,0.97)'];
+  let idx=0;
+  overlay.style.transition='background 0.22s linear, box-shadow 0.22s linear';
+  popupAlertInterval=setInterval(()=>{
+    const bg=colors[idx%colors.length];
+    overlay.style.background=`radial-gradient(circle at top, rgba(255,214,10,0.10), transparent 28%), ${bg}`;
+    overlay.style.boxShadow=idx%2===0?'inset 0 0 0 6px rgba(255,214,10,0.18)':'inset 0 0 0 6px rgba(255,69,96,0.22)';
+    idx++;
+  },220);
+}
+
+function stopPopupAlert(){
+  const overlay=document.getElementById('incoming-popup-overlay');
+  const banner=document.getElementById('incoming-popup-alert-banner');
+  clearInterval(popupAlertInterval);
+  popupAlertInterval=null;
+  stopPopupSiren();
+  if(banner) banner.style.display='none';
+  if(overlay){
+    overlay.style.transition='';
+    overlay.style.boxShadow='';
+    if(!popupRaveInterval) overlay.style.background='rgba(8,7,14,0.96)';
     overlay.onclick=null;
   }
+}
+
+async function startPopupSiren(){
+  try{
+    if(!popupSirenAudioCtx) popupSirenAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(popupSirenAudioCtx.state==='suspended') await popupSirenAudioCtx.resume();
+    stopPopupSiren();
+    const ctx=popupSirenAudioCtx;
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.type='sawtooth';
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.gain.value=0.018;
+    osc.start();
+    let high=false;
+    const sweep=()=>{
+      const now=ctx.currentTime;
+      osc.frequency.cancelScheduledValues(now);
+      osc.frequency.linearRampToValueAtTime(high?880:520, now+0.45);
+      high=!high;
+    };
+    sweep();
+    const interval=setInterval(sweep, 450);
+    popupSirenNodes={osc,gain,interval};
+  }catch(e){}
+}
+
+function stopPopupSiren(){
+  if(!popupSirenNodes) return;
+  clearInterval(popupSirenNodes.interval);
+  try{popupSirenNodes.osc.stop();}catch(e){}
+  try{popupSirenNodes.osc.disconnect();}catch(e){}
+  try{popupSirenNodes.gain.disconnect();}catch(e){}
+  popupSirenNodes=null;
 }
 
 async function showIncomingPopup(popup){
@@ -1886,18 +1967,29 @@ async function showIncomingPopup(popup){
   overlay.style.display='flex';
   if(Number(popup.rave_enabled)) startPopupRave();
   else stopPopupRave();
+  if(Number(popup.alert_enabled)) startPopupAlert();
+  else stopPopupAlert();
   if(popup.audio_url){
     audio.src=popup.audio_url;
     audio.volume=1;
     try{
       await audio.play();
+      if(Number(popup.alert_enabled)) await startPopupSiren();
       audioStatus.style.display='none';
     }catch(e){
       audioStatus.style.display='inline-flex';
-      overlay.onclick=()=>audio.play().then(()=>{audioStatus.style.display='none';}).catch(()=>{});
+      overlay.onclick=()=>audio.play().then(()=>{
+        if(Number(popup.alert_enabled)) startPopupSiren();
+        audioStatus.style.display='none';
+      }).catch(()=>{});
     }
   }else{
-    audioStatus.style.display='none';
+    if(Number(popup.alert_enabled)){
+      await startPopupSiren();
+      audioStatus.style.display='none';
+    }else{
+      audioStatus.style.display='none';
+    }
   }
 }
 
