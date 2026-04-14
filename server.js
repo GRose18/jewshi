@@ -22,7 +22,7 @@ const UPLOAD_ROOT = path.join(__dirname, 'public', 'uploads', 'popups');
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '30mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db;
@@ -1382,6 +1382,16 @@ app.post('/api/spin', authMiddleware, async(req,res)=>{
     const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({credits:winner.credits,newBalance:user.credits});
   }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.use((err, req, res, next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Upload too large. Try a smaller image, video, or MP3.' });
+  }
+  if (err) {
+    return res.status(500).json({ error: err.message || 'Server error' });
+  }
+  next();
 });
 
 initDB().then(()=>{
