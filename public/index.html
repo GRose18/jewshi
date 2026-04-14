@@ -737,6 +737,10 @@
               <input type="checkbox" id="popup-alert-enabled" style="width:16px;height:16px;accent-color:var(--red);">
               Alert mode
             </label>
+            <label style="display:flex;align-items:center;gap:10px;margin:6px 0 4px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
+              <input type="checkbox" id="popup-closeout-enabled" style="width:16px;height:16px;accent-color:var(--blue);">
+              Close out
+            </label>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;">
               <button class="btn-admin" id="popup-send-btn" onclick="sendPopupMessage()">Send Positive Message</button>
               <span style="font-size:12px;color:var(--text3);" id="popup-send-status"></span>
@@ -870,7 +874,10 @@
         <h2 id="incoming-popup-title" style="font-size:28px;font-weight:800;letter-spacing:-0.03em;color:#fff;margin:0 0 6px;">A message for you</h2>
         <p id="incoming-popup-message" style="font-size:15px;line-height:1.6;color:#d3cff3;margin:0;"></p>
       </div>
-      <div id="incoming-popup-audio-status" style="font-size:12px;color:#b7aefe;background:rgba(124,106,247,0.14);border:1px solid rgba(124,106,247,0.24);padding:8px 12px;border-radius:999px;display:none;">Click anywhere if sound does not start</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="incoming-popup-close-btn" onclick="dismissIncomingPopup()" style="display:none;background:var(--bg4);border:1px solid var(--border-hi);color:var(--text);padding:10px 14px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;">Exit</button>
+        <div id="incoming-popup-audio-status" style="font-size:12px;color:#b7aefe;background:rgba(124,106,247,0.14);border:1px solid rgba(124,106,247,0.24);padding:8px 12px;border-radius:999px;display:none;">Click anywhere if sound does not start</div>
+      </div>
     </div>
     <div id="incoming-popup-media-wrap" style="display:none;"></div>
     <audio id="incoming-popup-audio" loop></audio>
@@ -894,9 +901,9 @@ let popupAlertInterval=null;
 let popupSirenAudioCtx=null;
 let popupSirenNodes=null;
 let popupIntroTimeouts=[];
-async function api(method,path,body,extraHeaders={}){
+async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
-  const timeoutId=setTimeout(()=>controller.abort(),8000);
+  const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
   const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{}),...extraHeaders},signal:controller.signal};
   if(body) opts.body=JSON.stringify(body);
   try{
@@ -1767,6 +1774,7 @@ async function sendPopupMessage(){
   const audioFile=document.getElementById('popup-audio-file').files[0];
   const raveEnabled=document.getElementById('popup-rave-enabled').checked;
   const alertEnabled=document.getElementById('popup-alert-enabled').checked;
+  const closeoutEnabled=document.getElementById('popup-closeout-enabled').checked;
   if(!recipientIds.length){alert('Pick at least one recipient first.');return;}
   if(!title&&!message&&!alertText&&!mediaFile&&!audioFile){alert('Add a title, message, alert text, media, or audio first.');return;}
   const btn=document.getElementById('popup-send-btn');
@@ -1790,7 +1798,8 @@ async function sendPopupMessage(){
       audioName:audioFile?.name||'',
       raveEnabled,
       alertEnabled,
-    }, popupHeaders());
+      closeoutEnabled,
+    }, popupHeaders(), 60000);
     document.getElementById('popup-title').value='';
     document.getElementById('popup-message').value='';
     document.getElementById('popup-alert-text').value='';
@@ -1799,6 +1808,7 @@ async function sendPopupMessage(){
     document.querySelectorAll('.popup-recipient-checkbox').forEach(el=>{el.checked=false;});
     document.getElementById('popup-rave-enabled').checked=false;
     document.getElementById('popup-alert-enabled').checked=false;
+    document.getElementById('popup-closeout-enabled').checked=false;
     if(status) status.textContent='Sent.';
     showToast(`Positive message sent to ${recipientIds.length} recipient${recipientIds.length!==1?'s':''}.`);
     loadActivePopups();
@@ -1888,6 +1898,7 @@ function hideIncomingPopup(){
   const main=document.getElementById('incoming-popup-main-content');
   const wrap=document.getElementById('incoming-popup-media-wrap');
   const audio=document.getElementById('incoming-popup-audio');
+  const closeBtn=document.getElementById('incoming-popup-close-btn');
   const audioStatus=document.getElementById('incoming-popup-audio-status');
   if(overlay) overlay.style.display='none';
   popupIntroTimeouts.forEach(id=>clearTimeout(id));
@@ -1896,6 +1907,7 @@ function hideIncomingPopup(){
   stopPopupAlert();
   if(intro) intro.style.display='none';
   if(main) main.style.display='block';
+  if(closeBtn) closeBtn.style.display='none';
   if(wrap){wrap.style.display='none';wrap.innerHTML='';}
   if(audio){
     audio.pause();
@@ -2015,6 +2027,7 @@ async function showIncomingPopup(popup){
   const countdown=document.getElementById('incoming-popup-countdown');
   const wrap=document.getElementById('incoming-popup-media-wrap');
   const audio=document.getElementById('incoming-popup-audio');
+  const closeBtn=document.getElementById('incoming-popup-close-btn');
   const audioStatus=document.getElementById('incoming-popup-audio-status');
   title.textContent=popup.title||'Positive Message';
   message.textContent=popup.message||'';
@@ -2035,16 +2048,22 @@ async function showIncomingPopup(popup){
     if(activeIncomingPopupId!==popup.id) return;
     if(popup.media_url){
       if((popup.media_type||'').startsWith('video/')){
-        wrap.innerHTML=`<video src="${popup.media_url}" autoplay loop playsinline controls style="width:100%;max-height:68vh;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#000;"></video>`;
+        wrap.innerHTML=`<video id="incoming-popup-video" src="${popup.media_url}" autoplay loop playsinline muted controls style="width:100%;max-height:68vh;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#000;"></video>`;
       }else{
         wrap.innerHTML=`<img src="${popup.media_url}" alt="Positive message media" style="width:100%;max-height:68vh;object-fit:contain;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#090811;">`;
       }
       wrap.style.display='block';
+      const videoEl=document.getElementById('incoming-popup-video');
+      if(videoEl){
+        videoEl.currentTime=0;
+        videoEl.play().catch(()=>{});
+      }
     }else{
       wrap.style.display='none';
     }
     intro.style.display='none';
     main.style.display='block';
+    if(closeBtn) closeBtn.style.display=Number(popup.closeout_enabled)?'inline-flex':'none';
     if(popup.audio_url){
       audio.src=popup.audio_url;
       audio.volume=1;
@@ -2076,6 +2095,16 @@ async function showIncomingPopup(popup){
   }else{
     intro.style.display='none';
     await revealMainContent();
+  }
+}
+
+async function dismissIncomingPopup(){
+  if(!activeIncomingPopupId) return;
+  try{
+    await api('POST',`/popups/${activeIncomingPopupId}/dismiss`,{});
+    hideIncomingPopup();
+  }catch(e){
+    alert(e.message);
   }
 }
 
