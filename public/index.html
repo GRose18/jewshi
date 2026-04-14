@@ -608,6 +608,14 @@
                 <button onclick="setPlinkoBet(50)" class="quick-btn">50</button>
                 <button onclick="setPlinkoBet(100)" class="quick-btn">100</button>
               </div>
+              <div style="margin-bottom:14px;">
+                <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;">Risk</div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="plinko-risk-row">
+                  <button id="plinko-risk-low" onclick="setPlinkoRisk('low')" style="padding:11px 10px;border-radius:var(--radius);border:2px solid var(--green);background:rgba(0,208,132,0.10);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Low</button>
+                  <button id="plinko-risk-medium" onclick="setPlinkoRisk('medium')" style="padding:11px 10px;border-radius:var(--radius);border:1px solid var(--border-hi);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Medium</button>
+                  <button id="plinko-risk-high" onclick="setPlinkoRisk('high')" style="padding:11px 10px;border-radius:var(--radius);border:1px solid var(--border-hi);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">High</button>
+                </div>
+              </div>
               <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;" id="plinko-mult-grid"></div>
               <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;">
                 <span style="color:var(--text3);">Potential top hit</span>
@@ -2093,10 +2101,21 @@ let diceTarget=50;
 let diceRolling=false;
 let diceHistory=[];
 const PLINKO_ROWS=8;
-const PLINKO_MULTIPLIERS=[6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6];
+const PLINKO_RISK_TABLES={
+  low:[3.2,1.6,1.15,0.92,0.75,0.92,1.15,1.6,3.2],
+  medium:[6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6],
+  high:[12,4.5,1.6,0.6,0.2,0.6,1.6,4.5,12],
+};
 let plinkoDropping=false;
 let plinkoHistory=[];
-let plinkoBestMultiplier=Math.max(...PLINKO_MULTIPLIERS);
+let plinkoRisk='low';
+
+function getPlinkoMultipliers(){
+  return PLINKO_RISK_TABLES[plinkoRisk]||PLINKO_RISK_TABLES.low;
+}
+function getPlinkoBestMultiplier(){
+  return Math.max(...getPlinkoMultipliers());
+}
 
 function initCasino(){
   document.getElementById('casino-lobby').style.display='block';
@@ -2261,8 +2280,9 @@ function openPlinko(){
   document.getElementById('casino-lobby').style.display='none';
   document.getElementById('casino-plinko').style.display='block';
   document.getElementById('plinko-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
-  document.getElementById('plinko-best').textContent=plinkoBestMultiplier.toFixed(2)+'x';
+  document.getElementById('plinko-best').textContent=getPlinkoBestMultiplier().toFixed(2)+'x';
   document.getElementById('plinko-last-payout').textContent='⬡ 0';
+  syncPlinkoRiskButtons();
   renderPlinkoMultiplierGrid();
   updatePlinkoMaxWin();
   drawPlinkoBoard();
@@ -2291,18 +2311,21 @@ function setPlinkoBet(amount){
 
 function updatePlinkoMaxWin(){
   const bet=Math.floor(Number(document.getElementById('plinko-bet-input')?.value)||0);
-  const top=bet>0?Math.floor(bet*plinkoBestMultiplier):0;
+  const top=bet>0?Math.floor(bet*getPlinkoBestMultiplier()):0;
   const maxWin=document.getElementById('plinko-max-win');
   if(maxWin) maxWin.textContent='⬡ '+top.toLocaleString();
+  const best=document.getElementById('plinko-best');
+  if(best) best.textContent=getPlinkoBestMultiplier().toFixed(2)+'x';
 }
 
 function renderPlinkoMultiplierGrid(activeSlot=null){
   const grid=document.getElementById('plinko-mult-grid');
   if(!grid)return;
-  grid.innerHTML=PLINKO_MULTIPLIERS.map((mult,idx)=>{
+  const multipliers=getPlinkoMultipliers();
+  grid.innerHTML=multipliers.map((mult,idx)=>{
     const hot=idx===activeSlot;
-    const isEdge=idx===0||idx===PLINKO_MULTIPLIERS.length-1;
-    const isCenter=idx===Math.floor(PLINKO_MULTIPLIERS.length/2);
+    const isEdge=idx===0||idx===multipliers.length-1;
+    const isCenter=idx===Math.floor(multipliers.length/2);
     const bg=hot?'rgba(124,106,247,0.22)':isEdge?'rgba(240,192,64,0.12)':isCenter?'rgba(255,69,96,0.10)':'var(--bg3)';
     const border=hot?'1px solid rgba(124,106,247,0.7)':isEdge?'1px solid rgba(240,192,64,0.26)':isCenter?'1px solid rgba(255,69,96,0.26)':'1px solid var(--border)';
     const color=isEdge?'var(--gold)':isCenter?'var(--red)':'var(--text)';
@@ -2311,6 +2334,31 @@ function renderPlinkoMultiplierGrid(activeSlot=null){
       <div style="font-size:16px;font-weight:700;color:${color};margin-top:2px;">${mult.toFixed(mult%1?1:0)}x</div>
     </div>`;
   }).join('');
+}
+
+function syncPlinkoRiskButtons(){
+  const configs={
+    low:{border:'var(--green)',bg:'rgba(0,208,132,0.10)',color:'var(--green)'},
+    medium:{border:'var(--gold)',bg:'rgba(240,192,64,0.10)',color:'var(--gold)'},
+    high:{border:'var(--red)',bg:'rgba(255,69,96,0.10)',color:'var(--red)'},
+  };
+  ['low','medium','high'].forEach(risk=>{
+    const btn=document.getElementById('plinko-risk-'+risk);
+    if(!btn)return;
+    const active=risk===plinkoRisk;
+    const cfg=configs[risk];
+    btn.style.border=active?`2px solid ${cfg.border}`:'1px solid var(--border-hi)';
+    btn.style.background=active?cfg.bg:'var(--bg3)';
+    btn.style.color=active?cfg.color:'var(--text2)';
+  });
+}
+
+function setPlinkoRisk(risk){
+  if(!PLINKO_RISK_TABLES[risk])return;
+  plinkoRisk=risk;
+  syncPlinkoRiskButtons();
+  renderPlinkoMultiplierGrid();
+  updatePlinkoMaxWin();
 }
 
 function getPlinkoBoardMetrics(canvas){
@@ -2324,7 +2372,7 @@ function getPlinkoBoardMetrics(canvas){
   return {w,h,top,rowGap,pegGap,centerX,slots,bottomY};
 }
 
-function drawPlinkoBoard(ball=null,activeSlot=null,trail=[]){
+function drawPlinkoBoard(ball=null,activeSlot=null,trail=[],impactPeg=null){
   const canvas=document.getElementById('plinko-canvas');
   if(!canvas)return;
   const ctx=canvas.getContext('2d');
@@ -2333,6 +2381,7 @@ function drawPlinkoBoard(ball=null,activeSlot=null,trail=[]){
 
   const slotWidth=pegGap;
   const slotStartX=centerX-((slots-1)*pegGap)/2-slotWidth/2;
+  const multipliers=getPlinkoMultipliers();
 
   const bg=ctx.createLinearGradient(0,0,0,h);
   bg.addColorStop(0,'#161524');
@@ -2350,7 +2399,7 @@ function drawPlinkoBoard(ball=null,activeSlot=null,trail=[]){
     ctx.stroke();
   }
 
-  PLINKO_MULTIPLIERS.forEach((mult,idx)=>{
+  multipliers.forEach((mult,idx)=>{
     const x=slotStartX+idx*slotWidth;
     const isActive=idx===activeSlot;
     ctx.fillStyle=isActive?'rgba(124,106,247,0.26)':idx===0||idx===slots-1?'rgba(240,192,64,0.16)':idx===Math.floor(slots/2)?'rgba(255,69,96,0.14)':'rgba(30,30,46,0.95)';
@@ -2369,16 +2418,17 @@ function drawPlinkoBoard(ball=null,activeSlot=null,trail=[]){
     const rowStartX=centerX-((pegs-1)*pegGap)/2;
     for(let col=0;col<pegs;col++){
       const x=rowStartX+col*pegGap;
-      const glow=ctx.createRadialGradient(x,y,0,x,y,12);
-      glow.addColorStop(0,'rgba(196,184,255,0.28)');
+      const isImpact=impactPeg&&impactPeg.row===row&&impactPeg.col===col;
+      const glow=ctx.createRadialGradient(x,y,0,x,y,isImpact?20:12);
+      glow.addColorStop(0,isImpact?'rgba(240,192,64,0.58)':'rgba(196,184,255,0.28)');
       glow.addColorStop(1,'rgba(196,184,255,0)');
       ctx.fillStyle=glow;
       ctx.beginPath();
       ctx.arc(x,y,12,0,Math.PI*2);
       ctx.fill();
-      ctx.fillStyle='#d8d0ff';
+      ctx.fillStyle=isImpact?'#fff4bf':'#d8d0ff';
       ctx.beginPath();
-      ctx.arc(x,y,4.6,0,Math.PI*2);
+      ctx.arc(x,y,isImpact?5.8:4.6,0,Math.PI*2);
       ctx.fill();
     }
   }
@@ -2422,6 +2472,25 @@ function plinkoPathToPoints(path){
   points.push({x,y:bottomY+10});
   return points;
 }
+function buildPlinkoBounceKeyframes(path){
+  const canvas=document.getElementById('plinko-canvas');
+  const {top,rowGap,pegGap,centerX,bottomY}=getPlinkoBoardMetrics(canvas);
+  const frames=[{x:centerX,y:26,hold:7}];
+  let x=centerX;
+  for(let row=0;row<path.length;row++){
+    const dir=path[row]?1:-1;
+    const pegY=top+row*rowGap;
+    const rowStartX=centerX-(row*pegGap)/2;
+    const col=Math.round((x-rowStartX)/pegGap);
+    frames.push({x,y:pegY-20,frames:8,arc:0,peg:{row,col}});
+    frames.push({x:x+dir*6,y:pegY-2,frames:4,arc:6,peg:{row,col}});
+    x+=dir*(pegGap/2);
+    frames.push({x,y:pegY+18,frames:10,arc:-10,peg:{row,col}});
+  }
+  frames.push({x,y:bottomY-10,frames:14,arc:0});
+  frames.push({x,y:bottomY+10,frames:9,arc:0});
+  return frames;
+}
 
 async function dropPlinko(){
   if(plinkoDropping)return;
@@ -2438,7 +2507,7 @@ async function dropPlinko(){
   pill.style.color='var(--accent)';
   renderPlinkoMultiplierGrid();
   try{
-    const data=await api('POST','/casino/plinko',{betAmount});
+    const data=await api('POST','/casino/plinko',{betAmount,risk:plinkoRisk});
     await animatePlinkoDrop(data);
     currentUser.credits=data.newBalance;
     document.getElementById('plinko-balance').textContent='⬡ '+data.newBalance.toLocaleString();
@@ -2461,21 +2530,19 @@ async function dropPlinko(){
 
 function animatePlinkoDrop(data){
   return new Promise(resolve=>{
-    const points=plinkoPathToPoints(data.path);
-    if(points.length<2){
+    const keyframes=buildPlinkoBounceKeyframes(data.path);
+    if(keyframes.length<2){
       drawPlinkoBoard(null,data.slotIndex,[]);
       resolve();
       return;
     }
-    const totalSegments=points.length-1;
-    const framesPerSegment=16;
-    const totalFrames=totalSegments*framesPerSegment;
-    let frameIndex=0;
     const trail=[];
+    let segmentIndex=0;
+    let segmentFrame=0;
     function ease(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-    function frame(now){
-      if(frameIndex>=totalFrames){
-        const finalBall={x:points[points.length-1].x,y:points[points.length-1].y};
+    function frame(){
+      if(segmentIndex>=keyframes.length-1){
+        const finalBall={x:keyframes[keyframes.length-1].x,y:keyframes[keyframes.length-1].y};
         drawPlinkoBoard(finalBall,data.slotIndex,trail);
         setTimeout(()=>{
           drawPlinkoBoard(finalBall,data.slotIndex,trail);
@@ -2486,23 +2553,27 @@ function animatePlinkoDrop(data){
         },180);
         return;
       }
-      const overall=Math.min(frameIndex/Math.max(1,totalFrames),1);
-      const raw=overall*totalSegments;
-      const segIndex=Math.max(0,Math.min(totalSegments-1,Math.floor(raw)));
-      const localT=ease(raw-segIndex);
-      const from=points[segIndex];
-      const to=points[segIndex+1];
+      const from=keyframes[segmentIndex];
+      const to=keyframes[segmentIndex+1];
+      const segFrames=Math.max(1,to.frames||to.hold||8);
+      const rawT=Math.min(segmentFrame/segFrames,1);
+      const localT=ease(rawT);
       if(!from||!to){
-        frameIndex=totalFrames;
+        segmentIndex=keyframes.length;
         requestAnimationFrame(frame);
         return;
       }
       const x=from.x+(to.x-from.x)*localT;
-      const y=from.y+(to.y-from.y)*localT+Math.sin(localT*Math.PI)*8;
+      const y=from.y+(to.y-from.y)*localT-Math.sin(localT*Math.PI)*(to.arc||0);
       trail.push({x,y});
-      if(trail.length>14) trail.shift();
-      drawPlinkoBoard({x,y}, overall>0.82?data.slotIndex:null, trail);
-      frameIndex++;
+      if(trail.length>16) trail.shift();
+      const activeSlot=segmentIndex>=keyframes.length-3?data.slotIndex:null;
+      drawPlinkoBoard({x,y}, activeSlot, trail, to.peg||from.peg||null);
+      segmentFrame++;
+      if(segmentFrame>segFrames){
+        segmentFrame=0;
+        segmentIndex++;
+      }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
@@ -2516,6 +2587,7 @@ function addPlinkoHistoryRow(data,betAmount){
     payout:data.payout,
     profit:data.profit,
     betAmount,
+    risk:data.risk,
   });
   if(plinkoHistory.length>10)plinkoHistory.pop();
   renderPlinkoHistory();
@@ -2529,7 +2601,7 @@ async function loadPlinkoHistory(){
       ?plinkoBets.map(b=>`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
           <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${Number(b.payout/b.bet_amount||0).toFixed(1)}x</span>
-          <span style="font-size:13px;color:var(--text2);">⬡ ${b.bet_amount} bet</span>
+          <span style="font-size:13px;color:var(--text2);">${b.risk_level?b.risk_level.toUpperCase()+' · ':''}⬡ ${b.bet_amount} bet</span>
           <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
         </div>`).join('')
       :'<p style="font-size:13px;color:var(--text3);">No plinko drops yet.</p>';
@@ -2539,7 +2611,7 @@ async function loadPlinkoHistory(){
 function renderPlinkoHistory(){
   document.getElementById('plinko-history').innerHTML=plinkoHistory.map(b=>`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
-      <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">Slot ${b.slotIndex+1}</span>
+      <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.risk?b.risk.toUpperCase():'LOW'} · Slot ${b.slotIndex+1}</span>
       <span style="font-size:12px;color:var(--text3);">${b.multiplier.toFixed(b.multiplier%1?1:0)}x · ⬡ ${b.betAmount}</span>
       <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.betAmount}</span>
     </div>`).join('');

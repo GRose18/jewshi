@@ -1121,13 +1121,19 @@ app.post('/api/casino/dice', authMiddleware, adminOnly, async(req,res)=>{
 
 app.post('/api/casino/plinko', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    const {betAmount} = req.body;
+    const {betAmount, risk='low'} = req.body;
     const amount = Math.floor(Number(betAmount));
     if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    const riskTables = {
+      low:[3.2,1.6,1.15,0.92,0.75,0.92,1.15,1.6,3.2],
+      medium:[6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6],
+      high:[12,4.5,1.6,0.6,0.2,0.6,1.6,4.5,12],
+    };
+    if(!riskTables[risk]) return res.status(400).json({error:'Invalid risk'});
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
 
-    const multipliers = [6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6];
+    const multipliers = riskTables[risk];
     const path = [];
     let slotIndex = 0;
     for(let i=0;i<8;i++){
@@ -1147,12 +1153,13 @@ app.post('/api/casino/plinko', authMiddleware, adminOnly, async(req,res)=>{
     const betId = generateId('cbp');
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'plinko',amount,won?'win':'loss',payout,profit,Date.now()]);
-    await recordTx(req.user.id, profit, 'casino_plinko', betId, `Plinko: slot ${slotIndex+1} at ${multiplier}x on ⬡${amount}`);
+    await recordTx(req.user.id, profit, 'casino_plinko', betId, `Plinko ${risk}: slot ${slotIndex+1} at ${multiplier}x on ⬡${amount}`);
 
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({
       path,
       slotIndex,
+      risk,
       multiplier,
       payout,
       profit,
