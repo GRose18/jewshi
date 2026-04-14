@@ -1211,7 +1211,8 @@ function startDMFromProfile(userId,userName){closeProfileModal();switchTab('mess
 
 // ── PORTFOLIO ──
 async function renderPortfolio(){
-  const bets=await api('GET','/bets/mine');
+  let bets;
+  try{bets=await api('GET','/bets/mine');}catch(e){document.getElementById('active-positions').innerHTML='<p style="color:var(--red);font-size:13px;">Failed to load: '+e.message+'</p>';return;}
   const active=bets.filter(b=>b.status==='active'),won=bets.filter(b=>b.status==='won');
   const totalWagered=bets.reduce((s,b)=>s+b.amount,0);
   document.getElementById('portfolio-stats').innerHTML=`
@@ -1247,7 +1248,8 @@ async function renderPortfolio(){
 
 // ── LEADERBOARD ──
 async function renderLeaderboard(){
-  const users=await api('GET','/leaderboard');
+  let users;
+  try{users=await api('GET','/leaderboard');}catch(e){document.getElementById('leaderboard-list').innerHTML='<p style="color:var(--red);font-size:13px;padding:20px;">Failed to load: '+e.message+'</p>';return;}
   const medals=['🥇','🥈','🥉'];
   document.getElementById('leaderboard-list').innerHTML=users.map((u,i)=>{
     const ini=initials(u.name||u.id);
@@ -1264,7 +1266,8 @@ async function renderLeaderboard(){
 
 // ── STORE ──
 async function renderStore(){
-  const [items,history]=await Promise.all([api('GET','/store'),api('GET','/store/redemptions/mine')]);
+  let items,history;
+  try{[items,history]=await Promise.all([api('GET','/store'),api('GET','/store/redemptions/mine')]);}catch(e){document.getElementById('store-grid').innerHTML='<p style="color:var(--red);font-size:13px;">Failed to load: '+e.message+'</p>';return;}
   document.getElementById('store-grid').innerHTML=items.map(item=>{
     const canAfford=currentUser.credits>=item.cost;
     return `<div class="store-item"><div class="store-item-icon">${item.icon}</div><div class="store-item-name">${item.name}</div><div class="store-item-desc">${item.description}</div><div class="store-item-cost">⬡ ${item.cost.toLocaleString()}</div>
@@ -1288,7 +1291,7 @@ async function renderMessages(){
   document.getElementById('thread-header').textContent='Select a conversation';
   document.getElementById('thread-messages').innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;margin-top:40px;">Pick a conversation or start a new one.</p>';
   document.getElementById('thread-input').style.display='none';
-  await loadConversations();
+  try{await loadConversations();}catch(e){document.getElementById('conversation-list').innerHTML='<p style="color:var(--red);font-size:12px;padding:16px;">Failed to load: '+e.message+'</p>';}
   convPollInterval=setInterval(loadConversations,4000);
 }
 async function loadConversations(){
@@ -1381,9 +1384,11 @@ async function pollResolutions(){
 // ── ADMIN ──
 async function renderAdminTab(){
   if(!currentUser||currentUser.role!=='admin')return;
-  const [stats,markets,users,storeItems,txns,casinoData]=await Promise.all([
+  const _fallbacks=[{students:0,openMarkets:0,totalBets:0,pendingVol:0},[],[],[],[],{stats:{},bets:[]}];
+  const _results=await Promise.allSettled([
     api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/transactions'),api('GET','/admin/casino'),
   ]);
+  const [stats,markets,users,storeItems,txns,casinoData]=_results.map((r,i)=>r.status==='fulfilled'?r.value:(_fallbacks[i]??{}));
   document.getElementById('admin-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
