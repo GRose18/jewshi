@@ -723,6 +723,10 @@
               <div class="form-group"><label>Image or Video</label><input type="file" id="popup-media-file" accept="image/*,video/*"></div>
               <div class="form-group"><label>MP3</label><input type="file" id="popup-audio-file" accept="audio/mpeg,audio/mp3"></div>
             </div>
+            <label style="display:flex;align-items:center;gap:10px;margin:8px 0 4px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">
+              <input type="checkbox" id="popup-rave-enabled" style="width:16px;height:16px;accent-color:var(--accent);">
+              Light rave mode
+            </label>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;">
               <button class="btn-admin" id="popup-send-btn" onclick="sendPopupMessage()">Send Positive Message</button>
               <span style="font-size:12px;color:var(--text3);" id="popup-send-status"></span>
@@ -864,6 +868,7 @@ let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
 let activeIncomingPopupId=null;
+let popupRaveInterval=null;
 async function api(method,path,body,extraHeaders={}){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),8000);
@@ -1713,6 +1718,7 @@ async function sendPopupMessage(){
   const message=document.getElementById('popup-message').value.trim();
   const mediaFile=document.getElementById('popup-media-file').files[0];
   const audioFile=document.getElementById('popup-audio-file').files[0];
+  const raveEnabled=document.getElementById('popup-rave-enabled').checked;
   if(!recipientId){alert('Pick a recipient first.');return;}
   if(!title&&!message&&!mediaFile&&!audioFile){alert('Add a title, message, media, or audio first.');return;}
   const btn=document.getElementById('popup-send-btn');
@@ -1733,11 +1739,13 @@ async function sendPopupMessage(){
       mediaName:mediaFile?.name||'',
       audioDataUrl,
       audioName:audioFile?.name||'',
+      raveEnabled,
     }, popupHeaders());
     document.getElementById('popup-title').value='';
     document.getElementById('popup-message').value='';
     document.getElementById('popup-media-file').value='';
     document.getElementById('popup-audio-file').value='';
+    document.getElementById('popup-rave-enabled').checked=false;
     if(status) status.textContent='Sent.';
     showToast('Positive message sent.');
     loadActivePopups();
@@ -1812,6 +1820,7 @@ function hideIncomingPopup(){
   const audio=document.getElementById('incoming-popup-audio');
   const audioStatus=document.getElementById('incoming-popup-audio-status');
   if(overlay) overlay.style.display='none';
+  stopPopupRave();
   if(wrap){wrap.style.display='none';wrap.innerHTML='';}
   if(audio){
     audio.pause();
@@ -1819,6 +1828,38 @@ function hideIncomingPopup(){
     audio.load();
   }
   if(audioStatus) audioStatus.style.display='none';
+}
+
+function startPopupRave(){
+  const overlay=document.getElementById('incoming-popup-overlay');
+  if(!overlay) return;
+  stopPopupRave();
+  const colors=[
+    'rgba(255,0,110,0.94)',
+    'rgba(0,209,255,0.94)',
+    'rgba(255,214,10,0.94)',
+    'rgba(109,40,217,0.94)',
+    'rgba(0,255,163,0.94)',
+    'rgba(255,94,0,0.94)'
+  ];
+  let idx=0;
+  overlay.style.transition='background 0.18s linear';
+  popupRaveInterval=setInterval(()=>{
+    const next=colors[idx%colors.length];
+    overlay.style.background=`radial-gradient(circle at top, rgba(255,255,255,0.12), transparent 30%), ${next}`;
+    idx++;
+  },180);
+}
+
+function stopPopupRave(){
+  const overlay=document.getElementById('incoming-popup-overlay');
+  clearInterval(popupRaveInterval);
+  popupRaveInterval=null;
+  if(overlay){
+    overlay.style.transition='';
+    overlay.style.background='rgba(8,7,14,0.96)';
+    overlay.onclick=null;
+  }
 }
 
 async function showIncomingPopup(popup){
@@ -1843,6 +1884,8 @@ async function showIncomingPopup(popup){
     wrap.style.display='none';
   }
   overlay.style.display='flex';
+  if(Number(popup.rave_enabled)) startPopupRave();
+  else stopPopupRave();
   if(popup.audio_url){
     audio.src=popup.audio_url;
     audio.volume=1;
