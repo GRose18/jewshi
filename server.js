@@ -98,6 +98,16 @@ async function initDB() {
       credits_won INTEGER NOT NULL,
       timestamp INTEGER NOT NULL
     )
+    ;CREATE TABLE IF NOT EXISTS casino_bets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      game TEXT NOT NULL,
+      bet_amount INTEGER NOT NULL,
+      outcome TEXT NOT NULL,
+      payout INTEGER NOT NULL,
+      profit INTEGER NOT NULL,
+      timestamp INTEGER NOT NULL
+    )
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await seedIfEmpty();
@@ -567,6 +577,8 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
     if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
     if(m.market_type==='overunder'&&!['OVER','UNDER'].includes(side)) return res.status(400).json({error:'Side must be OVER or UNDER'});
     if(m.market_type==='binary'&&!['YES','NO'].includes(side)) return res.status(400).json({error:'Side must be YES or NO'});
+    const betCount = await db.get('SELECT COUNT(*) as c FROM bets WHERE user_id=? AND market_id=?', [req.user.id, marketId]);
+    if (betCount.c >= 5) return res.status(400).json({ error: 'You can only place up to 5 bets on a single market.' });
     await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,user.id]);
     if(m.market_type==='overunder'){
       if(side==='OVER') await db.run('UPDATE markets SET over_shares=over_shares+?,pool=pool+? WHERE id=?',[amount,amount,m.id]);
@@ -866,6 +878,59 @@ app.get('/api/spin/status', authMiddleware, async(req,res)=>{
     const canSpin=last.timestamp<midnight.getTime();
     const next=canSpin?null:new Date(midnight.getTime()+86400000).getTime();
     res.json({canSpin,nextSpin:next});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+// ── CASINO ──
+app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
+  try{
+    const {betAmount, target, direction} = req.body;
+    const amount = Math.floor(Number(betAmount));
+    if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    if(!['over','under'].includes(direction)) return res.status(400).json({error:'Invalid direction'});
+    if(target===undefined||target<2||target>98) return res.status(400).json({error:'Target must be between 2 and 98'});
+    const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+    const roll = parseFloat((Math.random()*100).toFixed(2));
+    const won = direction==='over' ? roll>target : roll<target;
+    const winChance = direction==='over' ? 100-target : target;
+    const multiplier = 99/winChance;
+    const payout = won ? Math.floor(amount*multiplier) : 0;
+    const profit = payout - amount;
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
+    if(won) await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,req.user.id]);
+    const betId = generateId('cbd');
+    await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [betId,req.user.id,'dice',amount,won?'win':'loss',payout,profit,Date.now()]);
+    await recordTx(req.user.id, profit, 'casino_dice', betId, `Dice: ${direction} ${target} — ${won?'won':'lost'} ⬡${amount}`);
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({roll, won, payout, profit, multiplier:parseFloat(multiplier.toFixed(4)), newBalance:Math.floor(updated.credits)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/casino/my-bets', authMiddleware, async(req,res)=>{
+  try{
+    const bets = await db.all('SELECT * FROM casino_bets WHERE user_id=? ORDER BY timestamp DESC LIMIT 20',[req.user.id]);
+    res.json(bets);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/admin/casino', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const bets = await db.all(`SELECT cb.*,u.name as user_name FROM casino_bets cb JOIN users u ON cb.user_id=u.id ORDER BY cb.timestamp DESC LIMIT 200`);
+    const stats = await db.get(`SELECT COUNT(*) as total_bets, SUM(bet_amount) as total_wagered, SUM(profit) as house_profit FROM casino_bets`);
+    res.json({bets, stats});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/users/:id/round-credits', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const user = await db.get('SELECT id,name,credits FROM users WHERE id=?',[req.params.id]);
+    if(!user) return res.status(404).json({error:'User not found'});
+    const floored = Math.floor(user.credits);
+    await db.run('UPDATE users SET credits=? WHERE id=?',[floored,req.params.id]);
+    await recordTx(req.params.id, floored-user.credits, 'admin_round', null, `Credits rounded down from ${user.credits} to ${floored}`);
+    res.json({success:true, before:user.credits, after:floored});
   }catch(e){res.status(500).json({error:e.message});}
 });
 

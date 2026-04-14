@@ -357,6 +357,7 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
+    <div class="nav-tab" data-tab="casino" onclick="switchTab('casino')">Casino</div>
     <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
@@ -383,6 +384,107 @@
         </select>
       </div>
       <div class="markets-grid" id="markets-grid"><div class="loading">Loading markets…</div></div>
+    </div>
+
+<!-- CASINO -->
+    <div id="tab-casino" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Jewshi Casino</h2>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Play games with your credits</p>
+        </div>
+      </div>
+
+      <!-- GAME LOBBY -->
+      <div id="casino-lobby" style="display:block;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;" id="casino-game-grid">
+          <div class="market-card" onclick="openDice()" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">🎲</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Dice</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Roll over or under your target</div>
+            <span class="status-tag status-open">Individual</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DICE GAME -->
+      <div id="casino-dice" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closeDice()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Dice</h2>
+        </div>
+
+        <div style="max-width:520px;margin:0 auto;">
+          <!-- Balance & bet -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="dice-balance">⬡ 0</div></div>
+            <div class="stat-card"><div class="stat-label">Payout</div><div class="stat-value" style="color:var(--accent);font-size:20px;" id="dice-payout-display">0.00x</div></div>
+            <div class="stat-card"><div class="stat-label">Win chance</div><div class="stat-value" style="font-size:20px;" id="dice-chance-display">50.00%</div></div>
+          </div>
+
+          <!-- Roll result display -->
+          <div class="panel" style="text-align:center;padding:28px;margin-bottom:18px;min-height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">
+            <div id="dice-result-num" style="font-size:56px;font-weight:700;color:var(--accent);letter-spacing:-0.03em;font-variant-numeric:tabular-nums;">—</div>
+            <div id="dice-result-msg" style="font-size:14px;color:var(--text3);">Place a bet to roll</div>
+          </div>
+
+          <!-- Track bar -->
+          <div class="panel" style="margin-bottom:18px;">
+            <div style="position:relative;height:14px;border-radius:7px;background:var(--bg4);margin-bottom:10px;overflow:visible;" id="dice-track">
+              <div id="dice-track-fill" style="position:absolute;top:0;height:100%;border-radius:7px;background:var(--accent);transition:width 0.2s;width:50%;"></div>
+              <div id="dice-track-needle" style="position:absolute;top:-5px;width:4px;height:24px;background:#fff;border-radius:2px;transform:translateX(-50%);left:50%;transition:left 0.2s;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);">
+              <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+            </div>
+          </div>
+
+          <!-- Direction toggle -->
+          <div style="display:flex;gap:10px;margin-bottom:16px;">
+            <button id="dice-btn-under" onclick="setDiceDirection('under')" style="flex:1;padding:12px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;background:var(--red-bg);border:1px solid var(--red-dim);color:var(--red);">Roll Under</button>
+            <button id="dice-btn-over" onclick="setDiceDirection('over')" style="flex:1;padding:12px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;background:var(--accent-bg);border:2px solid var(--accent);color:var(--accent);">Roll Over ✓</button>
+          </div>
+
+          <!-- Target slider -->
+          <div class="panel" style="margin-bottom:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Target</span>
+              <span id="dice-target-label" style="font-size:18px;font-weight:700;color:var(--text);">50</span>
+            </div>
+            <input type="range" id="dice-target-slider" min="2" max="98" value="50" step="1" oninput="onDiceSlider(this.value)" style="width:100%;accent-color:var(--accent);">
+          </div>
+
+          <!-- Bet amount -->
+          <div class="panel" style="margin-bottom:18px;">
+            <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">Bet Amount</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+              <input type="number" id="dice-bet-input" placeholder="0" min="1" step="1" oninput="onDiceBetInput()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+              <button onclick="setDiceBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+              <button onclick="setDiceBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="setDiceBet(10)" class="quick-btn">10</button>
+              <button onclick="setDiceBet(25)" class="quick-btn">25</button>
+              <button onclick="setDiceBet(50)" class="quick-btn">50</button>
+              <button onclick="setDiceBet(100)" class="quick-btn">100</button>
+            </div>
+          </div>
+
+          <!-- Win preview -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;font-size:13px;">
+            <span style="color:var(--text3);">Potential win</span>
+            <span id="dice-potential-win" style="font-size:16px;font-weight:700;color:var(--green);">⬡ 0</span>
+          </div>
+
+          <button id="dice-roll-btn" onclick="rollDice()" style="width:100%;padding:15px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:16px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:0.02em;">Roll</button>
+
+          <!-- Recent rolls -->
+          <div style="margin-top:24px;">
+            <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Rolls</div>
+            <div id="dice-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- FEED -->
@@ -495,6 +597,7 @@
       </div>
       <div class="panel"><div class="panel-title">Student Accounts</div><div id="admin-users-list"></div></div>
       <div class="panel"><div class="panel-title">Transaction Log</div><div id="admin-txn-list"><div class="loading">Loading…</div></div></div>
+      <div class="panel"><div class="panel-title">Casino Activity</div><div id="admin-casino-stats" style="margin-bottom:14px;"></div><div id="admin-casino-list"><div class="loading">Loading…</div></div></div>
     </div>
 
   </div>
@@ -747,6 +850,7 @@ function switchTab(tab){
   if(tab==='store')renderStore();
   if(tab==='messages')renderMessages();
   if(tab==='admin')renderAdminTab();
+  if(tab==='casino')initCasino();
 }
 
 // ── MARKETS ──
@@ -814,10 +918,10 @@ function selectSide(side){
   pb.textContent=`Place ${side} Bet`;
   updateBetSummary();
 }
-function setQuickAmount(n){document.getElementById('bet-amount').value=n;updateBetSummary();}
+function setQuickAmount(n){document.getElementById('bet-amount').value=Math.floor(n);updateBetSummary();}
 function updateBetSummary(){
   if(!currentBetMarket)return;
-  const amount=parseFloat(document.getElementById('bet-amount').value);
+  const amount=Math.floor(parseFloat(document.getElementById('bet-amount').value));
   if(!amount||amount<=0){document.getElementById('bet-summary').innerHTML='';return;}
   const m=currentBetMarket;
   const isOU=m.market_type==='overunder';
@@ -838,7 +942,7 @@ function updateBetSummary(){
   document.getElementById('balance-after').textContent=balAfter>=0?'⬡ '+balAfter.toLocaleString():'⚠ Insufficient';
 }
 async function placeBet(){
-  const amount=parseFloat(document.getElementById('bet-amount').value);
+  const amount=Math.floor(parseFloat(document.getElementById('bet-amount').value));
   if(!amount||amount<=0){alert('Enter a valid amount.');return;}
   if(currentUser.credits<amount){alert('Insufficient credits!');return;}
   try{
@@ -1203,8 +1307,8 @@ async function pollResolutions(){
 // ── ADMIN ──
 async function renderAdminTab(){
   if(!currentUser||currentUser.role!=='admin')return;
-  const [stats,markets,users,storeItems,txns]=await Promise.all([
-    api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/transactions'),
+  const [stats,markets,users,storeItems,txns,casinoData]=await Promise.all([
+    api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/transactions'),api('GET','/admin/casino'),
   ]);
   document.getElementById('admin-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
@@ -1277,6 +1381,22 @@ async function renderAdminTab(){
       </tr>`).join('')}</tbody>
     </table>`;
 
+  const cs=casinoData.stats||{};
+  document.getElementById('admin-casino-stats').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${cs.total_bets||0}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value" style="color:var(--accent)">⬡ ${(cs.total_wagered||0).toLocaleString()}</div></div>
+      <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(cs.house_profit||0).toLocaleString()}</div></div>
+    </div>`;
+  document.getElementById('admin-casino-list').innerHTML=!casinoData.bets?.length?'<p style="color:var(--text3);font-size:13px;margin-top:12px;">No casino bets yet.</p>'
+    :`<table class="portfolio-table" style="margin-top:14px;"><thead><tr><th>User</th><th>Game</th><th>Bet</th><th>Outcome</th><th>Profit</th><th>Time</th></tr></thead><tbody>${casinoData.bets.slice(0,50).map(b=>`<tr>
+      <td style="color:var(--text)">${esc(b.user_name||b.user_id)}</td>
+      <td><span class="history-pill" style="background:var(--accent-bg);color:var(--accent)">${b.game}</span></td>
+      <td>⬡ ${b.bet_amount}</td>
+      <td><span class="history-pill" style="background:${b.outcome==='win'?'var(--green-bg)':'var(--red-bg)'};color:${b.outcome==='win'?'var(--green)':'var(--red)'}">${b.outcome}</span></td>
+      <td style="color:${b.profit>=0?'var(--green)':'var(--red)'};font-weight:600;">${b.profit>=0?'+':''}${b.profit}</td>
+      <td style="color:var(--text3)">${new Date(b.timestamp).toLocaleString()}</td>
+    </tr>`).join('')}</tbody></table>`;
   document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
     :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
       <td style="color:var(--text)">${esc(t.user_name||t.user_id)}</td>
@@ -1598,6 +1718,168 @@ async function doWheelSpin(){
   }
 }
 
+// ── CASINO ──
+let diceDirection='over';
+let diceTarget=50;
+let diceRolling=false;
+let diceHistory=[];
+
+function initCasino(){
+  document.getElementById('casino-lobby').style.display='block';
+  document.getElementById('casino-dice').style.display='none';
+}
+
+function openDice(){
+  document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-dice').style.display='block';
+  updateDiceUI();
+  document.getElementById('dice-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  document.getElementById('dice-history').innerHTML='';
+  diceHistory=[];
+  loadDiceHistory();
+}
+
+function closeDice(){
+  document.getElementById('casino-dice').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function setDiceDirection(dir){
+  diceDirection=dir;
+  const btnOver=document.getElementById('dice-btn-over');
+  const btnUnder=document.getElementById('dice-btn-under');
+  if(dir==='over'){
+    btnOver.style.border='2px solid var(--accent)';btnOver.style.background='var(--accent-bg)';btnOver.style.color='var(--accent)';
+    btnUnder.style.border='1px solid var(--red-dim)';btnUnder.style.background='var(--red-bg)';btnUnder.style.color='var(--red)';
+    btnOver.textContent='Roll Over ✓';btnUnder.textContent='Roll Under';
+  } else {
+    btnUnder.style.border='2px solid var(--red)';btnUnder.style.background='var(--red-bg)';btnUnder.style.color='var(--red)';
+    btnOver.style.border='1px solid var(--accent-dim)';btnOver.style.background='var(--accent-bg)';btnOver.style.color='var(--accent)';
+    btnUnder.textContent='Roll Under ✓';btnOver.textContent='Roll Over';
+  }
+  updateDiceUI();
+}
+
+function onDiceSlider(val){
+  diceTarget=parseInt(val);
+  document.getElementById('dice-target-label').textContent=diceTarget;
+  updateDiceUI();
+}
+
+function onDiceBetInput(){
+  const input=document.getElementById('dice-bet-input');
+  let val=Math.floor(Number(input.value));
+  if(val<0)val=0;
+  input.value=val||'';
+  updateDiceWinPreview();
+}
+
+function setDiceBet(amount){
+  const floored=Math.floor(amount);
+  document.getElementById('dice-bet-input').value=floored>0?floored:'';
+  updateDiceWinPreview();
+}
+
+function updateDiceUI(){
+  const winChance=diceDirection==='over'?100-diceTarget:diceTarget;
+  const mult=99/winChance;
+  document.getElementById('dice-payout-display').textContent=mult.toFixed(4)+'x';
+  document.getElementById('dice-chance-display').textContent=winChance.toFixed(2)+'%';
+  document.getElementById('dice-target-label').textContent=diceTarget;
+  document.getElementById('dice-target-slider').value=diceTarget;
+  const fillPct=diceDirection==='over'?100-diceTarget:diceTarget;
+  document.getElementById('dice-track-fill').style.width=fillPct+'%';
+  document.getElementById('dice-track-needle').style.left=diceTarget+'%';
+  if(diceDirection==='over'){
+    document.getElementById('dice-track-fill').style.left=(diceTarget)+'%';
+    document.getElementById('dice-track-fill').style.width=(100-diceTarget)+'%';
+    document.getElementById('dice-track-fill').style.background='var(--accent)';
+  } else {
+    document.getElementById('dice-track-fill').style.left='0';
+    document.getElementById('dice-track-fill').style.width=diceTarget+'%';
+    document.getElementById('dice-track-fill').style.background='var(--red)';
+  }
+  updateDiceWinPreview();
+}
+
+function updateDiceWinPreview(){
+  const bet=Math.floor(Number(document.getElementById('dice-bet-input').value)||0);
+  const winChance=diceDirection==='over'?100-diceTarget:diceTarget;
+  const mult=99/winChance;
+  const potentialWin=bet>0?Math.floor(bet*mult):0;
+  document.getElementById('dice-potential-win').textContent='⬡ '+potentialWin.toLocaleString();
+}
+
+async function rollDice(){
+  if(diceRolling)return;
+  const betAmount=Math.floor(Number(document.getElementById('dice-bet-input').value));
+  if(!betAmount||betAmount<1){showToast('Enter a bet amount.');return;}
+  if(betAmount>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  diceRolling=true;
+  const btn=document.getElementById('dice-roll-btn');
+  btn.disabled=true;btn.textContent='Rolling…';
+  document.getElementById('dice-result-num').style.color='var(--text3)';
+  document.getElementById('dice-result-num').textContent='…';
+  document.getElementById('dice-result-msg').textContent='';
+  try{
+    const data=await api('POST','/casino/dice',{betAmount,target:diceTarget,direction:diceDirection});
+    // animate roll
+    let frames=0;
+    const totalFrames=18;
+    const interval=setInterval(()=>{
+      document.getElementById('dice-result-num').textContent=(Math.random()*100).toFixed(2);
+      frames++;
+      if(frames>=totalFrames){
+        clearInterval(interval);
+        document.getElementById('dice-result-num').textContent=data.roll.toFixed(2);
+        document.getElementById('dice-result-num').style.color=data.won?'var(--green)':'var(--red)';
+        document.getElementById('dice-result-msg').textContent=data.won
+          ?`You won ⬡ ${data.payout} (+⬡ ${data.profit})`
+          :`You lost ⬡ ${betAmount}`;
+        document.getElementById('dice-result-msg').style.color=data.won?'var(--green)':'var(--red)';
+        currentUser.credits=data.newBalance;
+        document.getElementById('dice-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+        updateTopbar();
+        addDiceHistoryRow(data,betAmount);
+        if(data.won) launchSpinConfetti();
+      }
+    },55);
+  }catch(e){showToast(e.message);}
+  finally{
+    diceRolling=false;
+    btn.disabled=false;btn.textContent='Roll';
+  }
+}
+
+function addDiceHistoryRow(data,betAmount){
+  diceHistory.unshift({roll:data.roll,won:data.won,payout:data.payout,profit:data.profit,betAmount,target:diceTarget,direction:diceDirection,mult:data.multiplier});
+  if(diceHistory.length>10)diceHistory.pop();
+  renderDiceHistory();
+}
+
+async function loadDiceHistory(){
+  try{
+    const bets=await api('GET','/casino/my-bets');
+    const diceBets=bets.filter(b=>b.game==='dice').slice(0,10);
+    document.getElementById('dice-history').innerHTML=diceBets.length
+      ?diceBets.map(b=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+          <span style="font-size:13px;font-weight:600;color:${b.outcome==='win'?'var(--green)':'var(--red)'};">${b.outcome==='win'?'WIN':'LOSS'}</span>
+          <span style="font-size:13px;color:var(--text2);">⬡ ${b.bet_amount} bet</span>
+          <span style="font-size:13px;font-weight:600;color:${b.outcome==='win'?'var(--green)':'var(--red)'};">${b.outcome==='win'?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+        </div>`).join('')
+      :'<p style="font-size:13px;color:var(--text3);">No dice history yet.</p>';
+  }catch(e){}
+}
+
+function renderDiceHistory(){
+  document.getElementById('dice-history').innerHTML=diceHistory.map(b=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.won?'var(--green-dim)':'var(--red-dim)'};">
+      <span style="font-size:14px;font-weight:700;color:${b.won?'var(--green)':'var(--red)'};">${b.roll.toFixed(2)}</span>
+      <span style="font-size:12px;color:var(--text3);">${b.direction==='over'?'over':'under'} ${b.target} · ${b.mult.toFixed(2)}x</span>
+      <span style="font-size:13px;font-weight:600;color:${b.won?'var(--green)':'var(--red)'};">${b.won?'+⬡ '+b.profit:'-⬡ '+b.betAmount}</span>
+    </div>`).join('');
+}
 // ── CANCEL BET ──
 async function cancelBet(betId,amount){
   const fee=Math.round(amount*0.05);
