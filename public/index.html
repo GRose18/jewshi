@@ -723,7 +723,10 @@
               <div class="form-group"><label>Image or Video</label><input type="file" id="popup-media-file" accept="image/*,video/*"></div>
               <div class="form-group"><label>MP3</label><input type="file" id="popup-audio-file" accept="audio/mpeg,audio/mp3"></div>
             </div>
-            <p style="font-size:12px;color:var(--text3);margin-top:2px;">Recipient-side delivery and media upload routes are the next build step. This tab is now securely gated and ready for that flow.</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+              <button class="btn-admin" id="popup-send-btn" onclick="sendPopupMessage()">Send Positive Message</button>
+              <span style="font-size:12px;color:var(--text3);" id="popup-send-status"></span>
+            </div>
           </div>
           <div class="panel">
             <div class="panel-title">Tab Password</div>
@@ -732,6 +735,10 @@
             <div class="form-group"><label>New Password</label><input type="password" id="popup-new-password" placeholder="New Pop-up password"></div>
             <button class="btn-admin" onclick="changePopupPassword()">Update Pop-up Password</button>
           </div>
+        </div>
+        <div class="panel" style="margin-top:18px;">
+          <div class="panel-title">Active Messages</div>
+          <div id="popup-active-list"><p style="font-size:13px;color:var(--text3);">No active pop-ups right now.</p></div>
         </div>
       </div>
     </div>
@@ -832,6 +839,21 @@
   </div>
 </div>
 
+<div id="incoming-popup-overlay" style="display:none;position:fixed;inset:0;background:rgba(8,7,14,0.96);z-index:5000;align-items:center;justify-content:center;padding:24px;">
+  <div style="width:min(960px,100%);max-height:100%;overflow:auto;background:linear-gradient(180deg,#1b1830,#100f1d);border:1px solid rgba(124,106,247,0.28);border-radius:24px;box-shadow:0 30px 90px rgba(0,0,0,0.5);padding:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#b7aefe;margin-bottom:8px;">Positive Message</div>
+        <h2 id="incoming-popup-title" style="font-size:28px;font-weight:800;letter-spacing:-0.03em;color:#fff;margin:0 0 6px;">A message for you</h2>
+        <p id="incoming-popup-message" style="font-size:15px;line-height:1.6;color:#d3cff3;margin:0;"></p>
+      </div>
+      <div id="incoming-popup-audio-status" style="font-size:12px;color:#b7aefe;background:rgba(124,106,247,0.14);border:1px solid rgba(124,106,247,0.24);padding:8px 12px;border-radius:999px;display:none;">Click anywhere if sound does not start</div>
+    </div>
+    <div id="incoming-popup-media-wrap" style="display:none;"></div>
+    <audio id="incoming-popup-audio" loop></audio>
+  </div>
+</div>
+
 <script>
 const API = window.location.hostname==='localhost'?'http://localhost:3000/api':'/api';
 const CREDITS_PER_DOLLAR=100;
@@ -840,10 +862,13 @@ let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
 let liveInterval=null,countdownInterval=null,liveMarketsData=[];
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
-async function api(method,path,body){
+let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
+let popupPollInterval=null;
+let activeIncomingPopupId=null;
+async function api(method,path,body,extraHeaders={}){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),8000);
-  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{})},signal:controller.signal};
+  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{}),...extraHeaders},signal:controller.signal};
   if(body) opts.body=JSON.stringify(body);
   try{
     const res=await fetch(API+path,opts);
@@ -1006,8 +1031,13 @@ async function doResendCode(){
 function doLogout(){
   authToken=null;currentUser=null;localStorage.removeItem('ew_token');sessionStorage.removeItem('access_granted');
   sessionStorage.removeItem('popup_tab_unlocked');
+  sessionStorage.removeItem('popup_unlock_token');
   popupTabUnlocked=false;
+  popupUnlockToken='';
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
+  clearInterval(popupPollInterval);
+  popupPollInterval=null;
+  hideIncomingPopup();
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').style.display='flex';
   document.getElementById('login-email').value='';document.getElementById('login-pass').value='';
@@ -1018,11 +1048,15 @@ async function enterApp(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('live-screen').style.display='none';
   document.getElementById('app').style.display='block';
-  if(currentUser.role==='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='block');
+  if(currentUser.role==='admin') document.querySelectorAll('.admin-only:not(.grose-only)').forEach(el=>el.style.display='block');
   if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
+  else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
   setInterval(pollResolutions,8000);pollResolutions();
+  clearInterval(popupPollInterval);
+  popupPollInterval=setInterval(pollIncomingPopup,3000);
+  pollIncomingPopup();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeProfileModal();closeSpinModal();}});
 }
 function updateTopbar(){
@@ -1596,7 +1630,10 @@ function renderPopupTab(){
   if(authPanel) authPanel.style.display=popupTabUnlocked?'none':'block';
   if(controlPanel) controlPanel.style.display=popupTabUnlocked?'block':'none';
   if(lockBtn) lockBtn.style.display=popupTabUnlocked?'inline-flex':'none';
-  if(popupTabUnlocked) populatePopupRecipientSelect();
+  if(popupTabUnlocked){
+    populatePopupRecipientSelect();
+    loadActivePopups();
+  }
 }
 
 async function populatePopupRecipientSelect(){
@@ -1618,9 +1655,11 @@ async function unlockPopupTab(){
   const password=input?.value||'';
   if(!password.trim()){alert('Enter the Pop-up tab password.');return;}
   try{
-    await api('POST','/admin/popup-auth',{password});
+    const data=await api('POST','/admin/popup-auth',{password});
     popupTabUnlocked=true;
+    popupUnlockToken=data.unlockToken||'';
     sessionStorage.setItem('popup_tab_unlocked','1');
+    sessionStorage.setItem('popup_unlock_token',popupUnlockToken);
     if(input) input.value='';
     renderPopupTab();
     showToast('Pop-up tab unlocked.');
@@ -1631,11 +1670,17 @@ async function unlockPopupTab(){
 
 function lockPopupTab(){
   popupTabUnlocked=false;
+  popupUnlockToken='';
   sessionStorage.removeItem('popup_tab_unlocked');
+  sessionStorage.removeItem('popup_unlock_token');
   const authInput=document.getElementById('popup-auth-password');
   if(authInput) authInput.value='';
   renderPopupTab();
   showToast('Pop-up tab locked.');
+}
+
+function popupHeaders(){
+  return popupUnlockToken?{'X-Popup-Unlock':popupUnlockToken}:{};
 }
 
 async function changePopupPassword(){
@@ -1649,6 +1694,168 @@ async function changePopupPassword(){
     showToast('Pop-up tab password updated.');
   }catch(e){
     alert(e.message);
+  }
+}
+
+async function fileToDataUrl(file){
+  if(!file) return null;
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result||''));
+    reader.onerror=()=>reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendPopupMessage(){
+  if(!popupTabUnlocked||!popupUnlockToken){alert('Unlock the Pop-up tab first.');return;}
+  const recipientId=document.getElementById('popup-recipient').value;
+  const title=document.getElementById('popup-title').value.trim();
+  const message=document.getElementById('popup-message').value.trim();
+  const mediaFile=document.getElementById('popup-media-file').files[0];
+  const audioFile=document.getElementById('popup-audio-file').files[0];
+  if(!recipientId){alert('Pick a recipient first.');return;}
+  if(!title&&!message&&!mediaFile&&!audioFile){alert('Add a title, message, media, or audio first.');return;}
+  const btn=document.getElementById('popup-send-btn');
+  const status=document.getElementById('popup-send-status');
+  btn.disabled=true;
+  btn.textContent='Sending…';
+  if(status) status.textContent='Uploading files and sending message…';
+  try{
+    const [mediaDataUrl,audioDataUrl]=await Promise.all([
+      fileToDataUrl(mediaFile),
+      fileToDataUrl(audioFile),
+    ]);
+    await api('POST','/admin/popups',{
+      recipientId,
+      title,
+      message,
+      mediaDataUrl,
+      mediaName:mediaFile?.name||'',
+      audioDataUrl,
+      audioName:audioFile?.name||'',
+    }, popupHeaders());
+    document.getElementById('popup-title').value='';
+    document.getElementById('popup-message').value='';
+    document.getElementById('popup-media-file').value='';
+    document.getElementById('popup-audio-file').value='';
+    if(status) status.textContent='Sent.';
+    showToast('Positive message sent.');
+    loadActivePopups();
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+    }
+    if(status) status.textContent='Failed.';
+    alert(e.message);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Send Positive Message';
+  }
+}
+
+async function loadActivePopups(){
+  const el=document.getElementById('popup-active-list');
+  if(!el||!popupTabUnlocked||!popupUnlockToken) return;
+  try{
+    const popups=await api('GET','/admin/popups/active',null,popupHeaders());
+    el.innerHTML=popups.length?popups.map(p=>`
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(p.title||'Positive Message')}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px;">To ${esc(p.recipient_name||p.recipient_id)} · ${p.status} · ${new Date(p.created_at).toLocaleString()}</div>
+        </div>
+        <button class="btn-admin btn-sm btn-danger" onclick="stopPopupMessage('${p.id}')">Stop Message</button>
+      </div>`).join(''):'<p style="font-size:13px;color:var(--text3);">No active pop-ups right now.</p>';
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+      return;
+    }
+    el.innerHTML='<p style="font-size:13px;color:var(--red);">Failed to load active messages.</p>';
+  }
+}
+
+async function stopPopupMessage(id){
+  if(!confirm('Stop this message for the recipient?')) return;
+  try{
+    await api('POST',`/admin/popups/${id}/stop`,{},popupHeaders());
+    showToast('Message stopped.');
+    loadActivePopups();
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+      return;
+    }
+    alert(e.message);
+  }
+}
+
+async function pollIncomingPopup(){
+  if(!authToken) return;
+  try{
+    const data=await api('GET','/popups/pending');
+    const popup=data.popup;
+    if(!popup){
+      hideIncomingPopup();
+      return;
+    }
+    if(activeIncomingPopupId!==popup.id){
+      showIncomingPopup(popup);
+    }
+  }catch(e){}
+}
+
+function hideIncomingPopup(){
+  activeIncomingPopupId=null;
+  const overlay=document.getElementById('incoming-popup-overlay');
+  const wrap=document.getElementById('incoming-popup-media-wrap');
+  const audio=document.getElementById('incoming-popup-audio');
+  const audioStatus=document.getElementById('incoming-popup-audio-status');
+  if(overlay) overlay.style.display='none';
+  if(wrap){wrap.style.display='none';wrap.innerHTML='';}
+  if(audio){
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  if(audioStatus) audioStatus.style.display='none';
+}
+
+async function showIncomingPopup(popup){
+  activeIncomingPopupId=popup.id;
+  const overlay=document.getElementById('incoming-popup-overlay');
+  const title=document.getElementById('incoming-popup-title');
+  const message=document.getElementById('incoming-popup-message');
+  const wrap=document.getElementById('incoming-popup-media-wrap');
+  const audio=document.getElementById('incoming-popup-audio');
+  const audioStatus=document.getElementById('incoming-popup-audio-status');
+  title.textContent=popup.title||'Positive Message';
+  message.textContent=popup.message||'';
+  wrap.innerHTML='';
+  if(popup.media_url){
+    if((popup.media_type||'').startsWith('video/')){
+      wrap.innerHTML=`<video src="${popup.media_url}" autoplay loop playsinline controls style="width:100%;max-height:68vh;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#000;"></video>`;
+    }else{
+      wrap.innerHTML=`<img src="${popup.media_url}" alt="Positive message media" style="width:100%;max-height:68vh;object-fit:contain;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#090811;">`;
+    }
+    wrap.style.display='block';
+  }else{
+    wrap.style.display='none';
+  }
+  overlay.style.display='flex';
+  if(popup.audio_url){
+    audio.src=popup.audio_url;
+    audio.volume=1;
+    try{
+      await audio.play();
+      audioStatus.style.display='none';
+    }catch(e){
+      audioStatus.style.display='inline-flex';
+      overlay.onclick=()=>audio.play().then(()=>{audioStatus.style.display='none';}).catch(()=>{});
+    }
+  }else{
+    audioStatus.style.display='none';
   }
 }
 

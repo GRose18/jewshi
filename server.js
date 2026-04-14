@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const { google } = require('googleapis');
@@ -15,6 +16,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'jewshi-secret-change-in-production
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 const POPUP_TAB_PASSWORD_KEY = 'popup_tab_password_hash';
 const DEFAULT_POPUP_TAB_PASSWORD = process.env.POPUP_TAB_PASSWORD || 'BryceB0mb!';
+const POPUP_UNLOCK_TTL_MS = 1000 * 60 * 45;
+const popupAdminUnlocks = new Map();
+const UPLOAD_ROOT = path.join(__dirname, 'public', 'uploads', 'popups');
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -111,9 +115,24 @@ async function initDB() {
       profit INTEGER DEFAULT 0,
       timestamp INTEGER NOT NULL
     )
+    ;CREATE TABLE IF NOT EXISTS popups (
+      id TEXT PRIMARY KEY,
+      sender_id TEXT NOT NULL,
+      recipient_id TEXT NOT NULL,
+      title TEXT DEFAULT '',
+      message TEXT DEFAULT '',
+      media_type TEXT DEFAULT NULL,
+      media_url TEXT DEFAULT NULL,
+      audio_url TEXT DEFAULT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      shown_at INTEGER DEFAULT NULL,
+      stopped_at INTEGER DEFAULT NULL
+    )
 
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
+  fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
   await ensureProtectedSettings();
   await seedIfEmpty();
 }
@@ -189,6 +208,53 @@ async function sendViaAppsScript(type, payload) {
 
 function generateId(p='') { return p+Date.now()+Math.random().toString(36).slice(2,6); }
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
+function issuePopupUnlockToken(userId){
+  const token = crypto.randomBytes(24).toString('hex');
+  popupAdminUnlocks.set(userId, { token, expiresAt: Date.now()+POPUP_UNLOCK_TTL_MS });
+  return token;
+}
+function requirePopupAdminUnlocked(req,res,next){
+  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can use Pop-up controls'});
+  const headerToken = req.headers['x-popup-unlock'];
+  const session = popupAdminUnlocks.get(req.user.id);
+  if(!headerToken || !session || session.token!==headerToken || session.expiresAt<Date.now()){
+    popupAdminUnlocks.delete(req.user.id);
+    return res.status(401).json({error:'Pop-up tab is locked. Unlock it again.'});
+  }
+  next();
+}
+function getFileExtension(name='', mime=''){
+  const ext = path.extname(name || '').toLowerCase();
+  if(ext && ext.length <= 8) return ext;
+  const map = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+    'audio/mpeg': '.mp3',
+    'audio/mp3': '.mp3',
+    'audio/wav': '.wav',
+  };
+  return map[mime] || '';
+}
+function saveDataUrlToFile(dataUrl, originalName, allowedKinds){
+  if(!dataUrl) return null;
+  const match = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+  if(!match) throw new Error('Invalid file upload');
+  const mime = match[1].toLowerCase();
+  const kind = mime.split('/')[0];
+  if(!allowedKinds.includes(kind) && !allowedKinds.includes(mime)) throw new Error('Unsupported file type');
+  const buffer = Buffer.from(match[2], 'base64');
+  const maxBytes = kind==='audio' ? 6 * 1024 * 1024 : 18 * 1024 * 1024;
+  if(buffer.length > maxBytes) throw new Error(`${kind==='audio'?'Audio':'Media'} file is too large`);
+  const ext = getFileExtension(originalName, mime);
+  const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+  fs.writeFileSync(path.join(UPLOAD_ROOT, filename), buffer);
+  return `/uploads/popups/${filename}`;
+}
 function shuffle(arr){
   const copy=[...arr];
   for(let i=copy.length-1;i>0;i--){
@@ -412,7 +478,8 @@ app.post('/api/admin/popup-auth', authMiddleware, adminOnly, async(req,res)=>{
     if(!row?.value) return res.status(500).json({error:'Pop-up tab password is not configured'});
     const ok=await bcrypt.compare(password,row.value);
     if(!ok) return res.status(401).json({error:'Incorrect Pop-up tab password'});
-    res.json({success:true});
+    const unlockToken = issuePopupUnlockToken(req.user.id);
+    res.json({success:true,unlockToken,expiresInMs:POPUP_UNLOCK_TTL_MS});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -429,6 +496,61 @@ app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=
     const nextHash=await bcrypt.hash(newPassword,10);
     await db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)',[POPUP_TAB_PASSWORD_KEY,nextHash]);
     res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
+  try{
+    const {recipientId,title,message,mediaDataUrl,mediaName,audioDataUrl,audioName}=req.body;
+    if(!recipientId) return res.status(400).json({error:'Recipient required'});
+    const recipient = await db.get('SELECT id,name FROM users WHERE id=?',[recipientId]);
+    if(!recipient) return res.status(404).json({error:'Recipient not found'});
+    if(recipient.id==='GROSE') return res.status(400).json({error:'Pick another recipient'});
+    if(!title?.trim() && !message?.trim() && !mediaDataUrl && !audioDataUrl) return res.status(400).json({error:'Add a title, message, media, or audio first'});
+    const mediaUrl = mediaDataUrl ? saveDataUrlToFile(mediaDataUrl, mediaName, ['image','video']) : null;
+    const audioUrl = audioDataUrl ? saveDataUrlToFile(audioDataUrl, audioName, ['audio','audio/mpeg','audio/mp3']) : null;
+    const mediaType = mediaDataUrl ? String(mediaDataUrl).slice(5, String(mediaDataUrl).indexOf(';')) : null;
+    await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE recipient_id=? AND status IN ('pending','active')",[Date.now(),recipientId]);
+    const id = generateId('popup');
+    await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,media_type,media_url,audio_url,status,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [id,req.user.id,recipientId,title?.trim()||'',message?.trim()||'',mediaType,mediaUrl,audioUrl,'pending',Date.now()]);
+    res.json(await db.get('SELECT * FROM popups WHERE id=?',[id]));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/admin/popups/active', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
+  try{
+    const popups = await db.all(`SELECT p.*,u.name as recipient_name
+      FROM popups p JOIN users u ON p.recipient_id=u.id
+      WHERE p.status IN ('pending','active')
+      ORDER BY p.created_at DESC LIMIT 20`);
+    res.json(popups);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/popups/:id/stop', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
+  try{
+    const popup = await db.get('SELECT * FROM popups WHERE id=?',[req.params.id]);
+    if(!popup) return res.status(404).json({error:'Pop-up not found'});
+    if(!['pending','active'].includes(popup.status)) return res.json({success:true});
+    await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE id=?",[Date.now(),req.params.id]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/popups/pending', authMiddleware, async(req,res)=>{
+  try{
+    const popup = await db.get(`SELECT * FROM popups
+      WHERE recipient_id=? AND status IN ('pending','active')
+      ORDER BY created_at DESC LIMIT 1`,[req.user.id]);
+    if(!popup) return res.json({popup:null});
+    if(popup.status==='pending'){
+      await db.run("UPDATE popups SET status='active', shown_at=? WHERE id=?",[Date.now(),popup.id]);
+      popup.status='active';
+      popup.shown_at=Date.now();
+    }
+    res.json({popup});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
