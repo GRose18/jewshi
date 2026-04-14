@@ -711,6 +711,10 @@ app.get('/api/me', authMiddleware, async(req,res)=>{
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
   res.json(await db.all("SELECT id,name,email,role,credits,grade,on_email_list,popup_access FROM users WHERE id!=?",[req.user.id]));
 });
+app.get('/api/popup/users', authMiddleware, async(req,res)=>{
+  if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
+  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND role!='admin' ORDER BY name ASC",[req.user.id]));
+});
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {amount}=req.body;

@@ -1671,10 +1671,9 @@ async function populatePopupRecipientSelect(){
   const list=document.getElementById('popup-recipient-list');
   if(!list) return;
   try{
-    const users=await api('GET','/users');
-    const students=users.filter(u=>u.role!=='admin');
-    list.innerHTML=students.length
-      ?students.map(u=>`
+    const users=await api('GET','/popup/users');
+    list.innerHTML=users.length
+      ?users.map(u=>`
         <label style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer;color:var(--text2);font-size:13px;">
           <input type="checkbox" class="popup-recipient-checkbox" value="${esc(u.id)}" style="width:16px;height:16px;accent-color:var(--accent);">
           <span>${esc(u.name||u.id)} <span style="color:var(--text3);">(${esc(u.id)})</span></span>
