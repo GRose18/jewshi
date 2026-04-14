@@ -527,7 +527,7 @@ app.post('/api/admin/popups', authMiddleware, requirePopupAdminUnlocked, async(r
     for(const targetId of targets){
       const recipient = await db.get('SELECT id,name,role FROM users WHERE id=?',[targetId]);
       if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
-      if(recipient.role==='admin') return res.status(400).json({error:'Admins cannot be targeted by Pop-up messages'});
+      if(recipient.id==='GROSE') return res.status(400).json({error:'GROSE cannot be targeted by Pop-up messages'});
       recipients.push(recipient);
     }
     const created = [];
@@ -713,7 +713,7 @@ app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
 });
 app.get('/api/popup/users', authMiddleware, async(req,res)=>{
   if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
-  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND role!='admin' ORDER BY name ASC",[req.user.id]));
+  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND id!='GROSE' ORDER BY name ASC",[req.user.id]));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
