@@ -98,6 +98,13 @@ async function initDB() {
       credits_won INTEGER NOT NULL,
       timestamp INTEGER NOT NULL
     )
+    ;CREATE TABLE IF NOT EXISTS crash_rounds (
+      id TEXT PRIMARY KEY,
+      state TEXT NOT NULL,
+      crash_point REAL NOT NULL,
+      started_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
     ;CREATE TABLE IF NOT EXISTS blackjack_sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -849,6 +856,116 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
 });
 
 
+// ── CRASH GAME ──
+let crashRound=null;
+let crashMultiplier=1.00;
+let crashPhase='waiting';
+let crashFlyingInterval=null;
+let crashStartTime=null;
+let crashHistory=[];
+
+function generateCrashPoint(){
+  const r=Math.random();
+  if(r<0.01) return 1.00;
+  return Math.max(1.00,parseFloat((0.99/(1-r)).toFixed(2)));
+}
+
+async function startCrashLoop(){
+  async function runRound(){
+    crashPhase='betting';
+    crashMultiplier=1.00;
+    const crashPoint=generateCrashPoint();
+    const roundId=generateId('cr');
+    crashRound={id:roundId,crashPoint,bets:{},cashedOut:{}};
+    await db.run('INSERT INTO crash_rounds (id,state,crash_point,started_at,created_at) VALUES (?,?,?,?,?)',
+      [roundId,'betting',crashPoint,null,Date.now()]);
+    await new Promise(r=>setTimeout(r,10000));
+    if(crashPhase!=='betting'){runRound();return;}
+    crashPhase='flying';
+    crashStartTime=Date.now();
+    await db.run('UPDATE crash_rounds SET state=?,started_at=? WHERE id=?',['flying',crashStartTime,roundId]);
+    await new Promise(resolve=>{
+      crashFlyingInterval=setInterval(async()=>{
+        const elapsed=(Date.now()-crashStartTime)/1000;
+        crashMultiplier=parseFloat(Math.pow(Math.E,0.09*elapsed).toFixed(2));
+        if(crashMultiplier>=crashPoint){
+          clearInterval(crashFlyingInterval);
+          crashMultiplier=parseFloat(crashPoint.toFixed(2));
+          crashPhase='crashed';
+          await db.run('UPDATE crash_rounds SET state=? WHERE id=?',['crashed',roundId]);
+          for(const [userId,bet] of Object.entries(crashRound.bets)){
+            if(!crashRound.cashedOut[userId]){
+              await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+                [generateId('cb'),userId,'crash',bet,'loss',0,-bet,Date.now()]);
+              await recordTx(userId,-bet,'casino_crash',null,`Crash: lost at ${crashMultiplier}x`);
+            }
+          }
+          crashHistory.unshift({crashPoint:crashMultiplier,id:roundId});
+          if(crashHistory.length>20)crashHistory.pop();
+          resolve();
+        }
+      },100);
+    });
+    await new Promise(r=>setTimeout(r,5000));
+    runRound();
+  }
+  runRound();
+}
+
+app.get('/api/casino/crash/state', authMiddleware, async(req,res)=>{
+  try{
+    const myBet=crashRound?.bets[req.user.id]||0;
+    const myCashout=crashRound?.cashedOut[req.user.id]||null;
+    const players=Object.entries(crashRound?.bets||{}).map(([uid,bet])=>({
+      userId:uid,bet,
+      cashedOut:crashRound.cashedOut[uid]||null
+    }));
+    res.json({
+      phase:crashPhase,
+      multiplier:crashMultiplier,
+      roundId:crashRound?.id||null,
+      myBet,myCashout,players,
+      history:crashHistory.slice(0,10),
+      countdown:crashPhase==='betting'?Math.max(0,10000-(Date.now()-(crashRound?Date.now():Date.now())))||10:0
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/crash/bet', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(crashPhase!=='betting') return res.status(400).json({error:'Betting is closed'});
+    if(crashRound.bets[req.user.id]) return res.status(400).json({error:'Already bet this round'});
+    const {betAmount}=req.body;
+    const bet=Math.floor(Number(betAmount));
+    if(!bet||bet<1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits)<bet) return res.status(400).json({error:'Insufficient credits'});
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[bet,req.user.id]);
+    crashRound.bets[req.user.id]=bet;
+    const updated=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({success:true,newBalance:Math.floor(updated.credits)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/crash/cashout', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(crashPhase!=='flying') return res.status(400).json({error:'Not in flight'});
+    if(!crashRound.bets[req.user.id]) return res.status(400).json({error:'No active bet'});
+    if(crashRound.cashedOut[req.user.id]) return res.status(400).json({error:'Already cashed out'});
+    const bet=crashRound.bets[req.user.id];
+    const mult=crashMultiplier;
+    const payout=Math.floor(bet*mult);
+    const profit=payout-bet;
+    crashRound.cashedOut[req.user.id]={multiplier:mult,payout};
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,req.user.id]);
+    await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [generateId('cb'),req.user.id,'crash',bet,'win',payout,profit,Date.now()]);
+    await recordTx(req.user.id,profit,'casino_crash',null,`Crash: cashed out at ${mult}x`);
+    const updated=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({success:true,multiplier:mult,payout,profit,newBalance:Math.floor(updated.credits)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 // ── BLACKJACK ──
 const BJ_SUITS=['♠','♣','♥','♦'];
 const BJ_VALUES=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
@@ -1209,5 +1326,8 @@ app.post('/api/spin', authMiddleware, async(req,res)=>{
 });
 
 initDB().then(()=>{
-  app.listen(PORT,()=>{console.log(`\n🚀 Jewshi Markets running at http://localhost:${PORT}\n`);});
+  app.listen(PORT,()=>{
+    console.log(`\n🚀 Jewshi Markets running at http://localhost:${PORT}\n`);
+    startCrashLoop();
+  });
 }).catch(err=>{console.error('DB init failed:',err);process.exit(1);});

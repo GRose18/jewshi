@@ -404,12 +404,84 @@
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Roll over or under your target</div>
             <span class="status-tag status-open">Individual</span>
           </div>
+          <div class="market-card" onclick="openCrash()" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">🚀</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Credit Crash</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Cash out before it crashes</div>
+            <span class="status-tag" style="background:rgba(29,158,117,0.12);color:#5DCAA5;border:1px solid rgba(29,158,117,0.3);">Multiplayer</span>
+          </div>
           <div class="market-card" onclick="openBlackjack()" style="text-align:center;padding:24px 18px;">
             <div style="font-size:36px;margin-bottom:10px;">🃏</div>
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Blackjack</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Beat the dealer to 21</div>
             <span class="status-tag status-open">Individual</span>
           </div>
+      </div>
+
+      <!-- CRASH GAME -->
+      <div id="casino-crash" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closeCrash()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Credit Crash</h2>
+          <div id="crash-phase-badge" style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-dim);">Waiting</div>
+        </div>
+        <div style="max-width:680px;margin:0 auto;">
+
+          <!-- STATS ROW -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="crash-balance">⬡ 0</div></div>
+            <div class="stat-card"><div class="stat-label">My Bet</div><div class="stat-value" style="color:var(--accent);font-size:20px;" id="crash-my-bet">—</div></div>
+            <div class="stat-card"><div class="stat-label">Profit</div><div class="stat-value" style="font-size:20px;" id="crash-my-profit">—</div></div>
+          </div>
+
+          <!-- GRAPH -->
+          <div style="background:#111118;border:1px solid #534AB7;border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;position:relative;overflow:hidden;">
+            <canvas id="crash-canvas" width="640" height="260" style="width:100%;height:260px;display:block;"></canvas>
+            <div id="crash-multiplier-display" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);font-size:64px;font-weight:700;letter-spacing:-0.03em;color:var(--accent);font-variant-numeric:tabular-nums;pointer-events:none;transition:color 0.3s;">1.00x</div>
+            <div id="crash-status-msg" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);font-size:13px;color:rgba(196,185,255,0.5);white-space:nowrap;"></div>
+          </div>
+
+          <!-- HISTORY PILLS -->
+          <div id="crash-history-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+          <!-- BET + CASHOUT -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div>
+              <div id="crash-bet-area">
+                <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;">Bet Amount</div>
+                <div style="display:flex;gap:6px;margin-bottom:8px;">
+                  <input type="number" id="crash-bet-input" placeholder="0" min="1" step="1" style="flex:1;padding:10px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:16px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;">
+                  <button onclick="setCrashBet(10)" class="quick-btn">10</button>
+                  <button onclick="setCrashBet(25)" class="quick-btn">25</button>
+                  <button onclick="setCrashBet(50)" class="quick-btn">50</button>
+                  <button onclick="setCrashBet(100)" class="quick-btn">100</button>
+                </div>
+                <button id="crash-bet-btn" onclick="placeCrashBet()" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Place Bet</button>
+              </div>
+              <div id="crash-bet-placed" style="display:none;background:var(--accent-bg);border:1px solid var(--accent-dim);border-radius:var(--radius);padding:14px;text-align:center;">
+                <div style="font-size:12px;color:var(--text3);margin-bottom:4px;">Bet placed</div>
+                <div id="crash-bet-placed-amt" style="font-size:20px;font-weight:700;color:var(--accent);">⬡ 0</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:stretch;">
+              <button id="crash-cashout-btn" onclick="doCrashCashout()" disabled style="width:100%;padding:12px;background:rgba(0,208,132,0.15);border:2px solid rgba(0,208,132,0.3);color:var(--green);border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;opacity:0.4;transition:all 0.2s;">
+                <div>Cash Out</div>
+                <div id="crash-cashout-val" style="font-size:20px;font-weight:700;margin-top:4px;">—</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- PLAYERS LIST -->
+          <div class="panel" style="margin-bottom:16px;">
+            <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Players This Round</div>
+            <div id="crash-players-list" style="display:flex;flex-direction:column;gap:6px;min-height:40px;">
+              <p style="font-size:13px;color:var(--text3);">No bets yet this round.</p>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       <!-- BLACKJACK GAME -->
@@ -1462,7 +1534,7 @@ async function renderAdminTab(){
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
       <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${cs.total_bets||0}</div></div>
       <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value" style="color:var(--accent)">⬡ ${(cs.total_wagered||0).toLocaleString()}</div></div>
-      <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(cs.house_profit||0).toLocaleString()}</div></div>
+      <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${-(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(-(cs.house_profit||0)).toLocaleString()}</div></div>
     </div>`;
   document.getElementById('admin-casino-list').innerHTML=!casinoData.bets?.length?'<p style="color:var(--text3);font-size:13px;margin-top:12px;">No casino bets yet.</p>'
     :`<table class="portfolio-table" style="margin-top:14px;"><thead><tr><th>User</th><th>Game</th><th>Bet</th><th>Outcome</th><th>Profit</th><th>Time</th></tr></thead><tbody>${casinoData.bets.slice(0,50).map(b=>`<tr>
@@ -1800,6 +1872,234 @@ async function doWheelSpin(){
       showToast(e.message);
     }
   }
+}
+
+// ── CRASH GAME ──
+let crashPollInterval=null;
+let crashCurrentPhase=null;
+let crashGraphPoints=[];
+let crashCanvasCtx=null;
+let crashAnimFrame=null;
+let crashMyBet=0;
+let crashMyCashout=null;
+let crashLastRoundId=null;
+
+function openCrash(){
+  document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-crash').style.display='block';
+  document.getElementById('crash-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  crashGraphPoints=[];
+  crashMyBet=0;
+  crashMyCashout=null;
+  const canvas=document.getElementById('crash-canvas');
+  crashCanvasCtx=canvas.getContext('2d');
+  startCrashPoll();
+}
+
+function closeCrash(){
+  stopCrashPoll();
+  document.getElementById('casino-crash').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function startCrashPoll(){
+  stopCrashPoll();
+  pollCrash();
+  crashPollInterval=setInterval(pollCrash,500);
+}
+
+function stopCrashPoll(){
+  if(crashPollInterval){clearInterval(crashPollInterval);crashPollInterval=null;}
+}
+
+async function pollCrash(){
+  try{
+    const data=await api('GET','/casino/crash/state');
+    updateCrashUI(data);
+  }catch(e){}
+}
+
+function updateCrashUI(data){
+  const {phase,multiplier,roundId,myBet,myCashout,players,history}=data;
+
+  if(roundId!==crashLastRoundId){
+    crashGraphPoints=[];
+    crashLastRoundId=roundId;
+    if(phase==='betting'||phase==='waiting'){
+      crashMyBet=0;
+      crashMyCashout=null;
+      document.getElementById('crash-bet-area').style.display='block';
+      document.getElementById('crash-bet-placed').style.display='none';
+      document.getElementById('crash-cashout-btn').disabled=true;
+      document.getElementById('crash-cashout-btn').style.opacity='0.4';
+      document.getElementById('crash-my-bet').textContent='—';
+      document.getElementById('crash-my-profit').textContent='—';
+      document.getElementById('crash-my-profit').style.color='var(--text)';
+    }
+  }
+
+  crashMyBet=myBet||crashMyBet;
+  crashMyCashout=myCashout||crashMyCashout;
+
+  // phase badge
+  const badge=document.getElementById('crash-phase-badge');
+  const multEl=document.getElementById('crash-multiplier-display');
+  const statusEl=document.getElementById('crash-status-msg');
+
+  if(phase==='betting'){
+    badge.textContent='Betting Open';badge.style.background='var(--green-bg)';badge.style.color='var(--green)';badge.style.borderColor='var(--green-dim)';
+    multEl.textContent='1.00x';multEl.style.color='var(--accent)';
+    statusEl.textContent='Place your bets — round starting soon';
+    document.getElementById('crash-bet-btn').disabled=!!myBet;
+    document.getElementById('crash-bet-btn').textContent=myBet?'Bet placed':'Place Bet';
+    if(myBet){
+      document.getElementById('crash-bet-area').style.display='none';
+      document.getElementById('crash-bet-placed').style.display='block';
+      document.getElementById('crash-bet-placed-amt').textContent='⬡ '+myBet.toLocaleString();
+    }
+  } else if(phase==='flying'){
+    badge.textContent='Flying 🚀';badge.style.background='var(--accent-bg)';badge.style.color='var(--accent)';badge.style.borderColor='var(--accent-dim)';
+    multEl.textContent=multiplier.toFixed(2)+'x';
+    multEl.style.color=multiplier<2?'var(--accent)':multiplier<5?'var(--green)':multiplier<10?'var(--gold)':'var(--red)';
+    statusEl.textContent='';
+    crashGraphPoints.push(multiplier);
+    if(myBet&&!myCashout){
+      document.getElementById('crash-cashout-btn').disabled=false;
+      document.getElementById('crash-cashout-btn').style.opacity='1';
+      const currentVal=Math.floor(myBet*multiplier);
+      document.getElementById('crash-cashout-val').textContent='⬡ '+currentVal.toLocaleString();
+      document.getElementById('crash-my-bet').textContent='⬡ '+myBet.toLocaleString();
+    }
+    if(myCashout){
+      document.getElementById('crash-cashout-btn').disabled=true;
+      document.getElementById('crash-cashout-btn').style.opacity='0.4';
+      document.getElementById('crash-my-profit').textContent='+⬡ '+(myCashout.payout-myBet).toLocaleString();
+      document.getElementById('crash-my-profit').style.color='var(--green)';
+    }
+  } else if(phase==='crashed'){
+    badge.textContent='💥 Crashed';badge.style.background='var(--red-bg)';badge.style.color='var(--red)';badge.style.borderColor='var(--red-dim)';
+    multEl.textContent=multiplier.toFixed(2)+'x';
+    multEl.style.color='var(--red)';
+    statusEl.textContent='Crashed at '+multiplier.toFixed(2)+'x — next round starting soon';
+    document.getElementById('crash-cashout-btn').disabled=true;
+    document.getElementById('crash-cashout-btn').style.opacity='0.4';
+    if(myBet&&!myCashout){
+      document.getElementById('crash-my-profit').textContent='-⬡ '+myBet.toLocaleString();
+      document.getElementById('crash-my-profit').style.color='var(--red)';
+    }
+  }
+
+  // graph
+  drawCrashGraph(phase,multiplier);
+
+  // players
+  const pl=document.getElementById('crash-players-list');
+  if(!players||!players.length){
+    pl.innerHTML='<p style="font-size:13px;color:var(--text3);">No bets yet this round.</p>';
+  } else {
+    pl.innerHTML=players.map(p=>{
+      const isMe=p.userId===currentUser?.id;
+      const co=p.cashedOut;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${co?'var(--green-dim)':'var(--border)'};">
+        <span style="font-size:13px;color:${isMe?'var(--accent)':'var(--text2)'};">${isMe?'You':'Player'}</span>
+        <span style="font-size:13px;color:var(--text2);">⬡ ${p.bet.toLocaleString()}</span>
+        ${co?`<span style="font-size:13px;font-weight:600;color:var(--green);">Cashed @ ${co.multiplier}x +⬡${(co.payout-p.bet).toLocaleString()}</span>`:`<span style="font-size:12px;color:var(--text3);">riding...</span>`}
+      </div>`;
+    }).join('');
+  }
+
+  // history pills
+  if(history&&history.length){
+    document.getElementById('crash-history-row').innerHTML=history.map(h=>{
+      const val=parseFloat(h.crashPoint);
+      const col=val<2?'var(--red)':val<5?'var(--gold)':'var(--green)';
+      return `<span style="padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:${col};">${val.toFixed(2)}x</span>`;
+    }).join('');
+  }
+}
+
+function drawCrashGraph(phase,multiplier){
+  const canvas=document.getElementById('crash-canvas');
+  if(!canvas||!crashCanvasCtx) return;
+  const ctx=crashCanvasCtx;
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle='rgba(124,106,247,0.1)';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=H-i*(H/4);
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    ctx.fillStyle='rgba(196,185,255,0.3)';ctx.font='11px Inter,sans-serif';
+    ctx.fillText((i+1)+'x',4,y-4);
+  }
+
+  if(!crashGraphPoints.length) return;
+
+  const pts=crashGraphPoints;
+  const maxMult=Math.max(...pts,2);
+  const crashed=phase==='crashed';
+
+  // line color
+  const lineCol=crashed?'#ff4560':multiplier<2?'#7c6af7':multiplier<5?'#00d084':multiplier<10?'#f0c040':'#ff8c42';
+
+  ctx.beginPath();
+  pts.forEach((m,i)=>{
+    const x=(i/(Math.max(pts.length-1,1)))*W;
+    const y=H-((m-1)/(maxMult-1||1))*(H*0.85)-H*0.05;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=lineCol;ctx.lineWidth=3;ctx.lineJoin='round';ctx.stroke();
+
+  // fill under line
+  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();
+  ctx.fillStyle=crashed?'rgba(255,69,96,0.08)':'rgba(124,106,247,0.08)';ctx.fill();
+
+  // dot at end
+  if(pts.length){
+    const lastX=W;
+    const lastY=H-((pts[pts.length-1]-1)/(maxMult-1||1))*(H*0.85)-H*0.05;
+    ctx.beginPath();ctx.arc(lastX,lastY,5,0,Math.PI*2);
+    ctx.fillStyle=lineCol;ctx.fill();
+  }
+}
+
+function setCrashBet(amount){
+  document.getElementById('crash-bet-input').value=Math.floor(amount);
+}
+
+async function placeCrashBet(){
+  const bet=Math.floor(Number(document.getElementById('crash-bet-input').value));
+  if(!bet||bet<1){showToast('Enter a bet amount.');return;}
+  if(bet>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  try{
+    const data=await api('POST','/casino/crash/bet',{betAmount:bet});
+    crashMyBet=bet;
+    currentUser.credits=data.newBalance;
+    document.getElementById('crash-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+    updateTopbar();
+    document.getElementById('crash-bet-area').style.display='none';
+    document.getElementById('crash-bet-placed').style.display='block';
+    document.getElementById('crash-bet-placed-amt').textContent='⬡ '+bet.toLocaleString();
+    document.getElementById('crash-my-bet').textContent='⬡ '+bet.toLocaleString();
+    showToast('Bet placed — good luck!');
+  }catch(e){showToast(e.message);}
+}
+
+async function doCrashCashout(){
+  try{
+    const data=await api('POST','/casino/crash/cashout');
+    crashMyCashout={multiplier:data.multiplier,payout:data.payout};
+    currentUser.credits=data.newBalance;
+    document.getElementById('crash-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+    updateTopbar();
+    document.getElementById('crash-cashout-btn').disabled=true;
+    document.getElementById('crash-cashout-btn').style.opacity='0.4';
+    document.getElementById('crash-my-profit').textContent='+⬡ '+data.profit.toLocaleString();
+    document.getElementById('crash-my-profit').style.color='var(--green)';
+    showToast(`Cashed out at ${data.multiplier}x — +⬡ ${data.profit}`);
+    launchSpinConfetti();
+  }catch(e){showToast(e.message);}
 }
 
 // ── BLACKJACK ──
