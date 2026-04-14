@@ -121,6 +121,7 @@ async function initDB() {
       recipient_id TEXT NOT NULL,
       title TEXT DEFAULT '',
       message TEXT DEFAULT '',
+      alert_text TEXT DEFAULT '',
       media_type TEXT DEFAULT NULL,
       media_url TEXT DEFAULT NULL,
       audio_url TEXT DEFAULT NULL,
@@ -136,6 +137,7 @@ async function initDB() {
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
   await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
+  await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
   fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
   await ensureProtectedSettings();
   await seedIfEmpty();
@@ -505,7 +507,7 @@ app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=
 
 app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
   try{
-    const {recipientId,recipientIds,title,message,mediaDataUrl,mediaName,audioDataUrl,audioName,raveEnabled,alertEnabled}=req.body;
+    const {recipientId,recipientIds,title,message,alertText,mediaDataUrl,mediaName,audioDataUrl,audioName,raveEnabled,alertEnabled}=req.body;
     const targets = [...new Set(
       (Array.isArray(recipientIds) ? recipientIds : [recipientId]).filter(Boolean)
     )];
@@ -525,9 +527,9 @@ app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlock
     for(const recipient of recipients){
       await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE recipient_id=? AND status IN ('pending','active')",[Date.now(),recipient.id]);
       const id = generateId('popup');
-      await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,media_type,media_url,audio_url,rave_enabled,alert_enabled,status,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id,req.user.id,recipient.id,title?.trim()||'',message?.trim()||'',mediaType,mediaUrl,audioUrl,raveEnabled?1:0,alertEnabled?1:0,'pending',Date.now()]);
+      await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,alert_text,media_type,media_url,audio_url,rave_enabled,alert_enabled,status,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id,req.user.id,recipient.id,title?.trim()||'',message?.trim()||'',alertText?.trim()||'',mediaType,mediaUrl,audioUrl,raveEnabled?1:0,alertEnabled?1:0,'pending',Date.now()]);
       created.push(await db.get('SELECT * FROM popups WHERE id=?',[id]));
     }
     res.json({count:created.length,popups:created});
