@@ -465,8 +465,7 @@ app.get('/api/users/:id/profile', authMiddleware, async(req,res)=>{
     if(!user) return res.status(404).json({error:'Profile not found'});
     const betsWon=(await db.get("SELECT COUNT(*) as c FROM bets WHERE user_id=? AND status='won'",[req.params.id])).c;
     const betsTotal=(await db.get("SELECT COUNT(*) as c FROM bets WHERE user_id=?",[req.params.id])).c;
-    const reposts=await db.all(`SELECT r.*,p.caption as original_caption,u.name as original_author FROM post_reposts r JOIN posts p ON r.post_id=p.id JOIN users u ON p.user_id=u.id WHERE r.user_id=? ORDER BY r.timestamp DESC`,[req.params.id]);
-    res.json({...user,betsWon,betsTotal,reposts});
+    res.json({...user,betsWon,betsTotal});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -675,11 +674,9 @@ app.get('/api/messages/users', authMiddleware, async(req,res)=>{
 // ── POSTS / FEED ──
 app.get('/api/feed', authMiddleware, async(req,res)=>{
   try{
-    const [posts, reposts, allLikes, allReposts] = await Promise.all([
+    const [posts, allLikes] = await Promise.all([
       db.all(`SELECT p.*,u.name as author_name,u.role as author_role FROM posts p JOIN users u ON p.user_id=u.id ORDER BY p.timestamp DESC LIMIT 50`),
-      db.all(`SELECT r.*,u.name as reposter_name,p.caption as original_caption,pu.name as original_author FROM post_reposts r JOIN users u ON r.user_id=u.id JOIN posts p ON r.post_id=p.id JOIN users pu ON p.user_id=pu.id ORDER BY r.timestamp DESC LIMIT 50`),
       db.all(`SELECT post_id, COUNT(*) as c FROM post_likes GROUP BY post_id`),
-      db.all(`SELECT post_id, COUNT(*) as c FROM post_reposts GROUP BY post_id`),
     ]);
 
     const userLikes=new Set(
@@ -687,25 +684,14 @@ app.get('/api/feed', authMiddleware, async(req,res)=>{
     );
 
     const likeCounts=Object.fromEntries(allLikes.map(r=>[r.post_id,r.c]));
-    const repostCounts=Object.fromEntries(allReposts.map(r=>[r.post_id,r.c]));
 
-    const feed=[
-      ...posts.map(p=>({
-        ...p,
-        feed_type:'post',
-        feed_time:p.timestamp,
-        like_count:likeCounts[p.id]||0,
-        user_liked:userLikes.has(p.id),
-        repost_count:repostCounts[p.id]||0,
-      })),
-      ...reposts.map(r=>({
-        ...r,
-        feed_type:'repost',
-        feed_time:r.timestamp,
-        like_count:likeCounts[r.post_id]||0,
-        user_liked:userLikes.has(r.post_id),
-      })),
-    ].sort((a,b)=>b.feed_time-a.feed_time).slice(0,50);
+    const feed=posts.map(p=>({
+      ...p,
+      feed_type:'post',
+      feed_time:p.timestamp,
+      like_count:likeCounts[p.id]||0,
+      user_liked:userLikes.has(p.id),
+    }));
 
     res.json(feed);
   }catch(e){res.status(500).json({error:e.message});}
@@ -726,14 +712,9 @@ app.post('/api/posts', authMiddleware, adminOnly, async(req,res)=>{
 app.delete('/api/posts/:id', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const id=req.params.id;
-    const isRepost=await db.get('SELECT id FROM post_reposts WHERE id=?',[id]);
-    if(isRepost){
-      await db.run('DELETE FROM post_reposts WHERE id=?',[id]);
-    } else {
-      await db.run('DELETE FROM post_likes WHERE post_id=?',[id]);
-      await db.run('DELETE FROM post_reposts WHERE post_id=?',[id]);
-      await db.run('DELETE FROM posts WHERE id=?',[id]);
-    }
+    await db.run('DELETE FROM post_likes WHERE post_id=?',[id]);
+    await db.run('DELETE FROM post_reposts WHERE post_id=?',[id]);
+    await db.run('DELETE FROM posts WHERE id=?',[id]);
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -749,18 +730,6 @@ app.post('/api/posts/:id/like', authMiddleware, async(req,res)=>{
         [generateId('lk'),req.params.id,req.user.id,Date.now()]);
       res.json({liked:true});
     }
-  }catch(e){res.status(500).json({error:e.message});}
-});
-
-app.post('/api/posts/:id/repost', authMiddleware, async(req,res)=>{
-  try{
-    const {caption}=req.body;
-    const existing=await db.get('SELECT id FROM post_reposts WHERE post_id=? AND user_id=?',[req.params.id,req.user.id]);
-    if(existing) return res.status(409).json({error:'Already reposted'});
-    const id=generateId('rp');
-    await db.run('INSERT INTO post_reposts (id,post_id,user_id,caption,timestamp) VALUES (?,?,?,?,?)',
-      [id,req.params.id,req.user.id,caption||'',Date.now()]);
-    res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
