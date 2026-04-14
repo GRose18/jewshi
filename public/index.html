@@ -787,18 +787,27 @@ let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
 let liveInterval=null,countdownInterval=null,liveMarketsData=[];
 async function api(method,path,body){
-  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{})}};
+  const controller=new AbortController();
+  const timeoutId=setTimeout(()=>controller.abort(),8000);
+  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{})},signal:controller.signal};
   if(body) opts.body=JSON.stringify(body);
-  const res=await fetch(API+path,opts);
-  const raw=await res.text();
-  let data;
   try{
-    data=raw?JSON.parse(raw):{};
+    const res=await fetch(API+path,opts);
+    const raw=await res.text();
+    let data;
+    try{
+      data=raw?JSON.parse(raw):{};
+    }catch(e){
+      throw new Error(`Server returned non-JSON for ${path}. Restart the server and try again.`);
+    }
+    if(!res.ok) throw new Error(data.error||'Request failed');
+    return data;
   }catch(e){
-    throw new Error(`Server returned non-JSON for ${path}. Restart the server and try again.`);
+    if(e.name==='AbortError') throw new Error(`Request to ${path} timed out. Restart the server and try again.`);
+    throw e;
+  }finally{
+    clearTimeout(timeoutId);
   }
-  if(!res.ok) throw new Error(data.error||'Request failed');
-  return data;
 }
 
 function getYesPercent(m){const t=(m.yes_shares||0)+(m.no_shares||0);return t===0?50:Math.round((m.yes_shares/t)*100);}
@@ -2453,38 +2462,48 @@ async function dropPlinko(){
 function animatePlinkoDrop(data){
   return new Promise(resolve=>{
     const points=plinkoPathToPoints(data.path);
-    const segments=[];
-    for(let i=0;i<points.length-1;i++){
-      segments.push({from:points[i],to:points[i+1]});
-    }
-    if(!segments.length){
+    if(points.length<2){
       drawPlinkoBoard(null,data.slotIndex,[]);
       resolve();
       return;
     }
-    const totalDuration=2100;
-    const start=performance.now();
-    function ease(t){return 1-Math.pow(1-t,3);}
+    const totalSegments=points.length-1;
+    const framesPerSegment=16;
+    const totalFrames=totalSegments*framesPerSegment;
+    let frameIndex=0;
+    const trail=[];
+    function ease(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
     function frame(now){
-      const elapsed=Math.min(now-start,totalDuration);
-      const overall=elapsed/totalDuration;
-      const raw=Math.min(overall*segments.length, segments.length-1e-6);
-      const segIndex=Math.min(segments.length-1,Math.floor(raw));
-      const localT=ease(Math.max(0, Math.min(0.999999, raw-segIndex)));
-      const seg=segments[segIndex];
-      const x=seg.from.x+(seg.to.x-seg.from.x)*localT;
-      const y=seg.from.y+(seg.to.y-seg.from.y)*localT+Math.sin(localT*Math.PI)*7;
-      const traveled=Math.max(1,Math.floor(raw)+1);
-      drawPlinkoBoard({x,y}, elapsed>totalDuration-260?data.slotIndex:null, points.slice(0,traveled));
-      if(elapsed<totalDuration){
-        requestAnimationFrame(frame);
-      } else {
-        drawPlinkoBoard({x:points[points.length-1].x,y:points[points.length-1].y},data.slotIndex,points);
+      if(frameIndex>=totalFrames){
+        const finalBall={x:points[points.length-1].x,y:points[points.length-1].y};
+        drawPlinkoBoard(finalBall,data.slotIndex,trail);
         setTimeout(()=>{
-          drawPlinkoBoard(null,data.slotIndex,[]);
-          resolve();
-        },420);
+          drawPlinkoBoard(finalBall,data.slotIndex,trail);
+          setTimeout(()=>{
+            drawPlinkoBoard(null,data.slotIndex,[]);
+            resolve();
+          },650);
+        },180);
+        return;
       }
+      const overall=Math.min(frameIndex/Math.max(1,totalFrames),1);
+      const raw=overall*totalSegments;
+      const segIndex=Math.max(0,Math.min(totalSegments-1,Math.floor(raw)));
+      const localT=ease(raw-segIndex);
+      const from=points[segIndex];
+      const to=points[segIndex+1];
+      if(!from||!to){
+        frameIndex=totalFrames;
+        requestAnimationFrame(frame);
+        return;
+      }
+      const x=from.x+(to.x-from.x)*localT;
+      const y=from.y+(to.y-from.y)*localT+Math.sin(localT*Math.PI)*8;
+      trail.push({x,y});
+      if(trail.length>14) trail.shift();
+      drawPlinkoBoard({x,y}, overall>0.82?data.slotIndex:null, trail);
+      frameIndex++;
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   });
