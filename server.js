@@ -13,6 +13,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'jewshi-secret-change-in-production';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+const POPUP_TAB_PASSWORD_KEY = 'popup_tab_password_hash';
+const DEFAULT_POPUP_TAB_PASSWORD = process.env.POPUP_TAB_PASSWORD || 'BryceB0mb!';
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -112,7 +114,16 @@ async function initDB() {
 
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
+  await ensureProtectedSettings();
   await seedIfEmpty();
+}
+
+async function ensureProtectedSettings() {
+  const popupPassword = await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);
+  if (!popupPassword?.value) {
+    const hash = await bcrypt.hash(DEFAULT_POPUP_TAB_PASSWORD, 10);
+    await db.run('INSERT INTO settings (key,value) VALUES (?,?)',[POPUP_TAB_PASSWORD_KEY, hash]);
+  }
 }
 
 async function seedIfEmpty() {
@@ -389,6 +400,35 @@ app.post('/api/admin/access-password', authMiddleware, adminOnly, async(req,res)
     const emails=emailUsers.map(u=>({email:u.email,name:u.name}));
     const sent=await sendViaAppsScript('access_password_changed',{emails,newPassword:password,siteUrl:CLIENT_URL});
     res.json({success:true,emailsSent:sent});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/popup-auth', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can unlock the Pop-up tab'});
+    const {password}=req.body;
+    if(!password) return res.status(400).json({error:'Password required'});
+    const row=await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);
+    if(!row?.value) return res.status(500).json({error:'Pop-up tab password is not configured'});
+    const ok=await bcrypt.compare(password,row.value);
+    if(!ok) return res.status(401).json({error:'Incorrect Pop-up tab password'});
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can change the Pop-up tab password'});
+    const {currentPassword,newPassword}=req.body;
+    if(!currentPassword||!newPassword) return res.status(400).json({error:'Missing fields'});
+    if(newPassword.length<6) return res.status(400).json({error:'New password must be at least 6 characters'});
+    const row=await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);
+    if(!row?.value) return res.status(500).json({error:'Pop-up tab password is not configured'});
+    const ok=await bcrypt.compare(currentPassword,row.value);
+    if(!ok) return res.status(401).json({error:'Current Pop-up tab password is incorrect'});
+    const nextHash=await bcrypt.hash(newPassword,10);
+    await db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)',[POPUP_TAB_PASSWORD_KEY,nextHash]);
+    res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 

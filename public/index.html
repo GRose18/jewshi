@@ -359,7 +359,7 @@
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
-    
+    <div class="nav-tab admin-only grose-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
   </div>
   <div class="main-content">
@@ -690,6 +690,51 @@
         </div>
       </div>
     </div>
+
+    <div id="tab-popup" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Pop-up</h2>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">GROSE-only control room for server-wide positive messages.</p>
+        </div>
+        <button class="btn-admin" onclick="lockPopupTab()" style="background:var(--bg4);color:var(--text2);display:none;" id="popup-lock-btn">Lock Tab</button>
+      </div>
+
+      <div class="panel" id="popup-auth-panel">
+        <div class="panel-title">Unlock Pop-up Tab</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Enter the extra Pop-up password to access recipient controls on this computer.</p>
+        <div class="admin-form-row">
+          <div class="form-group"><label>Pop-up Password</label><input type="password" id="popup-auth-password" placeholder="Enter password" onkeydown="if(event.key==='Enter')unlockPopupTab()"></div>
+        </div>
+        <button class="btn-admin" onclick="unlockPopupTab()">Unlock</button>
+      </div>
+
+      <div id="popup-control-panel" style="display:none;">
+        <div class="admin-grid">
+          <div class="panel">
+            <div class="panel-title">Positive Message</div>
+            <div class="form-group">
+              <label>Recipient</label>
+              <select id="popup-recipient"></select>
+            </div>
+            <div class="form-group"><label>Title</label><input type="text" id="popup-title" placeholder="Positive message"></div>
+            <div class="form-group"><label>Message</label><input type="text" id="popup-message" placeholder="You are doing great today."></div>
+            <div class="admin-form-row">
+              <div class="form-group"><label>Image or Video</label><input type="file" id="popup-media-file" accept="image/*,video/*"></div>
+              <div class="form-group"><label>MP3</label><input type="file" id="popup-audio-file" accept="audio/mpeg,audio/mp3"></div>
+            </div>
+            <p style="font-size:12px;color:var(--text3);margin-top:2px;">Recipient-side delivery and media upload routes are the next build step. This tab is now securely gated and ready for that flow.</p>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Tab Password</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Change the extra password required to open this tab on your machine.</p>
+            <div class="form-group"><label>Current Password</label><input type="password" id="popup-current-password" placeholder="Current Pop-up password"></div>
+            <div class="form-group"><label>New Password</label><input type="password" id="popup-new-password" placeholder="New Pop-up password"></div>
+            <button class="btn-admin" onclick="changePopupPassword()">Update Pop-up Password</button>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <!-- ADMIN -->
     <div id="tab-admin" class="tab-content">
@@ -794,6 +839,7 @@ let authToken=localStorage.getItem('ew_token');
 let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
 let liveInterval=null,countdownInterval=null,liveMarketsData=[];
+let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 async function api(method,path,body){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),8000);
@@ -959,6 +1005,8 @@ async function doResendCode(){
 }
 function doLogout(){
   authToken=null;currentUser=null;localStorage.removeItem('ew_token');sessionStorage.removeItem('access_granted');
+  sessionStorage.removeItem('popup_tab_unlocked');
+  popupTabUnlocked=false;
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').style.display='flex';
@@ -971,6 +1019,7 @@ async function enterApp(){
   document.getElementById('live-screen').style.display='none';
   document.getElementById('app').style.display='block';
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only').forEach(el=>el.style.display='block');
+  if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
   setInterval(pollResolutions,8000);pollResolutions();
@@ -995,6 +1044,7 @@ function switchTab(tab){
   if(tab==='store')renderStore();
   if(tab==='messages')renderMessages();
   if(tab==='admin')renderAdminTab();
+  if(tab==='popup')renderPopupTab();
   if(tab==='casino')initCasino();
 }
 
@@ -1533,6 +1583,73 @@ async function renderAdminTab(){
       <td style="color:var(--text3)">${esc(t.description)||'—'}</td>
       <td style="color:var(--text3)">${new Date(t.timestamp).toLocaleString()}</td>
     </tr>`).join('')}</tbody></table>`;
+}
+
+function renderPopupTab(){
+  if(!currentUser||currentUser.id!=='GROSE'){
+    switchTab('markets');
+    return;
+  }
+  const authPanel=document.getElementById('popup-auth-panel');
+  const controlPanel=document.getElementById('popup-control-panel');
+  const lockBtn=document.getElementById('popup-lock-btn');
+  if(authPanel) authPanel.style.display=popupTabUnlocked?'none':'block';
+  if(controlPanel) controlPanel.style.display=popupTabUnlocked?'block':'none';
+  if(lockBtn) lockBtn.style.display=popupTabUnlocked?'inline-flex':'none';
+  if(popupTabUnlocked) populatePopupRecipientSelect();
+}
+
+async function populatePopupRecipientSelect(){
+  const select=document.getElementById('popup-recipient');
+  if(!select) return;
+  try{
+    const users=await api('GET','/users');
+    const students=users.filter(u=>u.id!=='GROSE');
+    select.innerHTML=students.length
+      ?students.map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.id)} (${esc(u.id)})</option>`).join('')
+      :'<option value="">No recipients available</option>';
+  }catch(e){
+    select.innerHTML='<option value="">Failed to load users</option>';
+  }
+}
+
+async function unlockPopupTab(){
+  const input=document.getElementById('popup-auth-password');
+  const password=input?.value||'';
+  if(!password.trim()){alert('Enter the Pop-up tab password.');return;}
+  try{
+    await api('POST','/admin/popup-auth',{password});
+    popupTabUnlocked=true;
+    sessionStorage.setItem('popup_tab_unlocked','1');
+    if(input) input.value='';
+    renderPopupTab();
+    showToast('Pop-up tab unlocked.');
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+function lockPopupTab(){
+  popupTabUnlocked=false;
+  sessionStorage.removeItem('popup_tab_unlocked');
+  const authInput=document.getElementById('popup-auth-password');
+  if(authInput) authInput.value='';
+  renderPopupTab();
+  showToast('Pop-up tab locked.');
+}
+
+async function changePopupPassword(){
+  const currentPassword=document.getElementById('popup-current-password').value;
+  const newPassword=document.getElementById('popup-new-password').value;
+  if(!currentPassword||!newPassword){alert('Enter both the current and new password.');return;}
+  try{
+    await api('POST','/admin/popup-password',{currentPassword,newPassword});
+    document.getElementById('popup-current-password').value='';
+    document.getElementById('popup-new-password').value='';
+    showToast('Pop-up tab password updated.');
+  }catch(e){
+    alert(e.message);
+  }
 }
 
 function toggleLineInput(){document.getElementById('line-input-group').style.display=document.getElementById('new-market-type').value==='overunder'?'block':'none';}
