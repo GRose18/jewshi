@@ -124,6 +124,7 @@ async function initDB() {
       media_type TEXT DEFAULT NULL,
       media_url TEXT DEFAULT NULL,
       audio_url TEXT DEFAULT NULL,
+      rave_enabled INTEGER DEFAULT 0,
       status TEXT DEFAULT 'pending',
       created_at INTEGER NOT NULL,
       shown_at INTEGER DEFAULT NULL,
@@ -132,6 +133,7 @@ async function initDB() {
 
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
+  await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
   fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
   await ensureProtectedSettings();
   await seedIfEmpty();
@@ -501,7 +503,7 @@ app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=
 
 app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
   try{
-    const {recipientId,title,message,mediaDataUrl,mediaName,audioDataUrl,audioName}=req.body;
+    const {recipientId,title,message,mediaDataUrl,mediaName,audioDataUrl,audioName,raveEnabled}=req.body;
     if(!recipientId) return res.status(400).json({error:'Recipient required'});
     const recipient = await db.get('SELECT id,name FROM users WHERE id=?',[recipientId]);
     if(!recipient) return res.status(404).json({error:'Recipient not found'});
@@ -512,9 +514,9 @@ app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlock
     const mediaType = mediaDataUrl ? String(mediaDataUrl).slice(5, String(mediaDataUrl).indexOf(';')) : null;
     await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE recipient_id=? AND status IN ('pending','active')",[Date.now(),recipientId]);
     const id = generateId('popup');
-    await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,media_type,media_url,audio_url,status,created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [id,req.user.id,recipientId,title?.trim()||'',message?.trim()||'',mediaType,mediaUrl,audioUrl,'pending',Date.now()]);
+    await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,media_type,media_url,audio_url,rave_enabled,status,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [id,req.user.id,recipientId,title?.trim()||'',message?.trim()||'',mediaType,mediaUrl,audioUrl,raveEnabled?1:0,'pending',Date.now()]);
     res.json(await db.get('SELECT * FROM popups WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
