@@ -359,7 +359,7 @@
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
-    <div class="nav-tab admin-only grose-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
+    <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
   </div>
   <div class="main-content">
@@ -1073,6 +1073,7 @@ async function enterApp(){
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only:not(.grose-only)').forEach(el=>el.style.display='block');
   if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
   setInterval(pollResolutions,8000);pollResolutions();
@@ -1592,10 +1593,13 @@ async function renderAdminTab(){
   document.getElementById('admin-users-list').innerHTML=`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">${emailCount} user${emailCount!==1?'s':''} on email list. Check the box to include them in digest and password emails.</p>
     <table class="portfolio-table">
-      <thead><tr><th>Email List</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Email List</th><th>Pop-up</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
       <tbody>${users.map(u=>`<tr>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.on_email_list?'checked':''} onchange="toggleEmailList('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">`:'—'}
+        </td>
+        <td style="text-align:center;">
+          ${isGrose?`<input type="checkbox" ${u.popup_access?'checked':''} onchange="togglePopupAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold);">`:'—'}
         </td>
         <td style="color:var(--text)">${esc(u.name)||'—'}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
@@ -1642,7 +1646,7 @@ async function renderAdminTab(){
 }
 
 function renderPopupTab(){
-  if(!currentUser||currentUser.id!=='GROSE'){
+  if(!currentUser||!(currentUser.id==='GROSE'||currentUser.popup_access)){
     switchTab('markets');
     return;
   }
@@ -1741,7 +1745,7 @@ async function sendPopupMessage(){
   const raveEnabled=document.getElementById('popup-rave-enabled').checked;
   const alertEnabled=document.getElementById('popup-alert-enabled').checked;
   if(!recipientIds.length){alert('Pick at least one recipient first.');return;}
-  if(!title&&!message&&!mediaFile&&!audioFile){alert('Add a title, message, media, or audio first.');return;}
+  if(!title&&!message&&!alertText&&!mediaFile&&!audioFile){alert('Add a title, message, alert text, media, or audio first.');return;}
   const btn=document.getElementById('popup-send-btn');
   const status=document.getElementById('popup-send-status');
   btn.disabled=true;
@@ -1964,6 +1968,7 @@ function stopPopupSiren(){
 async function showIncomingPopup(popup){
   activeIncomingPopupId=popup.id;
   const overlay=document.getElementById('incoming-popup-overlay');
+  const banner=document.getElementById('incoming-popup-alert-banner');
   const title=document.getElementById('incoming-popup-title');
   const message=document.getElementById('incoming-popup-message');
   const intro=document.getElementById('incoming-popup-alert-sequence');
@@ -1976,16 +1981,10 @@ async function showIncomingPopup(popup){
   title.textContent=popup.title||'Positive Message';
   message.textContent=popup.message||'';
   wrap.innerHTML='';
-  if(popup.media_url){
-    if((popup.media_type||'').startsWith('video/')){
-      wrap.innerHTML=`<video src="${popup.media_url}" autoplay loop playsinline controls style="width:100%;max-height:68vh;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#000;"></video>`;
-    }else{
-      wrap.innerHTML=`<img src="${popup.media_url}" alt="Positive message media" style="width:100%;max-height:68vh;object-fit:contain;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#090811;">`;
-    }
-    wrap.style.display='block';
-  }else{
-    wrap.style.display='none';
-  }
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
+  audioStatus.style.display='none';
   overlay.style.display='flex';
   if(Number(popup.rave_enabled)) startPopupRave();
   else stopPopupRave();
@@ -1993,43 +1992,52 @@ async function showIncomingPopup(popup){
   else stopPopupAlert();
   popupIntroTimeouts.forEach(id=>clearTimeout(id));
   popupIntroTimeouts=[];
+  const effectiveAlertText=(popup.alert_text||popup.title||'Incoming Alert').slice(0,80);
+  const revealMainContent=async()=>{
+    if(activeIncomingPopupId!==popup.id) return;
+    if(popup.media_url){
+      if((popup.media_type||'').startsWith('video/')){
+        wrap.innerHTML=`<video src="${popup.media_url}" autoplay loop playsinline controls style="width:100%;max-height:68vh;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#000;"></video>`;
+      }else{
+        wrap.innerHTML=`<img src="${popup.media_url}" alt="Positive message media" style="width:100%;max-height:68vh;object-fit:contain;border-radius:18px;border:1px solid rgba(255,255,255,0.08);background:#090811;">`;
+      }
+      wrap.style.display='block';
+    }else{
+      wrap.style.display='none';
+    }
+    intro.style.display='none';
+    main.style.display='block';
+    if(popup.audio_url){
+      audio.src=popup.audio_url;
+      audio.volume=1;
+      try{
+        await audio.play();
+        if(Number(popup.alert_enabled)) await startPopupSiren();
+        audioStatus.style.display='none';
+      }catch(e){
+        audioStatus.style.display='inline-flex';
+        overlay.onclick=()=>audio.play().then(()=>{
+          if(Number(popup.alert_enabled)) startPopupSiren();
+          audioStatus.style.display='none';
+        }).catch(()=>{});
+      }
+    }else if(Number(popup.alert_enabled)){
+      await startPopupSiren();
+      audioStatus.style.display='none';
+    }
+  };
   if(Number(popup.alert_enabled)){
-    introText.textContent=(popup.alert_text||'Incoming Alert').slice(0,80);
+    if(banner) banner.textContent=effectiveAlertText;
+    introText.textContent=effectiveAlertText;
     countdown.textContent='3';
     intro.style.display='flex';
     main.style.display='none';
     popupIntroTimeouts.push(setTimeout(()=>{ if(activeIncomingPopupId===popup.id) countdown.textContent='2'; },1000));
     popupIntroTimeouts.push(setTimeout(()=>{ if(activeIncomingPopupId===popup.id) countdown.textContent='1'; },2000));
-    popupIntroTimeouts.push(setTimeout(()=>{
-      if(activeIncomingPopupId!==popup.id) return;
-      intro.style.display='none';
-      main.style.display='block';
-    },3000));
+    popupIntroTimeouts.push(setTimeout(()=>{ revealMainContent(); },3000));
   }else{
     intro.style.display='none';
-    main.style.display='block';
-  }
-  if(popup.audio_url){
-    audio.src=popup.audio_url;
-    audio.volume=1;
-    try{
-      await audio.play();
-      if(Number(popup.alert_enabled)) await startPopupSiren();
-      audioStatus.style.display='none';
-    }catch(e){
-      audioStatus.style.display='inline-flex';
-      overlay.onclick=()=>audio.play().then(()=>{
-        if(Number(popup.alert_enabled)) startPopupSiren();
-        audioStatus.style.display='none';
-      }).catch(()=>{});
-    }
-  }else{
-    if(Number(popup.alert_enabled)){
-      await startPopupSiren();
-      audioStatus.style.display='none';
-    }else{
-      audioStatus.style.display='none';
-    }
+    await revealMainContent();
   }
 }
 
@@ -2090,6 +2098,17 @@ async function toggleEmailList(userId,checkbox){
     checkbox.checked=!!res.on_email_list;
     showToast(res.on_email_list?'Added to email list':'Removed from email list');
   }catch(e){alert(e.message);checkbox.checked=!checkbox.checked;}
+}
+async function togglePopupAccess(userId,checkbox){
+  try{
+    const res=await api('POST','/users/'+userId+'/toggle-popup-access');
+    checkbox.checked=!!res.popup_access;
+    showToast(res.popup_access?'Pop-up access granted':'Pop-up access removed');
+    renderAdminTab();
+  }catch(e){
+    alert(e.message);
+    checkbox.checked=!checkbox.checked;
+  }
 }
 async function sendDigest(){
   const btn=document.getElementById('digest-btn');

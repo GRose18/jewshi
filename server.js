@@ -42,7 +42,8 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT NOT NULL,
       role TEXT DEFAULT 'student', credits INTEGER DEFAULT 200, grade TEXT DEFAULT '',
-      email_verified INTEGER DEFAULT 1, on_email_list INTEGER DEFAULT 0, bio TEXT DEFAULT ''
+      email_verified INTEGER DEFAULT 1, on_email_list INTEGER DEFAULT 0, bio TEXT DEFAULT '',
+      popup_access INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
@@ -135,6 +136,7 @@ async function initDB() {
 
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
+  await db.run("ALTER TABLE users ADD COLUMN popup_access INTEGER DEFAULT 0").catch(()=>{});
   await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
   await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
   await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
@@ -219,8 +221,13 @@ function issuePopupUnlockToken(userId){
   popupAdminUnlocks.set(userId, { token, expiresAt: Date.now()+POPUP_UNLOCK_TTL_MS });
   return token;
 }
-function requirePopupAdminUnlocked(req,res,next){
-  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can use Pop-up controls'});
+async function hasPopupTabAccess(userId){
+  if(userId==='GROSE') return true;
+  const user=await db.get('SELECT popup_access FROM users WHERE id=?',[userId]);
+  return !!user?.popup_access;
+}
+async function requirePopupAdminUnlocked(req,res,next){
+  if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
   const headerToken = req.headers['x-popup-unlock'];
   const session = popupAdminUnlocks.get(req.user.id);
   if(!headerToken || !session || session.token!==headerToken || session.expiresAt<Date.now()){
@@ -475,9 +482,9 @@ app.post('/api/admin/access-password', authMiddleware, adminOnly, async(req,res)
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/admin/popup-auth', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/admin/popup-auth', authMiddleware, async(req,res)=>{
   try{
-    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can unlock the Pop-up tab'});
+    if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
     const {password}=req.body;
     if(!password) return res.status(400).json({error:'Password required'});
     const row=await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);
@@ -489,7 +496,7 @@ app.post('/api/admin/popup-auth', authMiddleware, adminOnly, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/admin/popup-password', authMiddleware, async(req,res)=>{
   try{
     if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can change the Pop-up tab password'});
     const {currentPassword,newPassword}=req.body;
@@ -505,7 +512,7 @@ app.post('/api/admin/popup-password', authMiddleware, adminOnly, async(req,res)=
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
+app.post('/api/admin/popups', authMiddleware, requirePopupAdminUnlocked, async(req,res)=>{
   try{
     const {recipientId,recipientIds,title,message,alertText,mediaDataUrl,mediaName,audioDataUrl,audioName,raveEnabled,alertEnabled}=req.body;
     const targets = [...new Set(
@@ -536,7 +543,7 @@ app.post('/api/admin/popups', authMiddleware, adminOnly, requirePopupAdminUnlock
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.get('/api/admin/popups/active', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
+app.get('/api/admin/popups/active', authMiddleware, requirePopupAdminUnlocked, async(req,res)=>{
   try{
     const popups = await db.all(`SELECT p.*,u.name as recipient_name
       FROM popups p JOIN users u ON p.recipient_id=u.id
@@ -546,7 +553,7 @@ app.get('/api/admin/popups/active', authMiddleware, adminOnly, requirePopupAdmin
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/admin/popups/:id/stop', authMiddleware, adminOnly, requirePopupAdminUnlocked, async(req,res)=>{
+app.post('/api/admin/popups/:id/stop', authMiddleware, requirePopupAdminUnlocked, async(req,res)=>{
   try{
     const popup = await db.get('SELECT * FROM popups WHERE id=?',[req.params.id]);
     if(!popup) return res.status(404).json({error:'Pop-up not found'});
@@ -689,12 +696,12 @@ app.post('/api/auth/reset-password', async(req,res)=>{
 
 // ── USER ──
 app.get('/api/me', authMiddleware, async(req,res)=>{
-  const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list,bio FROM users WHERE id=?',[req.user.id]);
+  const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list,bio,popup_access FROM users WHERE id=?',[req.user.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   res.json(user);
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,email,role,credits,grade,on_email_list FROM users WHERE id!=?",[req.user.id]));
+  res.json(await db.all("SELECT id,name,email,role,credits,grade,on_email_list,popup_access FROM users WHERE id!=?",[req.user.id]));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -732,6 +739,16 @@ app.post('/api/users/:id/toggle-email-list', authMiddleware, adminOnly, async(re
   const newVal=user.on_email_list?0:1;
   await db.run('UPDATE users SET on_email_list=? WHERE id=?',[newVal,req.params.id]);
   res.json({on_email_list:newVal});
+});
+app.post('/api/users/:id/toggle-popup-access', authMiddleware, adminOnly, async(req,res)=>{
+  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can manage Pop-up access'});
+  if(req.params.id==='GROSE') return res.status(400).json({error:'GROSE always has Pop-up access'});
+  const user=await db.get('SELECT popup_access FROM users WHERE id=?',[req.params.id]);
+  if(!user) return res.status(404).json({error:'User not found'});
+  const newVal=user.popup_access?0:1;
+  await db.run('UPDATE users SET popup_access=? WHERE id=?',[newVal,req.params.id]);
+  popupAdminUnlocks.delete(req.params.id);
+  res.json({popup_access:newVal});
 });
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   const {id}=req.params;
