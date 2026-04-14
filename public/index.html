@@ -1667,7 +1667,7 @@ async function populatePopupRecipientSelect(){
   if(!select) return;
   try{
     const users=await api('GET','/users');
-    const students=users.filter(u=>u.id!=='GROSE');
+    const students=users.filter(u=>u.role!=='admin');
     select.innerHTML=students.length
       ?students.map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.id)} (${esc(u.id)})</option>`).join('')
       :'<option value="">No recipients available</option>';

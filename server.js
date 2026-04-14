@@ -525,9 +525,9 @@ app.post('/api/admin/popups', authMiddleware, requirePopupAdminUnlocked, async(r
     const mediaType = mediaDataUrl ? String(mediaDataUrl).slice(5, String(mediaDataUrl).indexOf(';')) : null;
     const recipients = [];
     for(const targetId of targets){
-      const recipient = await db.get('SELECT id,name FROM users WHERE id=?',[targetId]);
+      const recipient = await db.get('SELECT id,name,role FROM users WHERE id=?',[targetId]);
       if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
-      if(recipient.id==='GROSE') return res.status(400).json({error:'Pick another recipient'});
+      if(recipient.role==='admin') return res.status(400).json({error:'Admins cannot be targeted by Pop-up messages'});
       recipients.push(recipient);
     }
     const created = [];
