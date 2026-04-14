@@ -98,16 +98,7 @@ async function initDB() {
       credits_won INTEGER NOT NULL,
       timestamp INTEGER NOT NULL
     )
-    ;CREATE TABLE IF NOT EXISTS casino_bets (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      game TEXT NOT NULL,
-      bet_amount INTEGER NOT NULL,
-      outcome TEXT NOT NULL,
-      payout INTEGER NOT NULL,
-      profit INTEGER NOT NULL,
-      timestamp INTEGER NOT NULL
-    )
+
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
   await seedIfEmpty();
