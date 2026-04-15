@@ -369,7 +369,7 @@
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
-    <div class="nav-tab" data-tab="assistance" onclick="switchTab('assistance')">Assistance</div>
+    <div class="nav-tab assistance-only" data-tab="assistance" onclick="switchTab('assistance')" style="display:none;">Assistance</div>
     <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
   </div>
@@ -713,23 +713,23 @@
       <div class="assistance-grid">
         <div class="assistance-stack">
           <div class="panel">
-            <div class="panel-title">Trusted Helpers</div>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Choose someone you trust. They must approve before they can help you.</p>
+            <div class="panel-title">Start Helping</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Pick someone you have granted assistance access to. Sessions will begin immediately for them.</p>
             <div class="admin-form-row">
               <div class="form-group">
-                <label>Choose a helper</label>
+                <label>Choose a person</label>
                 <select id="assistance-helper-select"></select>
               </div>
             </div>
-            <button class="btn-admin" onclick="requestTrustedHelper()">Send Helper Request</button>
+            <button class="btn-admin" onclick="startAssistanceFromPicker()">Start Session</button>
             <div id="assistance-contacts-list" class="assistance-list" style="margin-top:14px;"></div>
           </div>
           <div class="panel">
-            <div class="panel-title">Incoming Helper Requests</div>
+            <div class="panel-title">Managed Mode</div>
             <div id="assistance-incoming-list" class="assistance-list"></div>
           </div>
           <div class="panel">
-            <div class="panel-title">People You Can Help</div>
+            <div class="panel-title">Quick Start</div>
             <div id="assistance-helper-for-list" class="assistance-list"></div>
           </div>
         </div>
@@ -1214,15 +1214,18 @@ async function enterApp(){
   if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
   document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
+  document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.assistance_access)?'block':'none');
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
   setInterval(pollResolutions,8000);pollResolutions();
   clearInterval(popupPollInterval);
   popupPollInterval=setInterval(pollIncomingPopup,3000);
   pollIncomingPopup();
-  bindAssistanceRuntime();
-  startAssistanceStream();
-  await Promise.allSettled([loadAssistanceDirectory(), loadAssistanceState()]);
+  if(currentUser.id==='GROSE'||currentUser.assistance_access){
+    bindAssistanceRuntime();
+    startAssistanceStream();
+    await Promise.allSettled([loadAssistanceDirectory(), loadAssistanceState()]);
+  }
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeProfileModal();closeSpinModal();}});
 }
 function updateTopbar(){
@@ -1233,6 +1236,7 @@ function updateTopbar(){
 async function refreshUser(){currentUser=await api('GET','/me');updateTopbar();}
 
 function switchTab(tab){
+  if(tab==='assistance'&&!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access))) return;
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
@@ -1294,6 +1298,9 @@ function cssEscapeSafe(value){
 function getPrimaryAssistanceSession(){
   return assistanceState.currentSessions.find(s=>s.status==='active')||assistanceState.currentSessions[0]||null;
 }
+function isManagedAssistanceSession(session){
+  return !!(session&&session.helper_user_id==='GROSE'&&session.senior_user_id!=='GROSE');
+}
 async function loadAssistanceDirectory(){
   if(!authToken) return;
   assistanceDirectory=await api('GET','/assistance/users');
@@ -1308,6 +1315,7 @@ async function loadAssistanceState(shouldRender=true){
   syncAssistanceOverlay();
 }
 function renderAssistanceTab(){
+  if(!currentUser||!(currentUser.id==='GROSE'||currentUser.assistance_access)) return;
   const select=document.getElementById('assistance-helper-select');
   if(!select) return;
   const contactsList=document.getElementById('assistance-contacts-list');
@@ -1316,50 +1324,44 @@ function renderAssistanceTab(){
   const currentSessionEl=document.getElementById('assistance-current-session');
   const helperConsoleEl=document.getElementById('assistance-helper-console');
   const recentSessionsEl=document.getElementById('assistance-recent-sessions');
-  select.innerHTML=`<option value="">Select a person</option>`+assistanceDirectory.map(user=>`<option value="${esc(user.id)}">${esc(user.name)}${user.grade?` (${esc(user.grade)})`:''}</option>`).join('');
-  contactsList.innerHTML=assistanceState.contacts.length?assistanceState.contacts.map(contact=>`
-    <div class="assistance-item">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(contact.helper_name)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px;">${contact.status==='approved'?'Approved helper':'Waiting for approval'}</div>
+  if(currentUser.id==='GROSE'){
+    const accessibleUsers=assistanceDirectory.filter(user=>user.assistance_access);
+    select.innerHTML=`<option value="">Select a person</option>`+accessibleUsers.map(user=>`<option value="${esc(user.id)}">${esc(user.name)}${user.grade?` (${esc(user.grade)})`:''}</option>`).join('');
+    contactsList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
+      <div class="assistance-item">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Remote assistance is enabled for this account.</div>
+          </div>
+          <div class="assistance-badge active">Enabled</div>
         </div>
-        <div class="assistance-badge ${contact.status==='approved'?'active':'pending'}">${esc(contact.status)}</div>
       </div>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn-admin btn-sm btn-danger" onclick="removeAssistanceContact('${contact.id}')">${contact.status==='approved'?'Remove':'Cancel Request'}</button>
-      </div>
-    </div>
-  `).join(''):`<p style="font-size:13px;color:var(--text3);">No helper relationships yet.</p>`;
-  incomingList.innerHTML=assistanceState.incomingRequests.length?assistanceState.incomingRequests.map(contact=>`
-    <div class="assistance-item">
-      <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(contact.senior_name)}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px;">Wants to add you as a trusted helper.</div>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn-admin btn-sm" onclick="approveAssistanceContact('${contact.id}')">Approve</button>
-        <button class="btn-admin btn-sm btn-danger" onclick="removeAssistanceContact('${contact.id}')">Decline</button>
-      </div>
-    </div>
-  `).join(''):`<p style="font-size:13px;color:var(--text3);">No pending requests.</p>`;
-  helperForList.innerHTML=assistanceState.helperFor.length?assistanceState.helperFor.map(contact=>`
-    <div class="assistance-item">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(contact.senior_name)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px;">You are a trusted helper for this person.</div>
+    `).join(''):`<p style="font-size:13px;color:var(--text3);">Grant assistance access from the admin user table first.</p>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Managed mode removes trust, approval, and stop prompts for assisted users. When you start a session, control is live immediately and the other person only sees simple guidance on screen.</div></div>`;
+    helperForList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
+      <div class="assistance-item">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Open a live session without asking them to approve anything.</div>
+          </div>
+          <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Start Session</button>
         </div>
-        <div class="assistance-badge active">Approved</div>
       </div>
-      <div style="margin-top:10px;">
-        <button class="btn-admin btn-sm" onclick="startAssistanceSession('${contact.user_id}')">Start Session</button>
-      </div>
-    </div>
-  `).join(''):`<p style="font-size:13px;color:var(--text3);">Nobody has approved you as a helper yet.</p>`;
+    `).join(''):`<p style="font-size:13px;color:var(--text3);">No users currently have managed assistance access.</p>`;
+  }else{
+    select.innerHTML=`<option value="">Select a person</option>`;
+    contactsList.innerHTML=`<p style="font-size:13px;color:var(--text3);">Assistance is managed by GROSE for this account.</p>`;
+    incomingList.innerHTML='';
+    helperForList.innerHTML='';
+  }
   const session=assistanceActiveSession||assistancePendingSession;
   if(!session){
     currentSessionEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">No active session. When a session starts, status, controls, and voice guidance options will appear here.</p>`;
   }else{
     const amSenior=session.senior_user_id===currentUser.id;
+    const managedSession=isManagedAssistanceSession(session);
     const otherName=amSenior?session.helper_name:session.senior_name;
     currentSessionEl.innerHTML=`
       <div class="assistance-item">
@@ -1371,14 +1373,15 @@ function renderAssistanceTab(){
           <div class="assistance-badge ${session.status==='active'?'active':'pending'}">${esc(session.status)}</div>
         </div>
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-          ${session.status==='pending'&&amSenior?`<button class="btn-admin btn-sm" onclick="respondToAssistanceRequest(true)">Accept</button><button class="btn-admin btn-sm btn-danger" onclick="respondToAssistanceRequest(false)">Decline</button>`:''}
+          ${session.status==='pending'&&amSenior&&!managedSession?`<button class="btn-admin btn-sm" onclick="respondToAssistanceRequest(true)">Accept</button><button class="btn-admin btn-sm btn-danger" onclick="respondToAssistanceRequest(false)">Decline</button>`:''}
           ${session.status==='active'?`<button class="btn-admin btn-sm btn-danger" onclick="stopActiveAssistance('stopped from assistance tab')">Stop Session</button>`:''}
-          ${session.status==='active'&&amSenior?`<button class="btn-admin btn-sm" onclick="toggleAssistanceControlGrant()">${session.control_enabled?'Revoke Control':'Allow Control'}</button>`:''}
+          ${session.status==='active'&&amSenior&&!managedSession?`<button class="btn-admin btn-sm" onclick="toggleAssistanceControlGrant()">${session.control_enabled?'Revoke Control':'Allow Control'}</button>`:''}
         </div>
       </div>
     `;
   }
   const helperSession=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.helper_user_id===currentUser.id?assistanceActiveSession:null;
+  const managedHelperSession=isManagedAssistanceSession(helperSession);
   if(!helperSession){
     helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Start a session as a trusted helper to unlock guided highlights, narration, and assisted interaction tools.</p>`;
   }else{
@@ -1392,7 +1395,7 @@ function renderAssistanceTab(){
             <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'assist'})">Assist</button>
           </div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-admin btn-sm" onclick="sendAssistControlRequest()">Request Control</button>
+            ${managedHelperSession?'':`<button class="btn-admin btn-sm" onclick="sendAssistControlRequest()">Request Control</button>`}
             <button class="btn-admin btn-sm" onclick="updateAssistanceMode({guidedMode:${helperSession.guided_mode?0:1}})">${helperSession.guided_mode?'Turn Guided Mode Off':'Turn Guided Mode On'}</button>
             <button class="btn-admin btn-sm" onclick="updateAssistanceMode({voiceEnabled:${helperSession.voice_enabled?0:1}})">${helperSession.voice_enabled?'Mute Voice':'Enable Voice'}</button>
           </div>
@@ -1443,6 +1446,11 @@ function renderAssistanceTab(){
     </div>
   `).join(''):`<p style="font-size:13px;color:var(--text3);">No completed sessions yet.</p>`;
 }
+async function startAssistanceFromPicker(){
+  const select=document.getElementById('assistance-helper-select');
+  if(!select||!select.value){alert('Choose a person first.');return;}
+  await startAssistanceSession(select.value);
+}
 async function requestTrustedHelper(){
   const select=document.getElementById('assistance-helper-select');
   if(!select.value){alert('Choose a helper first.');return;}
@@ -1468,7 +1476,7 @@ async function removeAssistanceContact(contactId){
 async function startAssistanceSession(seniorUserId){
   try{
     await api('POST','/assistance/sessions',{seniorUserId,mode:'guide',guidedMode:true,voiceEnabled:true,recordingEnabled:true});
-    showToast('Session request sent.');
+    showToast(currentUser?.id==='GROSE'?'Session started.':'Session request sent.');
     await loadAssistanceState();
     switchTab('assistance');
   }catch(e){alert(e.message);}
@@ -1600,6 +1608,7 @@ function syncAssistanceOverlay(){
   if(!overlay||!currentUser) return;
   const pending=assistancePendingSession;
   const active=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.senior_user_id===currentUser.id?assistanceActiveSession:null;
+  const managedSession=isManagedAssistanceSession(active||pending);
   if(!pending&&!active){
     hideAssistanceOverlay();
     return;
@@ -1607,14 +1616,16 @@ function syncAssistanceOverlay(){
   overlay.style.display='block';
   shell.style.opacity=active?'1':'0';
   banner.style.display=active?'block':'none';
-  requestCard.style.display=pending?'block':'none';
-  controlCard.style.display=active?'block':'none';
+  requestCard.style.display=pending&&!managedSession?'block':'none';
+  controlCard.style.display=active&&!managedSession?'block':'none';
   if(pending){
     document.getElementById('assistance-request-text').textContent=`${pending.helper_name} wants to help you inside Jewshi.`;
   }
   if(active){
-    document.getElementById('assistance-banner-text').textContent=`${active.helper_name} is currently assisting you`;
-    document.getElementById('assistance-banner-subtext').textContent=`Mode: ${active.mode} · Guided ${active.guided_mode?'on':'off'} · Recording ${active.recording_enabled?'on':'off'}`;
+    document.getElementById('assistance-banner-text').textContent=managedSession?`${active.helper_name} is guiding the page for you`:`${active.helper_name} is currently assisting you`;
+    document.getElementById('assistance-banner-subtext').textContent=managedSession
+      ?`Please listen for voice guidance while the page moves for you.`
+      :`Mode: ${active.mode} · Guided ${active.guided_mode?'on':'off'} · Recording ${active.recording_enabled?'on':'off'}`;
     document.getElementById('assistance-control-status').textContent=active.control_enabled
       ?'Helper control is currently allowed for clicks and typing inside Jewshi.'
       :'Helper control is off. Highlights and narration still work.';
@@ -2231,13 +2242,16 @@ async function renderAdminTab(){
   document.getElementById('admin-users-list').innerHTML=`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">${emailCount} user${emailCount!==1?'s':''} on email list. Check the box to include them in digest and password emails.</p>
     <table class="portfolio-table">
-      <thead><tr><th>Email List</th><th>Pop-up</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Email List</th><th>Pop-up</th><th>Assist</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
       <tbody>${users.map(u=>`<tr>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.on_email_list?'checked':''} onchange="toggleEmailList('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">`:'—'}
         </td>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.popup_access?'checked':''} onchange="togglePopupAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold);">`:'—'}
+        </td>
+        <td style="text-align:center;">
+          ${isGrose?`<input type="checkbox" ${u.assistance_access?'checked':''} onchange="toggleAssistanceAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:#39c9ff;">`:'—'}
         </td>
         <td style="color:var(--text)">${esc(u.name)||'—'}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
@@ -2811,6 +2825,17 @@ async function togglePopupAccess(userId,checkbox){
     const res=await api('POST','/users/'+userId+'/toggle-popup-access');
     checkbox.checked=!!res.popup_access;
     showToast(res.popup_access?'Pop-up access granted':'Pop-up access removed');
+    renderAdminTab();
+  }catch(e){
+    alert(e.message);
+    checkbox.checked=!checkbox.checked;
+  }
+}
+async function toggleAssistanceAccess(userId,checkbox){
+  try{
+    const res=await api('POST','/users/'+userId+'/toggle-assistance-access');
+    checkbox.checked=!!res.assistance_access;
+    showToast(res.assistance_access?'Assistance access granted':'Assistance access removed');
     renderAdminTab();
   }catch(e){
     alert(e.message);
