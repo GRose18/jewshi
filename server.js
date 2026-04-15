@@ -118,6 +118,18 @@ async function initDB() {
       profit INTEGER DEFAULT 0,
       timestamp INTEGER NOT NULL
     )
+    ;CREATE TABLE IF NOT EXISTS online_matches (
+      id TEXT PRIMARY KEY,
+      game_type TEXT NOT NULL,
+      host_id TEXT NOT NULL,
+      guest_id TEXT DEFAULT NULL,
+      status TEXT DEFAULT 'open',
+      wager INTEGER DEFAULT 0,
+      state TEXT NOT NULL,
+      winner_id TEXT DEFAULT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
     ;CREATE TABLE IF NOT EXISTS popups (
       id TEXT PRIMARY KEY,
       sender_id TEXT NOT NULL,
@@ -267,6 +279,16 @@ async function hasAssistanceAccess(userId){
   const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[userId]);
   return !!user?.assistance_access;
 }
+async function hasAssistanceSessionVisibility(userId){
+  if(await hasAssistanceAccess(userId)) return true;
+  const session = await db.get(
+    `SELECT id FROM assistance_sessions
+     WHERE senior_user_id=? AND status IN ('pending','active')
+     LIMIT 1`,
+    [userId]
+  );
+  return !!session;
+}
 async function requirePopupAdminUnlocked(req,res,next){
   if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
   const headerToken = req.headers['x-popup-unlock'];
@@ -352,6 +374,202 @@ function getVisibleBlackjackState(game){
   };
 }
 function getCurrentHand(game){ return game.playerHands[game.activeHand]; }
+function parseMatchState(raw){
+  try{ return JSON.parse(raw||'{}'); }catch{ return {}; }
+}
+function buildDeck52(){
+  const suits=['S','H','D','C'];
+  const vals=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  return shuffle(suits.flatMap(s=>vals.map(v=>({v,s}))));
+}
+function cardRankValue(v){
+  if(v==='A') return 14;
+  if(v==='K') return 13;
+  if(v==='Q') return 12;
+  if(v==='J') return 11;
+  return parseInt(v,10);
+}
+function sortDesc(nums){ return [...nums].sort((a,b)=>b-a); }
+function evaluatePokerHand(hand){
+  const ranks=sortDesc(hand.map(card=>cardRankValue(card.v)));
+  const counts={};
+  hand.forEach(card=>{ counts[card.v]=(counts[card.v]||0)+1; });
+  const grouped=Object.entries(counts)
+    .map(([v,count])=>({ value:cardRankValue(v), count }))
+    .sort((a,b)=>b.count-a.count||b.value-a.value);
+  const flush=hand.every(card=>card.s===hand[0].s);
+  const unique=[...new Set(ranks)].sort((a,b)=>a-b);
+  let straight=false;
+  let straightHigh=Math.max(...ranks);
+  if(unique.length===5){
+    if(unique[4]-unique[0]===4) straight=true;
+    else if(JSON.stringify(unique)===JSON.stringify([2,3,4,5,14])){ straight=true; straightHigh=5; }
+  }
+  if(straight&&flush) return { score:[8,straightHigh], label:'Straight Flush' };
+  if(grouped[0].count===4) return { score:[7,grouped[0].value,grouped[1].value], label:'Four of a Kind' };
+  if(grouped[0].count===3&&grouped[1].count===2) return { score:[6,grouped[0].value,grouped[1].value], label:'Full House' };
+  if(flush) return { score:[5,...ranks], label:'Flush' };
+  if(straight) return { score:[4,straightHigh], label:'Straight' };
+  if(grouped[0].count===3) return { score:[3,grouped[0].value,...grouped.slice(1).map(g=>g.value)], label:'Three of a Kind' };
+  if(grouped[0].count===2&&grouped[1].count===2){
+    const highPair=Math.max(grouped[0].value, grouped[1].value);
+    const lowPair=Math.min(grouped[0].value, grouped[1].value);
+    return { score:[2,highPair,lowPair,grouped[2].value], label:'Two Pair' };
+  }
+  if(grouped[0].count===2) return { score:[1,grouped[0].value,...grouped.slice(1).map(g=>g.value).sort((a,b)=>b-a)], label:'Pair' };
+  return { score:[0,...ranks], label:'High Card' };
+}
+function compareScoreArrays(a,b){
+  const len=Math.max(a.length,b.length);
+  for(let i=0;i<len;i++){
+    const av=a[i]||0, bv=b[i]||0;
+    if(av>bv) return 1;
+    if(av<bv) return -1;
+  }
+  return 0;
+}
+function makeOnlineDreidelState(hostId, guestId){
+  return {
+    players:[hostId, guestId],
+    tokens:{ [hostId]:7, [guestId]:7 },
+    pot:2,
+    turnUserId:hostId,
+    log:['Both players anted 1 token to start the pot.'],
+    lastSpin:null,
+    phase:'active',
+  };
+}
+function refillDreidelPot(state){
+  state.players.forEach(userId=>{
+    if((state.tokens[userId]||0)>0){
+      state.tokens[userId]-=1;
+      state.pot+=1;
+    }
+  });
+}
+function applyDreidelSpin(state, userId, spin){
+  if(state.turnUserId!==userId) throw new Error('It is not your turn');
+  const name = {N:'Nun',G:'Gimel',H:'Hey',S:'Shin'}[spin] || spin;
+  if(spin==='G'){
+    state.tokens[userId]=(state.tokens[userId]||0)+state.pot;
+    state.pot=0;
+    refillDreidelPot(state);
+  }else if(spin==='H'){
+    const gain=Math.max(1,Math.ceil(state.pot/2));
+    const actual=Math.min(gain,state.pot);
+    state.tokens[userId]=(state.tokens[userId]||0)+actual;
+    state.pot-=actual;
+  }else if(spin==='S'){
+    if((state.tokens[userId]||0)>0){
+      state.tokens[userId]-=1;
+      state.pot+=1;
+    }
+  }
+  state.lastSpin={userId,spin,name};
+  state.log.unshift(`${userId} spun ${name}.`);
+  const opponent=state.players.find(id=>id!==userId);
+  const totalTokens=(state.tokens[userId]||0)+(state.tokens[opponent]||0)+state.pot;
+  if((state.tokens[userId]||0)===totalTokens){
+    state.phase='finished';
+    state.winnerId=userId;
+  }else if((state.tokens[opponent]||0)===totalTokens){
+    state.phase='finished';
+    state.winnerId=opponent;
+  }else{
+    state.turnUserId=opponent;
+  }
+  return state;
+}
+function makeOnlinePokerState(hostId, guestId){
+  const deck=buildDeck52();
+  return {
+    players:[hostId, guestId],
+    phase:'draw',
+    deck,
+    hands:{
+      [hostId]:deck.splice(0,5),
+      [guestId]:deck.splice(0,5),
+    },
+    drawsSubmitted:{ [hostId]:false, [guestId]:false },
+    revealed:false,
+    log:['Cards dealt. Each player may discard up to 3 cards once.'],
+  };
+}
+function applyPokerDraw(state, userId, discardIndexes=[]){
+  if(state.phase!=='draw') throw new Error('This poker hand is already resolved');
+  if(state.drawsSubmitted[userId]) throw new Error('You already submitted your draw');
+  const indexes=[...new Set((Array.isArray(discardIndexes)?discardIndexes:[]).map(Number).filter(n=>n>=0&&n<5))];
+  if(indexes.length>3) throw new Error('You may discard at most 3 cards');
+  const hand=[...state.hands[userId]];
+  indexes.forEach(index=>{
+    hand[index]=state.deck.shift();
+  });
+  state.hands[userId]=hand;
+  state.drawsSubmitted[userId]=true;
+  state.log.unshift(`${userId} ${indexes.length?`drew ${indexes.length} card${indexes.length===1?'':'s'}`:'stood pat'}.`);
+  if(state.players.every(id=>state.drawsSubmitted[id])){
+    const a=state.players[0], b=state.players[1];
+    const evalA=evaluatePokerHand(state.hands[a]);
+    const evalB=evaluatePokerHand(state.hands[b]);
+    const cmp=compareScoreArrays(evalA.score, evalB.score);
+    state.phase='finished';
+    state.revealed=true;
+    state.results={ [a]:evalA, [b]:evalB };
+    state.winnerId=cmp===0?null:(cmp>0?a:b);
+    state.log.unshift(cmp===0?`Showdown ended in a tie: ${evalA.label}.`:`${state.winnerId} won with ${cmp>0?evalA.label:evalB.label}.`);
+  }
+  return state;
+}
+async function fetchOnlineMatch(matchId){
+  const match=await db.get(`SELECT m.*,
+    host.name as host_name,
+    guest.name as guest_name
+    FROM online_matches m
+    JOIN users host ON host.id=m.host_id
+    LEFT JOIN users guest ON guest.id=m.guest_id
+    WHERE m.id=?`, [matchId]);
+  if(!match) return null;
+  return { ...match, state:parseMatchState(match.state) };
+}
+async function saveOnlineMatch(matchId, state, extra={}){
+  const fields=['state=?','updated_at=?'];
+  const args=[JSON.stringify(state), Date.now()];
+  Object.entries(extra).forEach(([key,val])=>{
+    fields.push(`${key}=?`);
+    args.push(val);
+  });
+  args.push(matchId);
+  await db.run(`UPDATE online_matches SET ${fields.join(', ')} WHERE id=?`, args);
+  return fetchOnlineMatch(matchId);
+}
+function sanitizeOnlineMatchForUser(match, userId){
+  const state=JSON.parse(JSON.stringify(match.state||{}));
+  if(match.game_type==='poker' && state.phase==='draw' && state.hands){
+    Object.keys(state.hands).forEach(playerId=>{
+      if(playerId!==userId){
+        state.hands[playerId]=state.hands[playerId].map(()=>({v:'?',s:'?'}));
+      }
+    });
+  }
+  return { ...match, state };
+}
+async function settleOnlineMatch(match, winnerId){
+  const wager=Number(match.wager||0);
+  if(match.status==='finished') return fetchOnlineMatch(match.id);
+  if(winnerId){
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[wager*2,winnerId]);
+    await recordTx(winnerId,wager,'online_match_win',match.id,`${match.game_type} match won`);
+    const loserId=match.host_id===winnerId?match.guest_id:match.host_id;
+    if(loserId) await recordTx(loserId,-wager,'online_match_loss',match.id,`${match.game_type} match lost`);
+    return saveOnlineMatch(match.id, match.state, { status:'finished', winner_id:winnerId });
+  }
+  const split=Math.floor(wager);
+  await db.run('UPDATE users SET credits=credits+? WHERE id=?',[split,match.host_id]);
+  if(match.guest_id) await db.run('UPDATE users SET credits=credits+? WHERE id=?',[split,match.guest_id]);
+  await recordTx(match.host_id,0,'online_match_tie',match.id,`${match.game_type} match tied`);
+  if(match.guest_id) await recordTx(match.guest_id,0,'online_match_tie',match.id,`${match.game_type} match tied`);
+  return saveOnlineMatch(match.id, match.state, { status:'finished', winner_id:null });
+}
 async function finishBlackjackGame(userId){
   const game=blackjackGames.get(userId);
   if(!game) throw new Error('No active blackjack game');
@@ -432,6 +650,10 @@ async function adminOnly(req,res,next) {
 }
 async function requireAssistanceAccess(req,res,next){
   if(!(await hasAssistanceAccess(req.user.id))) return res.status(403).json({error:'You do not have Assistance access'});
+  next();
+}
+async function requireAssistanceVisibility(req,res,next){
+  if(!(await hasAssistanceSessionVisibility(req.user.id))) return res.status(403).json({error:'Assistance is not available for this account'});
   next();
 }
 function isGrose(req) { return req.user.id === 'GROSE'; }
@@ -847,7 +1069,7 @@ app.get('/api/me', authMiddleware, async(req,res)=>{
   if(!user) return res.status(404).json({error:'User not found'});
   res.json(user);
 });
-app.get('/api/assistance/stream', assistanceStreamAuth, requireAssistanceAccess, async(req,res)=>{
+app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
@@ -869,7 +1091,7 @@ app.get('/api/assistance/stream', assistanceStreamAuth, requireAssistanceAccess,
 app.get('/api/assistance/users', authMiddleware, requireAssistanceAccess, async(req,res)=>{
   res.json(await db.all('SELECT id,name,role,grade,assistance_access FROM users WHERE id!=? ORDER BY name ASC',[req.user.id]));
 });
-app.get('/api/assistance/state', authMiddleware, requireAssistanceAccess, async(req,res)=>{
+app.get('/api/assistance/state', authMiddleware, async(req,res)=>{
   res.json(await getAssistanceStateForUser(req.user.id));
 });
 app.post('/api/assistance/contacts', authMiddleware, requireAssistanceAccess, async(req,res)=>{
@@ -916,6 +1138,7 @@ app.delete('/api/assistance/contacts/:id', authMiddleware, requireAssistanceAcce
 });
 app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, async(req,res)=>{
   try{
+    if(req.user.id!=='GROSE') return res.status(403).json({error:'Only GROSE can choose who is being assisted'});
     const seniorUserId = String(req.body.seniorUserId || '').trim();
     const mode = ['observe','guide','assist'].includes(req.body.mode) ? req.body.mode : 'guide';
     const guidedMode = toBool(req.body.guidedMode ?? true);
@@ -1276,6 +1499,118 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
 });
 app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
   res.json(await db.all(`SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,m.b_param,m.market_type,m.line,m.over_shares,m.under_shares FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]));
+});
+
+// ── ONLINE MATCHES ──
+app.get('/api/matches', authMiddleware, async(req,res)=>{
+  try{
+    const rows=await db.all(`SELECT m.*,
+      host.name as host_name,
+      guest.name as guest_name
+      FROM online_matches m
+      JOIN users host ON host.id=m.host_id
+      LEFT JOIN users guest ON guest.id=m.guest_id
+      WHERE m.status IN ('open','active')
+         OR m.host_id=? OR m.guest_id=?
+      ORDER BY m.updated_at DESC
+      LIMIT 40`, [req.user.id, req.user.id]);
+    const game=req.query.game ? String(req.query.game) : '';
+    const matches=rows
+      .filter(row=>!game || row.game_type===game)
+      .map(row=>sanitizeOnlineMatchForUser({ ...row, state:parseMatchState(row.state) }, req.user.id));
+    res.json(matches);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/matches', authMiddleware, async(req,res)=>{
+  try{
+    const gameType = ['dreidel','poker'].includes(req.body.gameType) ? req.body.gameType : null;
+    const wager = Math.max(1, Math.floor(Number(req.body.wager)||0));
+    if(!gameType) return res.status(400).json({error:'Choose a supported game'});
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(!user||Math.floor(user.credits)<wager) return res.status(400).json({error:'Insufficient credits'});
+    const existing=await db.get(`SELECT id FROM online_matches WHERE (host_id=? OR guest_id=?) AND status IN ('open','active') LIMIT 1`, [req.user.id, req.user.id]);
+    if(existing) return res.status(400).json({error:'Finish your current online match first'});
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[wager, req.user.id]);
+    await recordTx(req.user.id, -wager, 'online_match_buyin', null, `Opened ${gameType} match`);
+    const id=generateId('om');
+    const baseState={ phase:'open', log:['Waiting for an opponent.'] };
+    await db.run(`INSERT INTO online_matches (id,game_type,host_id,guest_id,status,wager,state,winner_id,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [id, gameType, req.user.id, null, 'open', wager, JSON.stringify(baseState), null, Date.now(), Date.now()]);
+    res.json(await fetchOnlineMatch(id));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/matches/:id/join', authMiddleware, async(req,res)=>{
+  try{
+    const match=await fetchOnlineMatch(req.params.id);
+    if(!match) return res.status(404).json({error:'Match not found'});
+    if(match.status!=='open') return res.status(400).json({error:'That match is no longer open'});
+    if(match.host_id===req.user.id) return res.status(400).json({error:'You cannot join your own match'});
+    const existing=await db.get(`SELECT id FROM online_matches WHERE (host_id=? OR guest_id=?) AND status IN ('open','active') LIMIT 1`, [req.user.id, req.user.id]);
+    if(existing) return res.status(400).json({error:'Finish your current online match first'});
+    const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(!user||Math.floor(user.credits)<Number(match.wager||0)) return res.status(400).json({error:'Insufficient credits'});
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[match.wager, req.user.id]);
+    await recordTx(req.user.id, -match.wager, 'online_match_buyin', match.id, `Joined ${match.game_type} match`);
+    const state=match.game_type==='dreidel'
+      ? makeOnlineDreidelState(match.host_id, req.user.id)
+      : makeOnlinePokerState(match.host_id, req.user.id);
+    const updated=await saveOnlineMatch(match.id, state, { guest_id:req.user.id, status:'active' });
+    res.json(sanitizeOnlineMatchForUser(updated, req.user.id));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/matches/:id/cancel', authMiddleware, async(req,res)=>{
+  try{
+    const match=await fetchOnlineMatch(req.params.id);
+    if(!match) return res.status(404).json({error:'Match not found'});
+    if(match.host_id!==req.user.id) return res.status(403).json({error:'Only the host can cancel'});
+    if(match.status!=='open') return res.status(400).json({error:'Only open lobbies can be cancelled'});
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[match.wager, req.user.id]);
+    await recordTx(req.user.id, match.wager, 'online_match_refund', match.id, `Cancelled ${match.game_type} lobby`);
+    const updated=await saveOnlineMatch(match.id, { ...match.state, phase:'cancelled' }, { status:'cancelled' });
+    res.json(updated);
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/matches/:id', authMiddleware, async(req,res)=>{
+  try{
+    const match=await fetchOnlineMatch(req.params.id);
+    if(!match) return res.status(404).json({error:'Match not found'});
+    if(match.host_id!==req.user.id && match.guest_id!==req.user.id) return res.status(403).json({error:'Not your match'});
+    res.json(sanitizeOnlineMatchForUser(match, req.user.id));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/matches/:id/action', authMiddleware, async(req,res)=>{
+  try{
+    let match=await fetchOnlineMatch(req.params.id);
+    if(!match) return res.status(404).json({error:'Match not found'});
+    if(match.host_id!==req.user.id && match.guest_id!==req.user.id) return res.status(403).json({error:'Not your match'});
+    if(match.status!=='active') return res.status(400).json({error:'This match is not active'});
+    const action=String(req.body.action||'').trim();
+    const state=match.state||{};
+    if(match.game_type==='dreidel'){
+      if(action!=='spin') return res.status(400).json({error:'Unsupported dreidel action'});
+      const spins=['N','G','H','S'];
+      const spin=spins[Math.floor(Math.random()*spins.length)];
+      applyDreidelSpin(state, req.user.id, spin);
+      match=await saveOnlineMatch(match.id, state);
+      if(state.phase==='finished'){
+        match.state=state;
+        match=await settleOnlineMatch(match, state.winnerId||null);
+      }
+      return res.json(sanitizeOnlineMatchForUser(match, req.user.id));
+    }
+    if(match.game_type==='poker'){
+      if(action!=='draw') return res.status(400).json({error:'Unsupported poker action'});
+      applyPokerDraw(state, req.user.id, req.body.discardIndexes||[]);
+      match=await saveOnlineMatch(match.id, state);
+      if(state.phase==='finished'){
+        match.state=state;
+        match=await settleOnlineMatch(match, state.winnerId||null);
+      }
+      return res.json(sanitizeOnlineMatchForUser(match, req.user.id));
+    }
+    res.status(400).json({error:'Unknown game'});
+  }catch(e){res.status(400).json({error:e.message});}
 });
 
 // ── LEADERBOARD ──

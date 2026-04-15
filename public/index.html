@@ -363,6 +363,7 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
+    <div class="nav-tab" data-tab="matches" onclick="switchTab('matches')">Matches</div>
     <div class="nav-tab admin-only" data-tab="casino" onclick="switchTab('casino')" style="display:none;">Casino</div>
     <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
@@ -391,6 +392,68 @@
         </select>
       </div>
       <div class="markets-grid" id="markets-grid"><div class="loading">Loading markets…</div></div>
+    </div>
+
+    <!-- MATCHES -->
+    <div id="tab-matches" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Online Matches</h2>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Challenge someone head-to-head in Dreidel or five-card draw poker.</p>
+        </div>
+        <button class="btn-admin btn-sm" onclick="renderMatches()" style="white-space:nowrap;">Refresh</button>
+      </div>
+
+      <div id="matches-summary" class="stat-cards" style="margin-bottom:18px;"></div>
+
+      <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:18px;align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div class="panel">
+            <div class="panel-title">Start a Match</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">One open or active table at a time. Your wager is held when you create the lobby.</p>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label>Game</label>
+                <select id="match-create-game">
+                  <option value="dreidel">Dreidel</option>
+                  <option value="poker">Poker</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Wager</label>
+                <input type="number" id="match-create-wager" min="1" step="1" placeholder="25">
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <button class="quick-btn" onclick="setMatchWager(10)">10</button>
+              <button class="quick-btn" onclick="setMatchWager(25)">25</button>
+              <button class="quick-btn" onclick="setMatchWager(50)">50</button>
+              <button class="quick-btn" onclick="setMatchWager(100)">100</button>
+            </div>
+            <button class="btn-admin" style="width:100%;" onclick="createOnlineMatch()">Create Lobby</button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Open Tables</div>
+            <div id="matches-open-list"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div class="panel">
+            <div class="panel-title">Your Table</div>
+            <div id="matches-current"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">How It Works</div>
+            <div id="matches-help" style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2);line-height:1.55;">
+              <div>Dreidel: each player starts with 7 tokens and spins on their turn until one player controls everything in the pot.</div>
+              <div>Poker: both players get 5 cards, then each player may discard up to 3 cards one time before the showdown.</div>
+              <div>Winnings: both players buy in with the same wager, and the winner takes the whole pot. A poker tie splits it back evenly.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
 <!-- CASINO -->
@@ -1019,6 +1082,11 @@ let assistanceLastCursorSentAt=0;
 let assistanceMessageTimeout=null;
 let assistanceHighlightTimeout=null;
 let assistanceRuntimeBound=false;
+let onlineMatches=[];
+let onlineMatchFocus=null;
+function canUseAssistanceTab(){
+  return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
+}
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
@@ -1214,18 +1282,18 @@ async function enterApp(){
   if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
   document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
-  document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.assistance_access)?'block':'none');
+  document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
   updateTopbar();renderMarkets();
   setInterval(pollUnreadCount,5000);pollUnreadCount();
   setInterval(pollResolutions,8000);pollResolutions();
   clearInterval(popupPollInterval);
   popupPollInterval=setInterval(pollIncomingPopup,3000);
   pollIncomingPopup();
-  if(currentUser.id==='GROSE'||currentUser.assistance_access){
-    bindAssistanceRuntime();
-    startAssistanceStream();
-    await Promise.allSettled([loadAssistanceDirectory(), loadAssistanceState()]);
-  }
+  bindAssistanceRuntime();
+  await loadAssistanceState(false);
+  if(canUseAssistanceTab()) await loadAssistanceDirectory();
+  startAssistanceStream();
+  if(canUseAssistanceTab()) renderAssistanceTab();
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeProfileModal();closeSpinModal();}});
 }
 function updateTopbar(){
@@ -1236,12 +1304,13 @@ function updateTopbar(){
 async function refreshUser(){currentUser=await api('GET','/me');updateTopbar();}
 
 function switchTab(tab){
-  if(tab==='assistance'&&!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access))) return;
+  if(tab==='assistance'&&!canUseAssistanceTab()) return;
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   document.querySelector(`.nav-tab[data-tab="${tab}"]`).classList.add('active');
   if(tab==='markets')renderMarkets();
+  if(tab==='matches')renderMatches();
   if(tab==='feed')renderFeed();
   if(tab==='portfolio')renderPortfolio();
   if(tab==='leaderboard')renderLeaderboard();
@@ -1311,11 +1380,12 @@ async function loadAssistanceState(shouldRender=true){
   assistanceState=await api('GET','/assistance/state');
   assistanceActiveSession=getPrimaryAssistanceSession();
   assistancePendingSession=assistanceState.currentSessions.find(s=>s.status==='pending'&&s.senior_user_id===currentUser?.id)||null;
-  if(shouldRender||document.getElementById('tab-assistance')?.classList.contains('active')) renderAssistanceTab();
+  document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
+  if(canUseAssistanceTab()&&(shouldRender||document.getElementById('tab-assistance')?.classList.contains('active'))) renderAssistanceTab();
   syncAssistanceOverlay();
 }
 function renderAssistanceTab(){
-  if(!currentUser||!(currentUser.id==='GROSE'||currentUser.assistance_access)) return;
+  if(!currentUser||!canUseAssistanceTab()) return;
   const select=document.getElementById('assistance-helper-select');
   if(!select) return;
   const contactsList=document.getElementById('assistance-contacts-list');
@@ -1350,9 +1420,14 @@ function renderAssistanceTab(){
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">No users currently have managed assistance access.</p>`;
+  }else if(currentUser.assistance_access){
+    select.innerHTML=`<option value="">GROSE manages active assistance</option>`;
+    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">You can see this tab because Assistance access is enabled for your account, but only GROSE can choose who is actively being assisted.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">This tab is informational on non-GROSE accounts. Session assignment and remote control stay locked to GROSE.</div></div>`;
+    helperForList.innerHTML=`<p style="font-size:13px;color:var(--text3);">No start controls are available on this account.</p>`;
   }else{
-    select.innerHTML=`<option value="">Select a person</option>`;
-    contactsList.innerHTML=`<p style="font-size:13px;color:var(--text3);">Assistance is managed by GROSE for this account.</p>`;
+    select.innerHTML=`<option value="">Assistance is active</option>`;
+    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">This tab is view-only while someone is helping you. You do not need to do anything here.</div></div>`;
     incomingList.innerHTML='';
     helperForList.innerHTML='';
   }
@@ -1374,7 +1449,7 @@ function renderAssistanceTab(){
         </div>
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
           ${session.status==='pending'&&amSenior&&!managedSession?`<button class="btn-admin btn-sm" onclick="respondToAssistanceRequest(true)">Accept</button><button class="btn-admin btn-sm btn-danger" onclick="respondToAssistanceRequest(false)">Decline</button>`:''}
-          ${session.status==='active'?`<button class="btn-admin btn-sm btn-danger" onclick="stopActiveAssistance('stopped from assistance tab')">Stop Session</button>`:''}
+          ${session.status==='active'&&!amSenior?`<button class="btn-admin btn-sm btn-danger" onclick="stopActiveAssistance('stopped from assistance tab')">Stop Session</button>`:''}
           ${session.status==='active'&&amSenior&&!managedSession?`<button class="btn-admin btn-sm" onclick="toggleAssistanceControlGrant()">${session.control_enabled?'Revoke Control':'Allow Control'}</button>`:''}
         </div>
       </div>
@@ -1382,7 +1457,7 @@ function renderAssistanceTab(){
   }
   const helperSession=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.helper_user_id===currentUser.id?assistanceActiveSession:null;
   const managedHelperSession=isManagedAssistanceSession(helperSession);
-  if(!helperSession){
+  if(!helperSession||currentUser.id!=='GROSE'){
     helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Start a session as a trusted helper to unlock guided highlights, narration, and assisted interaction tools.</p>`;
   }else{
     helperConsoleEl.innerHTML=`
@@ -1425,6 +1500,7 @@ function renderAssistanceTab(){
         </div>
         <div class="assistance-item">
           <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Type Into Selected Field</div>
+          <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px;">Click "Highlight Next Click" on the field you want, then type the text below and press "Send Text".</div>
           <input id="assistance-input-text" type="text" placeholder="Enter text for the highlighted field">
           <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceInput()">Send Text</button>
         </div>
@@ -1474,6 +1550,7 @@ async function removeAssistanceContact(contactId){
   }catch(e){alert(e.message);}
 }
 async function startAssistanceSession(seniorUserId){
+  if(currentUser?.id!=='GROSE'){alert('Only GROSE can choose who is being assisted.');return;}
   try{
     await api('POST','/assistance/sessions',{seniorUserId,mode:'guide',guidedMode:true,voiceEnabled:true,recordingEnabled:true});
     showToast(currentUser?.id==='GROSE'?'Session started.':'Session request sent.');
@@ -1617,7 +1694,7 @@ function syncAssistanceOverlay(){
   shell.style.opacity=active?'1':'0';
   banner.style.display=active?'block':'none';
   requestCard.style.display=pending&&!managedSession?'block':'none';
-  controlCard.style.display=active&&!managedSession?'block':'none';
+  controlCard.style.display='none';
   if(pending){
     document.getElementById('assistance-request-text').textContent=`${pending.helper_name} wants to help you inside Jewshi.`;
   }
@@ -2066,6 +2143,244 @@ async function renderLeaderboard(){
       <div style="font-size:14px;font-weight:700;color:var(--green)">⬡ ${u.credits.toLocaleString()}</div>
     </div>`;
   }).join('');
+}
+
+// ── MATCHES ──
+function setMatchWager(amount){
+  document.getElementById('match-create-wager').value=Math.max(1,Math.floor(amount)||0);
+}
+function pokerSuitToSymbol(suit){
+  return ({S:'♠',H:'♥',D:'♦',C:'♣'})[suit]||suit||'?';
+}
+function renderPokerCard(card){
+  if(!card||card.v==='?'||card.s==='?') return renderCard({v:'?',s:'?'}, true);
+  return renderCard({v:card.v,s:pokerSuitToSymbol(card.s)});
+}
+function getMatchOpponent(match){
+  if(!match) return null;
+  if(match.host_id===currentUser.id){
+    return {id:match.guest_id,name:match.guest_name||match.guest_id||'Waiting for player'};
+  }
+  return {id:match.host_id,name:match.host_name||match.host_id};
+}
+function getMyMatchFromList(matches){
+  return matches.find(m=>m.host_id===currentUser.id||m.guest_id===currentUser.id)||null;
+}
+function renderMatchesSummary(){
+  const openCount=onlineMatches.filter(m=>m.status==='open').length;
+  const activeCount=onlineMatches.filter(m=>m.status==='active').length;
+  const myMatch=currentOnlineMatchForView();
+  document.getElementById('matches-summary').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green)">⬡ ${(currentUser?.credits||0).toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">Open Tables</div><div class="stat-value">${openCount}</div></div>
+    <div class="stat-card"><div class="stat-label">Active Matches</div><div class="stat-value">${activeCount}</div></div>
+    <div class="stat-card"><div class="stat-label">Your Status</div><div class="stat-value" style="font-size:18px;">${myMatch?esc(matchStatusLabel(myMatch)):'Ready'}</div></div>`;
+}
+function matchStatusLabel(match){
+  if(match.status==='open') return 'Waiting';
+  if(match.status==='active') return match.game_type==='dreidel'?'Playing Dreidel':'Playing Poker';
+  if(match.status==='finished') return 'Finished';
+  if(match.status==='cancelled') return 'Cancelled';
+  return match.status||'Open';
+}
+function currentOnlineMatchForView(){
+  const myLive=getMyMatchFromList(onlineMatches);
+  if(myLive) return myLive;
+  if(onlineMatchFocus&&onlineMatchFocus.status!=='cancelled'&&(onlineMatchFocus.host_id===currentUser.id||onlineMatchFocus.guest_id===currentUser.id)) return onlineMatchFocus;
+  return null;
+}
+async function renderMatches(){
+  const currentEl=document.getElementById('matches-current');
+  const openEl=document.getElementById('matches-open-list');
+  if(!currentEl||!openEl) return;
+  const wagerInput=document.getElementById('match-create-wager');
+  if(wagerInput&&!wagerInput.value) wagerInput.value='25';
+  currentEl.innerHTML='<div class="loading">Loading your table…</div>';
+  openEl.innerHTML='<div class="loading">Loading tables…</div>';
+  try{
+    onlineMatches=await api('GET','/matches');
+    const myMatch=getMyMatchFromList(onlineMatches);
+    if(myMatch){
+      try{
+        onlineMatchFocus=await api('GET',`/matches/${myMatch.id}`);
+      }catch(e){
+        onlineMatchFocus=myMatch;
+      }
+    }
+    renderMatchesSummary();
+    renderOpenMatchList();
+    renderCurrentMatch();
+  }catch(e){
+    currentEl.innerHTML='<p style="color:var(--red);font-size:13px;">Failed to load: '+esc(e.message)+'</p>';
+    openEl.innerHTML='';
+  }
+}
+function renderOpenMatchList(){
+  const openEl=document.getElementById('matches-open-list');
+  const lobbies=onlineMatches.filter(m=>m.status==='open'&&m.host_id!==currentUser.id);
+  if(!lobbies.length){
+    openEl.innerHTML='<p style="font-size:13px;color:var(--text3);">No open tables right now. Start one and wait for a challenger.</p>';
+    return;
+  }
+  openEl.innerHTML=lobbies.map(match=>`
+    <div style="padding:14px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg3);margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${match.game_type==='dreidel'?'Dreidel':'Poker'} Table</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px;">Hosted by ${esc(match.host_name||match.host_id)} · ⬡ ${Number(match.wager||0).toLocaleString()} buy-in</div>
+        </div>
+        <button class="btn-admin btn-sm" onclick="joinOnlineMatch('${match.id}')">Join</button>
+      </div>
+    </div>`).join('');
+}
+function renderCurrentMatch(){
+  const el=document.getElementById('matches-current');
+  const match=currentOnlineMatchForView();
+  if(!match){
+    el.innerHTML='<p style="font-size:13px;color:var(--text3);">You are not seated right now. Create a lobby or join an open table.</p>';
+    return;
+  }
+  if(match.status==='open'){
+    el.innerHTML=renderOpenOwnedMatch(match);
+    return;
+  }
+  if(match.game_type==='dreidel'){
+    el.innerHTML=renderDreidelMatch(match);
+    return;
+  }
+  el.innerHTML=renderPokerMatch(match);
+}
+function renderOpenOwnedMatch(match){
+  return `
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="padding:16px;border-radius:var(--radius-lg);border:1px solid var(--accent-dim);background:var(--accent-bg);">
+        <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:6px;">Lobby Open</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">${match.game_type==='dreidel'?'Dreidel':'Poker'} table for ⬡ ${Number(match.wager||0).toLocaleString()}</div>
+        <div style="font-size:13px;color:var(--text2);">Waiting for someone else to join your match.</div>
+      </div>
+      <button class="btn-admin btn-danger" style="width:max-content;" onclick="cancelOnlineMatch('${match.id}')">Cancel Lobby</button>
+    </div>`;
+}
+function renderDreidelMatch(match){
+  const state=match.state||{};
+  const opponent=getMatchOpponent(match);
+  const myTokens=Number(state.tokens?.[currentUser.id]||0);
+  const oppTokens=opponent?.id?Number(state.tokens?.[opponent.id]||0):0;
+  const myTurn=state.turnUserId===currentUser.id&&match.status==='active';
+  const finished=match.status==='finished'||state.phase==='finished';
+  const winnerLabel=state.winnerId===currentUser.id?'You won!':state.winnerId?`${esc(opponent?.name||state.winnerId)} won.`:'Match complete.';
+  return `
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">
+        <div class="stat-card"><div class="stat-label">You</div><div class="stat-value" style="font-size:20px;">${myTokens}</div></div>
+        <div class="stat-card"><div class="stat-label">Pot</div><div class="stat-value" style="font-size:20px;color:var(--gold);">${Number(state.pot||0)}</div></div>
+        <div class="stat-card"><div class="stat-label">${esc(opponent?.name||'Opponent')}</div><div class="stat-value" style="font-size:20px;">${oppTokens}</div></div>
+      </div>
+      <div style="padding:14px 16px;border-radius:var(--radius-lg);border:1px solid ${finished?'var(--green-dim)':myTurn?'var(--accent-dim)':'var(--border)'};background:${finished?'rgba(0,208,132,0.1)':myTurn?'var(--accent-bg)':'var(--bg3)'};">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">${finished?winnerLabel:(myTurn?'Your turn to spin.':`${esc(opponent?.name||'Opponent')} is up.`)}</div>
+        <div style="font-size:12px;color:var(--text3);">${state.lastSpin?`${esc(state.lastSpin.userId)} last spun ${esc(state.lastSpin.name)}.`:'The dreidel is ready.'}</div>
+      </div>
+      ${finished?'':`<button class="btn-admin" style="width:max-content;" ${myTurn?'':'disabled'} onclick="playDreidelSpin('${match.id}')">Spin Dreidel</button>`}
+      <div>
+        <div style="font-size:12px;color:var(--text3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">Match Log</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">${(state.log||[]).slice(0,8).map(entry=>`<div style="padding:10px 12px;border-radius:var(--radius);background:var(--bg3);border:1px solid var(--border);font-size:13px;color:var(--text2);">${esc(entry)}</div>`).join('')||'<div style="font-size:13px;color:var(--text3);">No spins yet.</div>'}</div>
+      </div>
+    </div>`;
+}
+function renderPokerMatch(match){
+  const state=match.state||{};
+  const opponent=getMatchOpponent(match);
+  const myCards=state.hands?.[currentUser.id]||[];
+  const oppCards=opponent?.id?(state.hands?.[opponent.id]||[]):[];
+  const myDone=!!state.drawsSubmitted?.[currentUser.id];
+  const oppDone=opponent?.id?!!state.drawsSubmitted?.[opponent.id]:false;
+  const finished=match.status==='finished'||state.phase==='finished';
+  const myResult=state.results?.[currentUser.id];
+  const oppResult=opponent?.id?state.results?.[opponent.id]:null;
+  const header=finished
+    ?(state.winnerId===currentUser.id?'You won the hand.':state.winnerId?`${esc(opponent?.name||'Opponent')} won the hand.`:'The hand ended in a tie.')
+    :(myDone?'Waiting for the other draw to finish.':'Choose up to 3 cards to discard, then draw.');
+  return `
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div style="padding:14px 16px;border-radius:var(--radius-lg);border:1px solid ${finished?'var(--green-dim)':myDone?'var(--gold-dim)':'var(--accent-dim)'};background:${finished?'rgba(0,208,132,0.1)':myDone?'rgba(240,192,64,0.08)':'var(--accent-bg)'};">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">${header}</div>
+        <div style="font-size:12px;color:var(--text3);">${finished?(myResult?`Your hand: ${esc(myResult.label)}.`:'Showdown complete.'):oppDone?'Your opponent has already locked in their draw.':'Both players still have one draw.'}</div>
+      </div>
+
+      <div>
+        <div style="font-size:12px;color:var(--text3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">${esc(opponent?.name||'Opponent')}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">${oppCards.map(card=>`<div>${renderPokerCard(card)}</div>`).join('')}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px;">${finished&&oppResult?esc(oppResult.label):oppDone?'Draw locked in':'Still choosing cards'}</div>
+      </div>
+
+      <div>
+        <div style="font-size:12px;color:var(--text3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">Your hand</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">${myCards.map((card,index)=>`
+          <label style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px;border-radius:14px;border:1px solid ${!finished&&!myDone?'var(--accent-dim)':'var(--border)'};background:${!finished&&!myDone?'rgba(124,106,247,0.06)':'var(--bg3)'};">
+            ${renderPokerCard(card)}
+            ${finished||myDone?'':`<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);"><input type="checkbox" class="match-discard-box" value="${index}"> Discard</span>`}
+          </label>`).join('')}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px;">${finished&&myResult?esc(myResult.label):myDone?'Your draw is locked in.':'Pick up to three cards to replace.'}</div>
+      </div>
+
+      ${finished?'':`<button class="btn-admin" style="width:max-content;" ${myDone?'disabled':''} onclick="submitPokerDraw('${match.id}')">${myDone?'Draw Submitted':'Draw Cards'}</button>`}
+
+      <div>
+        <div style="font-size:12px;color:var(--text3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">Hand Log</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">${(state.log||[]).slice(0,8).map(entry=>`<div style="padding:10px 12px;border-radius:var(--radius);background:var(--bg3);border:1px solid var(--border);font-size:13px;color:var(--text2);">${esc(entry)}</div>`).join('')||'<div style="font-size:13px;color:var(--text3);">No actions yet.</div>'}</div>
+      </div>
+    </div>`;
+}
+async function createOnlineMatch(){
+  const gameType=document.getElementById('match-create-game').value;
+  const wager=Math.floor(Number(document.getElementById('match-create-wager').value));
+  if(!wager||wager<1){showToast('Enter a valid wager.');return;}
+  try{
+    onlineMatchFocus=await api('POST','/matches',{gameType,wager});
+    await refreshUser();
+    await renderMatches();
+    showToast(`${gameType==='dreidel'?'Dreidel':'Poker'} lobby created.`);
+  }catch(e){showToast(e.message);}
+}
+async function joinOnlineMatch(matchId){
+  try{
+    onlineMatchFocus=await api('POST',`/matches/${matchId}/join`);
+    await refreshUser();
+    await renderMatches();
+    showToast('Joined the match.');
+  }catch(e){showToast(e.message);}
+}
+async function cancelOnlineMatch(matchId){
+  try{
+    await api('POST',`/matches/${matchId}/cancel`);
+    onlineMatchFocus=null;
+    await refreshUser();
+    await renderMatches();
+    showToast('Lobby cancelled.');
+  }catch(e){showToast(e.message);}
+}
+async function playDreidelSpin(matchId){
+  try{
+    onlineMatchFocus=await api('POST',`/matches/${matchId}/action`,{action:'spin'});
+    await refreshUser();
+    await renderMatches();
+    if(onlineMatchFocus.status==='finished') showToast(onlineMatchFocus.state?.winnerId===currentUser.id?'You won the dreidel match.':'Dreidel match complete.');
+  }catch(e){showToast(e.message);}
+}
+async function submitPokerDraw(matchId){
+  const checked=[...document.querySelectorAll('.match-discard-box:checked')].map(el=>Number(el.value));
+  if(checked.length>3){showToast('Discard at most 3 cards.');return;}
+  try{
+    onlineMatchFocus=await api('POST',`/matches/${matchId}/action`,{action:'draw',discardIndexes:checked});
+    await refreshUser();
+    await renderMatches();
+    if(onlineMatchFocus.status==='finished'){
+      const winnerId=onlineMatchFocus.state?.winnerId||null;
+      showToast(winnerId===currentUser.id?'You won the poker hand.':winnerId?'Poker hand complete.':'Poker hand tied.');
+    }else{
+      showToast('Your draw has been submitted.');
+    }
+  }catch(e){showToast(e.message);}
 }
 
 // ── STORE ──
