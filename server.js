@@ -19,6 +19,7 @@ const DEFAULT_POPUP_TAB_PASSWORD = process.env.POPUP_TAB_PASSWORD || 'BryceB0mb!
 const POPUP_UNLOCK_TTL_MS = 1000 * 60 * 45;
 const popupAdminUnlocks = new Map();
 const UPLOAD_ROOT = path.join(__dirname, 'public', 'uploads', 'popups');
+const assistanceStreams = new Map();
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -133,6 +134,37 @@ async function initDB() {
       created_at INTEGER NOT NULL,
       shown_at INTEGER DEFAULT NULL,
       stopped_at INTEGER DEFAULT NULL
+    )
+    ;CREATE TABLE IF NOT EXISTS assistance_contacts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      helper_user_id TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      approved_at INTEGER DEFAULT NULL
+    )
+    ;CREATE TABLE IF NOT EXISTS assistance_sessions (
+      id TEXT PRIMARY KEY,
+      senior_user_id TEXT NOT NULL,
+      helper_user_id TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      mode TEXT DEFAULT 'guide',
+      guided_mode INTEGER DEFAULT 1,
+      control_enabled INTEGER DEFAULT 0,
+      voice_enabled INTEGER DEFAULT 1,
+      recording_enabled INTEGER DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      started_at INTEGER DEFAULT NULL,
+      ended_at INTEGER DEFAULT NULL,
+      stop_reason TEXT DEFAULT ''
+    )
+    ;CREATE TABLE IF NOT EXISTS assistance_events (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      actor_user_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      payload TEXT DEFAULT '{}',
+      created_at INTEGER NOT NULL
     )
 
   `);
@@ -380,6 +412,12 @@ function authMiddleware(req,res,next) {
   try { req.user = jwt.verify(token, JWT_SECRET); next(); }
   catch { res.status(401).json({error:'Invalid token'}); }
 }
+function assistanceStreamAuth(req,res,next) {
+  const token = req.query.token || req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({error:'No token'});
+  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
+  catch { res.status(401).json({error:'Invalid token'}); }
+}
 async function adminOnly(req,res,next) {
   const user = await db.get('SELECT role FROM users WHERE id=?',[req.user.id]);
   if (!user||user.role!=='admin') return res.status(403).json({error:'Admin only'});
@@ -424,6 +462,83 @@ function censorText(text) {
 }
 function getYesPercent(m) { const t=(m.yes_shares||0)+(m.no_shares||0); return t===0?50:Math.round((m.yes_shares/t)*100); }
 function getOverPercent(m) { const t=(m.over_shares||0)+(m.under_shares||0); return t===0?50:Math.round((m.over_shares/t)*100); }
+function toBool(value){
+  return value===true || value===1 || value==='1' || value==='true';
+}
+function writeSse(res, payload){
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+function emitAssistance(userIds, type, payload={}){
+  const targets = [...new Set((Array.isArray(userIds)?userIds:[userIds]).filter(Boolean))];
+  const message = { type, payload, at: Date.now() };
+  targets.forEach(userId=>{
+    const streams = assistanceStreams.get(userId);
+    if(!streams) return;
+    streams.forEach(res=>writeSse(res, message));
+  });
+}
+async function fetchAssistanceSession(sessionId){
+  return db.get(`SELECT s.*,
+    senior.name as senior_name, senior.role as senior_role, senior.grade as senior_grade,
+    helper.name as helper_name, helper.role as helper_role, helper.grade as helper_grade
+    FROM assistance_sessions s
+    JOIN users senior ON senior.id=s.senior_user_id
+    JOIN users helper ON helper.id=s.helper_user_id
+    WHERE s.id=?`, [sessionId]);
+}
+async function logAssistanceEvent(sessionId, actorUserId, eventType, payload={}){
+  const id = generateId('ae');
+  const createdAt = Date.now();
+  await db.run(
+    'INSERT INTO assistance_events (id,session_id,actor_user_id,event_type,payload,created_at) VALUES (?,?,?,?,?,?)',
+    [id, sessionId, actorUserId, eventType, JSON.stringify(payload||{}), createdAt]
+  );
+  return { id, session_id: sessionId, actor_user_id: actorUserId, event_type: eventType, payload, created_at: createdAt };
+}
+async function emitAssistanceSessionRefresh(sessionId, type='assistance-session', extra={}){
+  const session = await fetchAssistanceSession(sessionId);
+  if(!session) return;
+  emitAssistance([session.senior_user_id, session.helper_user_id], type, { sessionId, ...extra });
+}
+async function getAssistanceStateForUser(userId){
+  const [contacts, incomingRequests, helperFor, currentSessions, recentSessions] = await Promise.all([
+    db.all(`SELECT c.*,u.name as helper_name,u.role as helper_role,u.grade as helper_grade
+      FROM assistance_contacts c
+      JOIN users u ON u.id=c.helper_user_id
+      WHERE c.user_id=?
+      ORDER BY c.created_at DESC`, [userId]),
+    db.all(`SELECT c.*,u.name as senior_name,u.role as senior_role,u.grade as senior_grade
+      FROM assistance_contacts c
+      JOIN users u ON u.id=c.user_id
+      WHERE c.helper_user_id=? AND c.status='pending'
+      ORDER BY c.created_at DESC`, [userId]),
+    db.all(`SELECT c.*,u.name as senior_name,u.role as senior_role,u.grade as senior_grade
+      FROM assistance_contacts c
+      JOIN users u ON u.id=c.user_id
+      WHERE c.helper_user_id=? AND c.status='approved'
+      ORDER BY u.name ASC`, [userId]),
+    db.all(`SELECT s.*,
+      senior.name as senior_name, senior.role as senior_role,
+      helper.name as helper_name, helper.role as helper_role
+      FROM assistance_sessions s
+      JOIN users senior ON senior.id=s.senior_user_id
+      JOIN users helper ON helper.id=s.helper_user_id
+      WHERE (s.senior_user_id=? OR s.helper_user_id=?)
+        AND s.status IN ('pending','active')
+      ORDER BY s.created_at DESC`, [userId, userId]),
+    db.all(`SELECT s.*,
+      senior.name as senior_name,
+      helper.name as helper_name
+      FROM assistance_sessions s
+      JOIN users senior ON senior.id=s.senior_user_id
+      JOIN users helper ON helper.id=s.helper_user_id
+      WHERE (s.senior_user_id=? OR s.helper_user_id=?)
+        AND s.status='stopped'
+      ORDER BY COALESCE(s.ended_at,s.created_at) DESC
+      LIMIT 12`, [userId, userId]),
+  ]);
+  return { contacts, incomingRequests, helperFor, currentSessions, recentSessions };
+}
 // ── EMAIL VERIFICATION ──
 app.post('/api/auth/verify-code', async(req,res)=>{
   try{
@@ -721,6 +836,216 @@ app.get('/api/me', authMiddleware, async(req,res)=>{
   if(!user) return res.status(404).json({error:'User not found'});
   res.json(user);
 });
+app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  if(res.flushHeaders) res.flushHeaders();
+  const userId = req.user.id;
+  const streams = assistanceStreams.get(userId) || new Set();
+  streams.add(res);
+  assistanceStreams.set(userId, streams);
+  writeSse(res, { type:'connected', payload:{ userId }, at:Date.now() });
+  const heartbeat = setInterval(()=>res.write(': keep-alive\n\n'), 25000);
+  req.on('close', ()=>{
+    clearInterval(heartbeat);
+    const activeStreams = assistanceStreams.get(userId);
+    if(!activeStreams) return;
+    activeStreams.delete(res);
+    if(!activeStreams.size) assistanceStreams.delete(userId);
+  });
+});
+app.get('/api/assistance/users', authMiddleware, async(req,res)=>{
+  res.json(await db.all('SELECT id,name,role,grade FROM users WHERE id!=? ORDER BY name ASC',[req.user.id]));
+});
+app.get('/api/assistance/state', authMiddleware, async(req,res)=>{
+  res.json(await getAssistanceStateForUser(req.user.id));
+});
+app.post('/api/assistance/contacts', authMiddleware, async(req,res)=>{
+  try{
+    const helperUserId = String(req.body.helperUserId || '').trim();
+    if(!helperUserId) return res.status(400).json({error:'Choose a helper first'});
+    if(helperUserId===req.user.id) return res.status(400).json({error:'You cannot add yourself as a helper'});
+    const helper = await db.get('SELECT id FROM users WHERE id=?',[helperUserId]);
+    if(!helper) return res.status(404).json({error:'Helper not found'});
+    const existing = await db.get('SELECT * FROM assistance_contacts WHERE user_id=? AND helper_user_id=?',[req.user.id, helperUserId]);
+    if(existing?.status==='approved') return res.json({success:true});
+    if(existing){
+      await db.run('UPDATE assistance_contacts SET status=?, created_at=?, approved_at=NULL WHERE id=?',['pending', Date.now(), existing.id]);
+      emitAssistance(helperUserId, 'assistance-contact', { kind:'request', contactId:existing.id, fromUserId:req.user.id });
+      return res.json({success:true});
+    }
+    const id = generateId('ac');
+    await db.run('INSERT INTO assistance_contacts (id,user_id,helper_user_id,status,created_at,approved_at) VALUES (?,?,?,?,?,NULL)',
+      [id, req.user.id, helperUserId, 'pending', Date.now()]);
+    emitAssistance(helperUserId, 'assistance-contact', { kind:'request', contactId:id, fromUserId:req.user.id });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/assistance/contacts/:id/approve', authMiddleware, async(req,res)=>{
+  try{
+    const contact = await db.get('SELECT * FROM assistance_contacts WHERE id=?',[req.params.id]);
+    if(!contact) return res.status(404).json({error:'Request not found'});
+    if(contact.helper_user_id!==req.user.id) return res.status(403).json({error:'Not your request'});
+    await db.run('UPDATE assistance_contacts SET status=?, approved_at=? WHERE id=?',['approved', Date.now(), contact.id]);
+    emitAssistance([contact.user_id, contact.helper_user_id], 'assistance-contact', { kind:'approved', contactId:contact.id });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.delete('/api/assistance/contacts/:id', authMiddleware, async(req,res)=>{
+  try{
+    const contact = await db.get('SELECT * FROM assistance_contacts WHERE id=?',[req.params.id]);
+    if(!contact) return res.status(404).json({error:'Request not found'});
+    if(contact.user_id!==req.user.id && contact.helper_user_id!==req.user.id)
+      return res.status(403).json({error:'Not allowed'});
+    await db.run('DELETE FROM assistance_contacts WHERE id=?',[contact.id]);
+    emitAssistance([contact.user_id, contact.helper_user_id], 'assistance-contact', { kind:'removed', contactId:contact.id });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/assistance/sessions', authMiddleware, async(req,res)=>{
+  try{
+    const seniorUserId = String(req.body.seniorUserId || '').trim();
+    const mode = ['observe','guide','assist'].includes(req.body.mode) ? req.body.mode : 'guide';
+    const guidedMode = toBool(req.body.guidedMode ?? true);
+    const voiceEnabled = toBool(req.body.voiceEnabled ?? true);
+    const recordingEnabled = toBool(req.body.recordingEnabled ?? true);
+    if(!seniorUserId) return res.status(400).json({error:'Choose who you want to help'});
+    if(seniorUserId===req.user.id) return res.status(400).json({error:'Use another account as the helper'});
+    const relationship = await db.get(
+      `SELECT id FROM assistance_contacts
+       WHERE user_id=? AND helper_user_id=? AND status='approved'`,
+      [seniorUserId, req.user.id]
+    );
+    if(!relationship) return res.status(403).json({error:'That person has not approved you as a trusted helper'});
+    const busy = await db.get(
+      `SELECT id FROM assistance_sessions
+       WHERE status IN ('pending','active')
+         AND (senior_user_id=? OR helper_user_id=? OR senior_user_id=? OR helper_user_id=?)
+       LIMIT 1`,
+      [seniorUserId, seniorUserId, req.user.id, req.user.id]
+    );
+    if(busy) return res.status(400).json({error:'One of you is already in an assistance session'});
+    const id = generateId('as');
+    await db.run(`INSERT INTO assistance_sessions
+      (id,senior_user_id,helper_user_id,status,mode,guided_mode,control_enabled,voice_enabled,recording_enabled,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [id, seniorUserId, req.user.id, 'pending', mode, guidedMode?1:0, 0, voiceEnabled?1:0, recordingEnabled?1:0, Date.now()]);
+    await logAssistanceEvent(id, req.user.id, 'session_requested', { mode, guidedMode, voiceEnabled, recordingEnabled });
+    emitAssistance([seniorUserId, req.user.id], 'assistance-session', { kind:'requested', sessionId:id });
+    res.json({session:await fetchAssistanceSession(id)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/assistance/sessions/:id/respond', authMiddleware, async(req,res)=>{
+  try{
+    const approve = toBool(req.body.approve);
+    const session = await fetchAssistanceSession(req.params.id);
+    if(!session) return res.status(404).json({error:'Session not found'});
+    if(session.senior_user_id!==req.user.id) return res.status(403).json({error:'Only the assisted user can approve'});
+    if(session.status!=='pending') return res.status(400).json({error:'This request is no longer pending'});
+    if(approve){
+      await db.run('UPDATE assistance_sessions SET status=?, started_at=? WHERE id=?',['active', Date.now(), session.id]);
+      await logAssistanceEvent(session.id, req.user.id, 'session_approved', {});
+      await emitAssistanceSessionRefresh(session.id, 'assistance-session', { kind:'approved' });
+      return res.json({success:true});
+    }
+    await db.run('UPDATE assistance_sessions SET status=?, ended_at=?, stop_reason=? WHERE id=?',['stopped', Date.now(), 'declined', session.id]);
+    await logAssistanceEvent(session.id, req.user.id, 'session_declined', {});
+    await emitAssistanceSessionRefresh(session.id, 'assistance-session', { kind:'declined' });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/assistance/sessions/:id/stop', authMiddleware, async(req,res)=>{
+  try{
+    const reason = String(req.body.reason || 'stopped').slice(0,140);
+    const session = await fetchAssistanceSession(req.params.id);
+    if(!session) return res.status(404).json({error:'Session not found'});
+    if(session.senior_user_id!==req.user.id && session.helper_user_id!==req.user.id)
+      return res.status(403).json({error:'Not your session'});
+    if(session.status==='stopped') return res.json({success:true});
+    await db.run('UPDATE assistance_sessions SET status=?, ended_at=?, stop_reason=? WHERE id=?',['stopped', Date.now(), reason, session.id]);
+    await logAssistanceEvent(session.id, req.user.id, 'session_stopped', { reason });
+    await emitAssistanceSessionRefresh(session.id, 'assistance-session', { kind:'stopped', reason });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/assistance/sessions/:id/mode', authMiddleware, async(req,res)=>{
+  try{
+    const session = await fetchAssistanceSession(req.params.id);
+    if(!session) return res.status(404).json({error:'Session not found'});
+    if(session.status!=='active') return res.status(400).json({error:'Session is not active'});
+    if(session.senior_user_id!==req.user.id && session.helper_user_id!==req.user.id)
+      return res.status(403).json({error:'Not your session'});
+    const nextMode = ['observe','guide','assist'].includes(req.body.mode) ? req.body.mode : session.mode;
+    const guidedMode = req.body.guidedMode===undefined ? session.guided_mode : (toBool(req.body.guidedMode)?1:0);
+    const voiceEnabled = req.body.voiceEnabled===undefined ? session.voice_enabled : (toBool(req.body.voiceEnabled)?1:0);
+    const recordingEnabled = req.body.recordingEnabled===undefined ? session.recording_enabled : (toBool(req.body.recordingEnabled)?1:0);
+    let controlEnabled = session.control_enabled;
+    if(req.body.controlEnabled!==undefined){
+      if(session.senior_user_id!==req.user.id) return res.status(403).json({error:'Only the assisted user can grant control'});
+      controlEnabled = toBool(req.body.controlEnabled) ? 1 : 0;
+    }
+    await db.run(`UPDATE assistance_sessions
+      SET mode=?, guided_mode=?, voice_enabled=?, recording_enabled=?, control_enabled=?
+      WHERE id=?`,
+      [nextMode, guidedMode, voiceEnabled, recordingEnabled, controlEnabled, session.id]);
+    await logAssistanceEvent(session.id, req.user.id, 'mode_changed', {
+      mode: nextMode,
+      guidedMode: !!guidedMode,
+      voiceEnabled: !!voiceEnabled,
+      recordingEnabled: !!recordingEnabled,
+      controlEnabled: !!controlEnabled,
+    });
+    await emitAssistanceSessionRefresh(session.id, 'assistance-session', { kind:'mode-changed' });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/assistance/sessions/:id/event', authMiddleware, async(req,res)=>{
+  try{
+    const session = await fetchAssistanceSession(req.params.id);
+    if(!session) return res.status(404).json({error:'Session not found'});
+    if(session.status!=='active') return res.status(400).json({error:'Session is not active'});
+    if(session.senior_user_id!==req.user.id && session.helper_user_id!==req.user.id)
+      return res.status(403).json({error:'Not your session'});
+    const type = String(req.body.type || '').trim();
+    const payload = req.body.payload && typeof req.body.payload==='object' ? req.body.payload : {};
+    const helperOnlyTypes = new Set(['cursor','highlight','narration','navigate','control_request','click','input','keypress']);
+    const controlTypes = new Set(['click','input','keypress']);
+    if(!type) return res.status(400).json({error:'Missing event type'});
+    if(helperOnlyTypes.has(type) && session.helper_user_id!==req.user.id)
+      return res.status(403).json({error:'Only the helper can send that event'});
+    if(controlTypes.has(type) && !session.control_enabled)
+      return res.status(403).json({error:'Control has not been granted'});
+    const event = type==='cursor'
+      ? { id:generateId('ae'), session_id:session.id, actor_user_id:req.user.id, event_type:type, payload, created_at:Date.now() }
+      : await logAssistanceEvent(session.id, req.user.id, type, payload);
+    emitAssistance([session.senior_user_id, session.helper_user_id], 'assistance-event', {
+      sessionId: session.id,
+      event,
+    });
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.get('/api/assistance/sessions/:id/recording', authMiddleware, async(req,res)=>{
+  try{
+    const session = await fetchAssistanceSession(req.params.id);
+    if(!session) return res.status(404).json({error:'Session not found'});
+    if(session.senior_user_id!==req.user.id && session.helper_user_id!==req.user.id && req.user.role!=='admin')
+      return res.status(403).json({error:'Not your recording'});
+    const events = await db.all(`SELECT e.*,u.name as actor_name
+      FROM assistance_events e
+      JOIN users u ON u.id=e.actor_user_id
+      WHERE e.session_id=?
+      ORDER BY e.created_at ASC`, [session.id]);
+    res.json({
+      session,
+      events: events.map(event=>({
+        ...event,
+        payload: (()=>{ try{return JSON.parse(event.payload||'{}');}catch{return {}; } })(),
+      })),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
   res.json(await db.all("SELECT id,name,email,role,credits,grade,on_email_list,popup_access FROM users WHERE id!=?",[req.user.id]));
 });
@@ -785,6 +1110,9 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   await db.run('DELETE FROM messages WHERE sender_id=? OR recipient_id=?',[id,id]);
   await db.run('DELETE FROM post_likes WHERE user_id=?',[id]);
   await db.run('DELETE FROM post_reposts WHERE user_id=?',[id]);
+  await db.run('DELETE FROM assistance_events WHERE session_id IN (SELECT id FROM assistance_sessions WHERE senior_user_id=? OR helper_user_id=?)',[id,id]);
+  await db.run('DELETE FROM assistance_sessions WHERE senior_user_id=? OR helper_user_id=?',[id,id]);
+  await db.run('DELETE FROM assistance_contacts WHERE user_id=? OR helper_user_id=?',[id,id]);
   await db.run('DELETE FROM users WHERE id=?',[id]);
   res.json({success:true});
 });

@@ -249,6 +249,16 @@
   .img-preview-wrap{position:relative;margin-top:10px;}
   .img-preview{width:100%;max-height:200px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border);}
   .img-remove-btn{position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+  .assistance-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px}
+  .assistance-stack{display:flex;flex-direction:column;gap:16px}
+  .assistance-list{display:flex;flex-direction:column;gap:10px}
+  .assistance-item{padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--bg3)}
+  .assistance-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
+  .assistance-badge.pending{background:rgba(255,193,7,0.12);color:#ffcf5a;border:1px solid rgba(255,193,7,0.24)}
+  .assistance-badge.active{background:rgba(0,208,132,0.12);color:var(--green);border:1px solid rgba(0,208,132,0.24)}
+  .assistance-badge.stopped{background:rgba(255,69,96,0.12);color:var(--red);border:1px solid rgba(255,69,96,0.24)}
+  .assistance-helper-console{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  @media (max-width: 900px){.assistance-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -359,6 +369,7 @@
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
+    <div class="nav-tab" data-tab="assistance" onclick="switchTab('assistance')">Assistance</div>
     <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
   </div>
@@ -691,6 +702,61 @@
       </div>
     </div>
 
+    <div id="tab-assistance" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Remote Assistance</h2>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Trusted helpers can guide someone through Jewshi with visible cues, narration, and an instant stop button.</p>
+        </div>
+        <div class="assistance-badge active" id="assistance-connection-badge">Offline</div>
+      </div>
+      <div class="assistance-grid">
+        <div class="assistance-stack">
+          <div class="panel">
+            <div class="panel-title">Trusted Helpers</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Choose someone you trust. They must approve before they can help you.</p>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label>Choose a helper</label>
+                <select id="assistance-helper-select"></select>
+              </div>
+            </div>
+            <button class="btn-admin" onclick="requestTrustedHelper()">Send Helper Request</button>
+            <div id="assistance-contacts-list" class="assistance-list" style="margin-top:14px;"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Incoming Helper Requests</div>
+            <div id="assistance-incoming-list" class="assistance-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">People You Can Help</div>
+            <div id="assistance-helper-for-list" class="assistance-list"></div>
+          </div>
+        </div>
+        <div class="assistance-stack">
+          <div class="panel">
+            <div class="panel-title">Current Session</div>
+            <div id="assistance-current-session"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Helper Console</div>
+            <div id="assistance-helper-console"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Session Recordings</div>
+            <div id="assistance-recent-sessions" class="assistance-list"></div>
+          </div>
+          <div class="panel" id="assistance-recording-panel" style="display:none;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+              <div class="panel-title" style="margin:0;">Recording Timeline</div>
+              <button class="btn-admin btn-sm" onclick="closeAssistanceRecording()">Close</button>
+            </div>
+            <div id="assistance-recording-viewer" class="assistance-list" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-popup" class="tab-content">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
@@ -885,6 +951,45 @@
   </div>
 </div>
 
+<div id="assistance-overlay" style="display:none;position:fixed;inset:0;z-index:5500;pointer-events:none;">
+  <div id="assistance-overlay-shell" style="position:absolute;inset:0;border:4px solid rgba(57,201,255,0.7);box-shadow:inset 0 0 0 6px rgba(57,201,255,0.12);border-radius:18px;opacity:0;"></div>
+  <div id="assistance-highlight-box" style="display:none;position:fixed;border:3px solid #39c9ff;border-radius:16px;box-shadow:0 0 0 6px rgba(57,201,255,0.16);background:rgba(57,201,255,0.08);transition:all 0.22s ease;pointer-events:none;"></div>
+  <div id="assistance-helper-cursor" style="display:none;position:fixed;left:0;top:0;transform:translate(-50%,-50%);pointer-events:none;z-index:3;">
+    <div style="width:26px;height:26px;border-radius:50%;background:#39c9ff;box-shadow:0 0 0 5px rgba(57,201,255,0.18),0 0 22px rgba(57,201,255,0.38);position:relative;"></div>
+    <div style="margin-top:8px;background:#0b2130;color:#dff8ff;border:1px solid rgba(57,201,255,0.4);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Helper</div>
+  </div>
+  <div style="position:fixed;top:18px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+    <div style="pointer-events:auto;display:flex;flex-direction:column;gap:10px;max-width:min(560px,100%);">
+      <div id="assistance-banner" style="display:none;background:linear-gradient(135deg,#0c1b2a,#10283b);color:#e5fbff;border:1px solid rgba(57,201,255,0.36);border-radius:18px;padding:14px 16px;box-shadow:0 18px 40px rgba(0,0,0,0.24);">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#7fe3ff;margin-bottom:6px;">Assistance Active</div>
+        <div id="assistance-banner-text" style="font-size:15px;font-weight:700;"></div>
+        <div id="assistance-banner-subtext" style="font-size:12px;color:#b7dfea;margin-top:4px;"></div>
+      </div>
+      <div id="assistance-request-card" style="display:none;pointer-events:auto;background:#171925;color:#f2f5ff;border:1px solid rgba(255,255,255,0.1);border-radius:18px;padding:18px 18px 16px;box-shadow:0 18px 40px rgba(0,0,0,0.3);max-width:420px;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#9ed8ff;margin-bottom:6px;">Help Request</div>
+        <div id="assistance-request-text" style="font-size:16px;font-weight:700;line-height:1.4;"></div>
+        <div style="font-size:12px;color:#b6bdd6;line-height:1.5;margin-top:6px;">You stay in control. You can stop at any time, and keyboard/mouse control stays off until you allow it.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+          <button class="btn-admin" onclick="respondToAssistanceRequest(true)">Accept</button>
+          <button class="btn-admin btn-danger" onclick="respondToAssistanceRequest(false)">Decline</button>
+        </div>
+      </div>
+      <div id="assistance-message-card" style="display:none;pointer-events:none;background:rgba(10,15,22,0.9);color:#f3fbff;border:1px solid rgba(57,201,255,0.28);border-radius:16px;padding:14px 16px;max-width:460px;backdrop-filter:blur(10px);">
+        <div style="font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#7fe3ff;margin-bottom:6px;">Voice Guidance</div>
+        <div id="assistance-message-text" style="font-size:16px;font-weight:700;line-height:1.45;"></div>
+      </div>
+    </div>
+    <div id="assistance-control-card" style="display:none;pointer-events:auto;background:rgba(10,15,22,0.92);color:#f5fbff;border:1px solid rgba(255,255,255,0.1);border-radius:18px;padding:14px;min-width:280px;box-shadow:0 18px 40px rgba(0,0,0,0.28);">
+      <div style="font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:#a4f0c9;margin-bottom:8px;">Your Controls</div>
+      <div id="assistance-control-status" style="font-size:13px;color:#d5deef;line-height:1.5;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="assistance-control-toggle-btn" class="btn-admin" onclick="toggleAssistanceControlGrant()">Allow Control</button>
+        <button class="btn-admin btn-danger" onclick="stopActiveAssistance('stopped by assisted user')">Stop Assistance</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = window.location.hostname==='localhost'?'http://localhost:3000/api':'/api';
 const CREDITS_PER_DOLLAR=100;
@@ -901,6 +1006,19 @@ let popupAlertInterval=null;
 let popupSirenAudioCtx=null;
 let popupSirenNodes=null;
 let popupIntroTimeouts=[];
+let popupBackGuardActive=false;
+let popupCanClose=false;
+let assistanceDirectory=[];
+let assistanceState={contacts:[],incomingRequests:[],helperFor:[],currentSessions:[],recentSessions:[]};
+let assistanceEventSource=null;
+let assistanceActiveSession=null;
+let assistancePendingSession=null;
+let assistancePickerMode=null;
+let assistanceSelectedTarget=null;
+let assistanceLastCursorSentAt=0;
+let assistanceMessageTimeout=null;
+let assistanceHighlightTimeout=null;
+let assistanceRuntimeBound=false;
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
@@ -1070,6 +1188,14 @@ function doLogout(){
   sessionStorage.removeItem('popup_unlock_token');
   popupTabUnlocked=false;
   popupUnlockToken='';
+  closeAssistanceStream();
+  assistanceDirectory=[];
+  assistanceState={contacts:[],incomingRequests:[],helperFor:[],currentSessions:[],recentSessions:[]};
+  assistanceActiveSession=null;
+  assistancePendingSession=null;
+  assistancePickerMode=null;
+  assistanceSelectedTarget=null;
+  hideAssistanceOverlay();
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
   clearInterval(popupPollInterval);
   popupPollInterval=null;
@@ -1094,6 +1220,9 @@ async function enterApp(){
   clearInterval(popupPollInterval);
   popupPollInterval=setInterval(pollIncomingPopup,3000);
   pollIncomingPopup();
+  bindAssistanceRuntime();
+  startAssistanceStream();
+  await Promise.allSettled([loadAssistanceDirectory(), loadAssistanceState()]);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeProfileModal();closeSpinModal();}});
 }
 function updateTopbar(){
@@ -1114,9 +1243,504 @@ function switchTab(tab){
   if(tab==='leaderboard')renderLeaderboard();
   if(tab==='store')renderStore();
   if(tab==='messages')renderMessages();
+  if(tab==='assistance')renderAssistanceTab();
   if(tab==='admin')renderAdminTab();
   if(tab==='popup')renderPopupTab();
   if(tab==='casino')initCasino();
+}
+
+// ── ASSISTANCE ──
+function bindAssistanceRuntime(){
+  if(assistanceRuntimeBound) return;
+  assistanceRuntimeBound=true;
+  document.addEventListener('mousemove',maybeShareAssistanceCursor,{passive:true});
+  document.addEventListener('click',handleAssistancePicker,true);
+}
+function closeAssistanceStream(){
+  if(assistanceEventSource){
+    assistanceEventSource.close();
+    assistanceEventSource=null;
+  }
+}
+function startAssistanceStream(){
+  closeAssistanceStream();
+  if(!authToken || typeof EventSource==='undefined') return;
+  const streamUrl=`${API}/assistance/stream?token=${encodeURIComponent(authToken)}`;
+  assistanceEventSource=new EventSource(streamUrl);
+  assistanceEventSource.onmessage=async(event)=>{
+    try{
+      const msg=JSON.parse(event.data);
+      if(msg.type==='connected'){
+        const badge=document.getElementById('assistance-connection-badge');
+        if(badge){badge.textContent='Live';badge.className='assistance-badge active';}
+        return;
+      }
+      if(msg.type==='assistance-event'&&msg.payload?.event){
+        applyAssistanceEvent(msg.payload.event, msg.payload.sessionId);
+        return;
+      }
+      await loadAssistanceState(false);
+    }catch(e){}
+  };
+  assistanceEventSource.onerror=()=>{
+    const badge=document.getElementById('assistance-connection-badge');
+    if(badge){badge.textContent='Reconnecting';badge.className='assistance-badge pending';}
+  };
+}
+function cssEscapeSafe(value){
+  if(window.CSS&&typeof window.CSS.escape==='function') return window.CSS.escape(value);
+  return String(value).replace(/[^a-zA-Z0-9_-]/g,match=>`\\${match}`);
+}
+function getPrimaryAssistanceSession(){
+  return assistanceState.currentSessions.find(s=>s.status==='active')||assistanceState.currentSessions[0]||null;
+}
+async function loadAssistanceDirectory(){
+  if(!authToken) return;
+  assistanceDirectory=await api('GET','/assistance/users');
+  renderAssistanceTab();
+}
+async function loadAssistanceState(shouldRender=true){
+  if(!authToken) return;
+  assistanceState=await api('GET','/assistance/state');
+  assistanceActiveSession=getPrimaryAssistanceSession();
+  assistancePendingSession=assistanceState.currentSessions.find(s=>s.status==='pending'&&s.senior_user_id===currentUser?.id)||null;
+  if(shouldRender||document.getElementById('tab-assistance')?.classList.contains('active')) renderAssistanceTab();
+  syncAssistanceOverlay();
+}
+function renderAssistanceTab(){
+  const select=document.getElementById('assistance-helper-select');
+  if(!select) return;
+  const contactsList=document.getElementById('assistance-contacts-list');
+  const incomingList=document.getElementById('assistance-incoming-list');
+  const helperForList=document.getElementById('assistance-helper-for-list');
+  const currentSessionEl=document.getElementById('assistance-current-session');
+  const helperConsoleEl=document.getElementById('assistance-helper-console');
+  const recentSessionsEl=document.getElementById('assistance-recent-sessions');
+  select.innerHTML=`<option value="">Select a person</option>`+assistanceDirectory.map(user=>`<option value="${esc(user.id)}">${esc(user.name)}${user.grade?` (${esc(user.grade)})`:''}</option>`).join('');
+  contactsList.innerHTML=assistanceState.contacts.length?assistanceState.contacts.map(contact=>`
+    <div class="assistance-item">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(contact.helper_name)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px;">${contact.status==='approved'?'Approved helper':'Waiting for approval'}</div>
+        </div>
+        <div class="assistance-badge ${contact.status==='approved'?'active':'pending'}">${esc(contact.status)}</div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-admin btn-sm btn-danger" onclick="removeAssistanceContact('${contact.id}')">${contact.status==='approved'?'Remove':'Cancel Request'}</button>
+      </div>
+    </div>
+  `).join(''):`<p style="font-size:13px;color:var(--text3);">No helper relationships yet.</p>`;
+  incomingList.innerHTML=assistanceState.incomingRequests.length?assistanceState.incomingRequests.map(contact=>`
+    <div class="assistance-item">
+      <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(contact.senior_name)}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px;">Wants to add you as a trusted helper.</div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-admin btn-sm" onclick="approveAssistanceContact('${contact.id}')">Approve</button>
+        <button class="btn-admin btn-sm btn-danger" onclick="removeAssistanceContact('${contact.id}')">Decline</button>
+      </div>
+    </div>
+  `).join(''):`<p style="font-size:13px;color:var(--text3);">No pending requests.</p>`;
+  helperForList.innerHTML=assistanceState.helperFor.length?assistanceState.helperFor.map(contact=>`
+    <div class="assistance-item">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(contact.senior_name)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px;">You are a trusted helper for this person.</div>
+        </div>
+        <div class="assistance-badge active">Approved</div>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn-admin btn-sm" onclick="startAssistanceSession('${contact.user_id}')">Start Session</button>
+      </div>
+    </div>
+  `).join(''):`<p style="font-size:13px;color:var(--text3);">Nobody has approved you as a helper yet.</p>`;
+  const session=assistanceActiveSession||assistancePendingSession;
+  if(!session){
+    currentSessionEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">No active session. When a session starts, status, controls, and voice guidance options will appear here.</p>`;
+  }else{
+    const amSenior=session.senior_user_id===currentUser.id;
+    const otherName=amSenior?session.helper_name:session.senior_name;
+    currentSessionEl.innerHTML=`
+      <div class="assistance-item">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);">${amSenior?'Receiving help from':'Helping'} ${esc(otherName)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:5px;">Mode: <strong style="color:var(--text);text-transform:capitalize;">${esc(session.mode)}</strong> · Guided ${session.guided_mode?'on':'off'} · Voice ${session.voice_enabled?'on':'off'} · Recording ${session.recording_enabled?'on':'off'}</div>
+          </div>
+          <div class="assistance-badge ${session.status==='active'?'active':'pending'}">${esc(session.status)}</div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          ${session.status==='pending'&&amSenior?`<button class="btn-admin btn-sm" onclick="respondToAssistanceRequest(true)">Accept</button><button class="btn-admin btn-sm btn-danger" onclick="respondToAssistanceRequest(false)">Decline</button>`:''}
+          ${session.status==='active'?`<button class="btn-admin btn-sm btn-danger" onclick="stopActiveAssistance('stopped from assistance tab')">Stop Session</button>`:''}
+          ${session.status==='active'&&amSenior?`<button class="btn-admin btn-sm" onclick="toggleAssistanceControlGrant()">${session.control_enabled?'Revoke Control':'Allow Control'}</button>`:''}
+        </div>
+      </div>
+    `;
+  }
+  const helperSession=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.helper_user_id===currentUser.id?assistanceActiveSession:null;
+  if(!helperSession){
+    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Start a session as a trusted helper to unlock guided highlights, narration, and assisted interaction tools.</p>`;
+  }else{
+    helperConsoleEl.innerHTML=`
+      <div class="assistance-helper-console">
+        <div class="assistance-item">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Session Mode</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'observe'})">Observe</button>
+            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'guide'})">Guide</button>
+            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'assist'})">Assist</button>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-admin btn-sm" onclick="sendAssistControlRequest()">Request Control</button>
+            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({guidedMode:${helperSession.guided_mode?0:1}})">${helperSession.guided_mode?'Turn Guided Mode Off':'Turn Guided Mode On'}</button>
+            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({voiceEnabled:${helperSession.voice_enabled?0:1}})">${helperSession.voice_enabled?'Mute Voice':'Enable Voice'}</button>
+          </div>
+        </div>
+        <div class="assistance-item">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Guide To Tab</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('markets')">Markets</button>
+            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('feed')">JewGram</button>
+            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('portfolio')">My Bets</button>
+            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('messages')">Messages</button>
+            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('assistance')">Assistance</button>
+          </div>
+        </div>
+        <div class="assistance-item">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Pick Something On Screen</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-admin btn-sm" onclick="armAssistancePicker('highlight')">Highlight Next Click</button>
+            <button class="btn-admin btn-sm" onclick="armAssistancePicker('click')">Click Next Pick</button>
+          </div>
+          <div id="assistance-target-display" style="font-size:12px;color:var(--text3);margin-top:10px;">No target selected.</div>
+        </div>
+        <div class="assistance-item">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Narration</div>
+          <textarea id="assistance-narration-text" placeholder="Explain what is happening in simple words." style="width:100%;min-height:90px;resize:vertical;"></textarea>
+          <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceNarration()">Speak Message</button>
+        </div>
+        <div class="assistance-item">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Type Into Selected Field</div>
+          <input id="assistance-input-text" type="text" placeholder="Enter text for the highlighted field">
+          <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceInput()">Send Text</button>
+        </div>
+      </div>
+    `;
+  }
+  recentSessionsEl.innerHTML=assistanceState.recentSessions.length?assistanceState.recentSessions.map(session=>`
+    <div class="assistance-item">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${session.senior_user_id===currentUser.id?'Helped by':'Helped'} ${esc(session.senior_user_id===currentUser.id?session.helper_name:session.senior_name)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px;">${new Date(session.created_at).toLocaleString()} · ${session.mode} mode · ${session.stop_reason||'ended'}</div>
+        </div>
+        <div class="assistance-badge stopped">Ended</div>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn-admin btn-sm" onclick="viewAssistanceRecording('${session.id}')">View Timeline</button>
+      </div>
+    </div>
+  `).join(''):`<p style="font-size:13px;color:var(--text3);">No completed sessions yet.</p>`;
+}
+async function requestTrustedHelper(){
+  const select=document.getElementById('assistance-helper-select');
+  if(!select.value){alert('Choose a helper first.');return;}
+  try{
+    await api('POST','/assistance/contacts',{helperUserId:select.value});
+    showToast('Helper request sent.');
+    await loadAssistanceState();
+  }catch(e){alert(e.message);}
+}
+async function approveAssistanceContact(contactId){
+  try{
+    await api('POST',`/assistance/contacts/${contactId}/approve`,{});
+    showToast('Helper approved.');
+    await loadAssistanceState();
+  }catch(e){alert(e.message);}
+}
+async function removeAssistanceContact(contactId){
+  try{
+    await api('DELETE',`/assistance/contacts/${contactId}`);
+    await loadAssistanceState();
+  }catch(e){alert(e.message);}
+}
+async function startAssistanceSession(seniorUserId){
+  try{
+    await api('POST','/assistance/sessions',{seniorUserId,mode:'guide',guidedMode:true,voiceEnabled:true,recordingEnabled:true});
+    showToast('Session request sent.');
+    await loadAssistanceState();
+    switchTab('assistance');
+  }catch(e){alert(e.message);}
+}
+async function respondToAssistanceRequest(approve){
+  const session=assistancePendingSession;
+  if(!session) return;
+  try{
+    await api('POST',`/assistance/sessions/${session.id}/respond`,{approve});
+    await loadAssistanceState();
+  }catch(e){alert(e.message);}
+}
+async function stopActiveAssistance(reason='stopped'){
+  const session=assistanceActiveSession||assistancePendingSession;
+  if(!session) return;
+  try{
+    await api('POST',`/assistance/sessions/${session.id}/stop`,{reason});
+    await loadAssistanceState();
+    showToast('Assistance stopped.');
+  }catch(e){alert(e.message);}
+}
+async function updateAssistanceMode(changes){
+  if(!assistanceActiveSession) return;
+  try{
+    await api('POST',`/assistance/sessions/${assistanceActiveSession.id}/mode`,changes);
+    await loadAssistanceState();
+  }catch(e){alert(e.message);}
+}
+async function toggleAssistanceControlGrant(){
+  if(!assistanceActiveSession) return;
+  await updateAssistanceMode({controlEnabled:assistanceActiveSession.control_enabled?0:1});
+}
+async function sendAssistEvent(type,payload){
+  if(!assistanceActiveSession||assistanceActiveSession.status!=='active') return;
+  return api('POST',`/assistance/sessions/${assistanceActiveSession.id}/event`,{type,payload});
+}
+async function sendAssistNavigate(tab){
+  try{
+    await sendAssistEvent('navigate',{tab});
+    if(assistanceActiveSession?.guided_mode){
+      await sendAssistEvent('narration',{text:`Let's go to the ${tab} section.`});
+    }
+  }catch(e){alert(e.message);}
+}
+async function sendAssistControlRequest(){
+  try{
+    await sendAssistEvent('control_request',{text:'Your helper would like to click or type for you.'});
+    showToast('Control request sent.');
+  }catch(e){alert(e.message);}
+}
+function armAssistancePicker(mode){
+  assistancePickerMode=mode;
+  showToast(mode==='highlight'?'Click something to highlight it for the other person.':'Click a target to guide and then activate it.');
+}
+function getAssistanceSelectedTargetDisplay(){
+  const el=document.getElementById('assistance-target-display');
+  if(!el) return;
+  el.textContent=assistanceSelectedTarget?`Selected: ${assistanceSelectedTarget.label}`:'No target selected.';
+}
+function describeAssistTarget(target){
+  if(!target) return null;
+  const el=target.closest('[id], .nav-tab, input, textarea, select, button, a');
+  if(!el) return null;
+  if(el.closest('#assistance-overlay')||el.closest('#tab-assistance')) return null;
+  let selector='';
+  if(el.id) selector=`#${cssEscapeSafe(el.id)}`;
+  else if(el.dataset.tab) selector=`.nav-tab[data-tab="${cssEscapeSafe(el.dataset.tab)}"]`;
+  else if(el.getAttribute('placeholder')) selector=`${el.tagName.toLowerCase()}[placeholder="${String(el.getAttribute('placeholder')).replace(/"/g,'\\"')}"]`;
+  else if(el.getAttribute('onclick')) selector=`${el.tagName.toLowerCase()}[onclick="${String(el.getAttribute('onclick')).replace(/"/g,'\\"')}"]`;
+  else return null;
+  const label=(el.innerText||el.value||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.id||el.tagName).trim().slice(0,80);
+  return {selector,label:label||'selected item'};
+}
+async function handleAssistancePicker(event){
+  const helperSession=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.helper_user_id===currentUser?.id?assistanceActiveSession:null;
+  if(!helperSession||!assistancePickerMode) return;
+  const targetInfo=describeAssistTarget(event.target);
+  if(!targetInfo) return;
+  event.preventDefault();
+  event.stopPropagation();
+  assistanceSelectedTarget=targetInfo;
+  getAssistanceSelectedTargetDisplay();
+  try{
+    await sendAssistEvent('highlight',targetInfo);
+    if(assistancePickerMode==='click'){
+      await sendAssistEvent('click',targetInfo);
+    }else if(helperSession.guided_mode){
+      await sendAssistEvent('narration',{text:`Look for ${targetInfo.label}.`});
+    }
+  }catch(e){alert(e.message);}
+  assistancePickerMode=null;
+}
+async function maybeShareAssistanceCursor(event){
+  const helperSession=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.helper_user_id===currentUser?.id?assistanceActiveSession:null;
+  if(!helperSession) return;
+  const now=Date.now();
+  if(now-assistanceLastCursorSentAt<180) return;
+  assistanceLastCursorSentAt=now;
+  try{
+    await sendAssistEvent('cursor',{
+      x:Math.max(0,Math.min(1,event.clientX/window.innerWidth)),
+      y:Math.max(0,Math.min(1,event.clientY/window.innerHeight)),
+    });
+  }catch(e){}
+}
+async function sendAssistanceNarration(){
+  const input=document.getElementById('assistance-narration-text');
+  if(!input||!input.value.trim()) return;
+  try{
+    await sendAssistEvent('narration',{text:input.value.trim()});
+    input.value='';
+  }catch(e){alert(e.message);}
+}
+async function sendAssistanceInput(){
+  const input=document.getElementById('assistance-input-text');
+  if(!input||!input.value.trim()){alert('Enter text first.');return;}
+  if(!assistanceSelectedTarget){alert('Pick a field first.');return;}
+  try{
+    await sendAssistEvent('input',{selector:assistanceSelectedTarget.selector,label:assistanceSelectedTarget.label,value:input.value});
+    input.value='';
+  }catch(e){alert(e.message);}
+}
+function syncAssistanceOverlay(){
+  const overlay=document.getElementById('assistance-overlay');
+  const shell=document.getElementById('assistance-overlay-shell');
+  const banner=document.getElementById('assistance-banner');
+  const requestCard=document.getElementById('assistance-request-card');
+  const controlCard=document.getElementById('assistance-control-card');
+  if(!overlay||!currentUser) return;
+  const pending=assistancePendingSession;
+  const active=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.senior_user_id===currentUser.id?assistanceActiveSession:null;
+  if(!pending&&!active){
+    hideAssistanceOverlay();
+    return;
+  }
+  overlay.style.display='block';
+  shell.style.opacity=active?'1':'0';
+  banner.style.display=active?'block':'none';
+  requestCard.style.display=pending?'block':'none';
+  controlCard.style.display=active?'block':'none';
+  if(pending){
+    document.getElementById('assistance-request-text').textContent=`${pending.helper_name} wants to help you inside Jewshi.`;
+  }
+  if(active){
+    document.getElementById('assistance-banner-text').textContent=`${active.helper_name} is currently assisting you`;
+    document.getElementById('assistance-banner-subtext').textContent=`Mode: ${active.mode} · Guided ${active.guided_mode?'on':'off'} · Recording ${active.recording_enabled?'on':'off'}`;
+    document.getElementById('assistance-control-status').textContent=active.control_enabled
+      ?'Helper control is currently allowed for clicks and typing inside Jewshi.'
+      :'Helper control is off. Highlights and narration still work.';
+    document.getElementById('assistance-control-toggle-btn').textContent=active.control_enabled?'Revoke Control':'Allow Control';
+  }
+}
+function hideAssistanceOverlay(){
+  const overlay=document.getElementById('assistance-overlay');
+  if(overlay) overlay.style.display='none';
+  const highlight=document.getElementById('assistance-highlight-box');
+  const cursor=document.getElementById('assistance-helper-cursor');
+  const message=document.getElementById('assistance-message-card');
+  if(highlight) highlight.style.display='none';
+  if(cursor) cursor.style.display='none';
+  if(message) message.style.display='none';
+}
+function showAssistanceMessage(text){
+  const card=document.getElementById('assistance-message-card');
+  const body=document.getElementById('assistance-message-text');
+  if(!card||!body) return;
+  body.textContent=text;
+  card.style.display='block';
+  clearTimeout(assistanceMessageTimeout);
+  assistanceMessageTimeout=setTimeout(()=>{card.style.display='none';},5000);
+}
+function speakAssistanceMessage(text){
+  if(!('speechSynthesis' in window)||!text) return;
+  try{
+    window.speechSynthesis.cancel();
+    const utterance=new SpeechSynthesisUtterance(text);
+    utterance.rate=0.95;
+    utterance.pitch=1;
+    window.speechSynthesis.speak(utterance);
+  }catch(e){}
+}
+function resolveAssistanceTarget(selector){
+  if(!selector) return null;
+  try{return document.querySelector(selector);}catch(e){return null;}
+}
+function flashAssistanceHighlight(selector){
+  const el=resolveAssistanceTarget(selector);
+  const box=document.getElementById('assistance-highlight-box');
+  if(!el||!box) return null;
+  const rect=el.getBoundingClientRect();
+  el.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+  box.style.display='block';
+  box.style.left=`${Math.max(8,rect.left-8)}px`;
+  box.style.top=`${Math.max(8,rect.top-8)}px`;
+  box.style.width=`${Math.max(24,rect.width+16)}px`;
+  box.style.height=`${Math.max(24,rect.height+16)}px`;
+  clearTimeout(assistanceHighlightTimeout);
+  assistanceHighlightTimeout=setTimeout(()=>{box.style.display='none';},3600);
+  return el;
+}
+function applyAssistanceEvent(event, sessionId){
+  if(!event||!currentUser) return;
+  const session=assistanceActiveSession&&assistanceActiveSession.id===sessionId?assistanceActiveSession:null;
+  if(sessionId&&sessionId!==assistanceActiveSession?.id&&sessionId!==assistancePendingSession?.id) return;
+  const payload=event.payload||{};
+  if(event.event_type==='cursor'&&assistanceActiveSession?.senior_user_id===currentUser.id){
+    const cursor=document.getElementById('assistance-helper-cursor');
+    if(cursor){
+      cursor.style.display='block';
+      cursor.style.left=`${(payload.x||0)*window.innerWidth}px`;
+      cursor.style.top=`${(payload.y||0)*window.innerHeight}px`;
+    }
+    return;
+  }
+  if(event.event_type==='highlight'){
+    flashAssistanceHighlight(payload.selector);
+    showAssistanceMessage(`Highlighted: ${payload.label||'selected item'}`);
+    return;
+  }
+  if(event.event_type==='narration'){
+    showAssistanceMessage(payload.text||'');
+    if(assistanceActiveSession?.voice_enabled) speakAssistanceMessage(payload.text||'');
+    return;
+  }
+  if(event.event_type==='navigate'&&payload.tab){
+    switchTab(payload.tab);
+    showAssistanceMessage(`Opening ${payload.tab}.`);
+    return;
+  }
+  if(event.event_type==='control_request'&&assistanceActiveSession?.senior_user_id===currentUser.id){
+    showAssistanceMessage(payload.text||'Your helper requested control.');
+    return;
+  }
+  if(event.event_type==='click'&&assistanceActiveSession?.senior_user_id===currentUser.id){
+    const el=flashAssistanceHighlight(payload.selector);
+    if(!el) return;
+    const perform=()=>{ if(typeof el.click==='function') el.click(); };
+    setTimeout(perform, assistanceActiveSession?.guided_mode?700:150);
+    return;
+  }
+  if(event.event_type==='input'&&assistanceActiveSession?.senior_user_id===currentUser.id){
+    const el=flashAssistanceHighlight(payload.selector);
+    if(!el||!('value' in el)||el.type==='password') return;
+    setTimeout(()=>{
+      el.focus();
+      el.value=payload.value||'';
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+    }, assistanceActiveSession?.guided_mode?700:100);
+  }
+}
+async function viewAssistanceRecording(sessionId){
+  try{
+    const data=await api('GET',`/assistance/sessions/${sessionId}/recording`);
+    document.getElementById('assistance-recording-panel').style.display='block';
+    document.getElementById('assistance-recording-viewer').innerHTML=data.events.length?data.events.map(event=>`
+      <div class="assistance-item">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(event.actor_name)} · ${esc(event.event_type)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">${new Date(event.created_at).toLocaleString()}</div>
+          </div>
+        </div>
+        <pre style="margin-top:10px;white-space:pre-wrap;font-size:12px;background:var(--bg4);border:1px solid var(--border);border-radius:12px;padding:10px;color:var(--text2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${esc(JSON.stringify(event.payload||{},null,2))}</pre>
+      </div>
+    `).join(''):`<p style="font-size:13px;color:var(--text3);">No recording events found.</p>`;
+    document.getElementById('assistance-recording-panel').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){alert(e.message);}
+}
+function closeAssistanceRecording(){
+  const panel=document.getElementById('assistance-recording-panel');
+  if(panel) panel.style.display='none';
 }
 
 // ── MARKETS ──
@@ -1893,6 +2517,7 @@ async function pollIncomingPopup(){
 
 function hideIncomingPopup(){
   activeIncomingPopupId=null;
+  popupCanClose=false;
   const overlay=document.getElementById('incoming-popup-overlay');
   const intro=document.getElementById('incoming-popup-alert-sequence');
   const main=document.getElementById('incoming-popup-main-content');
@@ -2017,6 +2642,7 @@ function stopPopupSiren(){
 
 async function showIncomingPopup(popup){
   activeIncomingPopupId=popup.id;
+  popupCanClose=!!Number(popup.closeout_enabled);
   const overlay=document.getElementById('incoming-popup-overlay');
   const banner=document.getElementById('incoming-popup-alert-banner');
   const title=document.getElementById('incoming-popup-title');
@@ -2037,6 +2663,14 @@ async function showIncomingPopup(popup){
   audio.load();
   audioStatus.style.display='none';
   overlay.style.display='flex';
+  if(!popupCanClose){
+    if(!popupBackGuardActive){
+      history.pushState({popupGuard:true},'',window.location.href);
+      popupBackGuardActive=true;
+    }
+  }else{
+    popupBackGuardActive=false;
+  }
   if(Number(popup.rave_enabled)) startPopupRave();
   else stopPopupRave();
   if(Number(popup.alert_enabled)) startPopupAlert();
@@ -2107,6 +2741,12 @@ async function dismissIncomingPopup(){
     alert(e.message);
   }
 }
+
+window.addEventListener('popstate',()=>{
+  if(activeIncomingPopupId && !popupCanClose){
+    history.pushState({popupGuard:true},'',window.location.href);
+  }
+});
 
 function toggleLineInput(){document.getElementById('line-input-group').style.display=document.getElementById('new-market-type').value==='overunder'?'block':'none';}
 async function createMarket(){
