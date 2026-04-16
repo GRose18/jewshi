@@ -363,7 +363,6 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
-    <div class="nav-tab" data-tab="matches" onclick="switchTab('matches')">Matches</div>
     <div class="nav-tab admin-only" data-tab="casino" onclick="switchTab('casino')" style="display:none;">Casino</div>
     <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
@@ -392,68 +391,6 @@
         </select>
       </div>
       <div class="markets-grid" id="markets-grid"><div class="loading">Loading markets…</div></div>
-    </div>
-
-    <!-- MATCHES -->
-    <div id="tab-matches" class="tab-content">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
-        <div>
-          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Online Matches</h2>
-          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Challenge someone head-to-head in Dreidel or five-card draw poker.</p>
-        </div>
-        <button class="btn-admin btn-sm" onclick="renderMatches()" style="white-space:nowrap;">Refresh</button>
-      </div>
-
-      <div id="matches-summary" class="stat-cards" style="margin-bottom:18px;"></div>
-
-      <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:18px;align-items:start;">
-        <div style="display:flex;flex-direction:column;gap:18px;">
-          <div class="panel">
-            <div class="panel-title">Start a Match</div>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">One open or active table at a time. Your wager is held when you create the lobby.</p>
-            <div class="admin-form-row">
-              <div class="form-group">
-                <label>Game</label>
-                <select id="match-create-game">
-                  <option value="dreidel">Dreidel</option>
-                  <option value="poker">Poker</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Wager</label>
-                <input type="number" id="match-create-wager" min="1" step="1" placeholder="25">
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;margin-bottom:12px;">
-              <button class="quick-btn" onclick="setMatchWager(10)">10</button>
-              <button class="quick-btn" onclick="setMatchWager(25)">25</button>
-              <button class="quick-btn" onclick="setMatchWager(50)">50</button>
-              <button class="quick-btn" onclick="setMatchWager(100)">100</button>
-            </div>
-            <button class="btn-admin" style="width:100%;" onclick="createOnlineMatch()">Create Lobby</button>
-          </div>
-
-          <div class="panel">
-            <div class="panel-title">Open Tables</div>
-            <div id="matches-open-list"></div>
-          </div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:18px;">
-          <div class="panel">
-            <div class="panel-title">Your Table</div>
-            <div id="matches-current"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-title">How It Works</div>
-            <div id="matches-help" style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2);line-height:1.55;">
-              <div>Dreidel: each player starts with 7 tokens and spins on their turn until one player controls everything in the pot.</div>
-              <div>Poker: both players get 5 cards, then each player may discard up to 3 cards one time before the showdown.</div>
-              <div>Winnings: both players buy in with the same wager, and the winner takes the whole pot. A poker tie splits it back evenly.</div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
 <!-- CASINO -->
@@ -485,6 +422,82 @@
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Blackjack</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Beat the dealer to 21</div>
             <span class="status-tag status-open">Individual</span>
+          </div>
+          <div class="market-card" onclick="openMatchLobby('dreidel')" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">🕎</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Dreidel</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Head-to-head spin match</div>
+            <span class="status-tag status-open">Join Lobby</span>
+          </div>
+          <div class="market-card" onclick="openMatchLobby('poker')" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">♠️</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Poker</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Five-card draw against another player</div>
+            <span class="status-tag status-open">Join Lobby</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="casino-matches" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:22px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button onclick="closeMatchLobby()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+            <div>
+              <h2 id="casino-match-title" style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Online Matches</h2>
+              <p id="casino-match-subtitle" style="font-size:12px;color:var(--text3);margin-top:3px;">Join an open lobby or create your own table.</p>
+            </div>
+          </div>
+          <button class="btn-admin btn-sm" onclick="renderMatches()" style="white-space:nowrap;">Refresh</button>
+        </div>
+
+        <div id="matches-summary" class="stat-cards" style="margin-bottom:18px;"></div>
+
+        <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:18px;align-items:start;">
+          <div style="display:flex;flex-direction:column;gap:18px;">
+            <div class="panel">
+              <div class="panel-title">Create Lobby</div>
+              <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">One open or active table at a time. Your wager is held when you create the lobby.</p>
+              <div class="admin-form-row">
+                <div class="form-group">
+                  <label>Game</label>
+                  <select id="match-create-game">
+                    <option value="dreidel">Dreidel</option>
+                    <option value="poker">Poker</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Wager</label>
+                  <input type="number" id="match-create-wager" min="1" step="1" placeholder="25">
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <button class="quick-btn" onclick="setMatchWager(10)">10</button>
+                <button class="quick-btn" onclick="setMatchWager(25)">25</button>
+                <button class="quick-btn" onclick="setMatchWager(50)">50</button>
+                <button class="quick-btn" onclick="setMatchWager(100)">100</button>
+              </div>
+              <button class="btn-admin" style="width:100%;" onclick="createOnlineMatch()">Create Lobby</button>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title">Open Tables</div>
+              <div id="matches-open-list"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:18px;">
+            <div class="panel">
+              <div class="panel-title">Your Table</div>
+              <div id="matches-current"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title">How It Works</div>
+              <div id="matches-help" style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2);line-height:1.55;">
+                <div>Dreidel: each player starts with 7 tokens and spins on their turn until one player controls everything in the pot.</div>
+                <div>Poker: both players get 5 cards, then each player may discard up to 3 cards one time before the showdown.</div>
+                <div>Winnings: both players buy in with the same wager, and the winner takes the whole pot. A poker tie splits it back evenly.</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1084,6 +1097,7 @@ let assistanceHighlightTimeout=null;
 let assistanceRuntimeBound=false;
 let onlineMatches=[];
 let onlineMatchFocus=null;
+let onlineMatchFilter='all';
 function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
@@ -1310,7 +1324,6 @@ function switchTab(tab){
   document.getElementById('tab-'+tab).classList.add('active');
   document.querySelector(`.nav-tab[data-tab="${tab}"]`).classList.add('active');
   if(tab==='markets')renderMarkets();
-  if(tab==='matches')renderMatches();
   if(tab==='feed')renderFeed();
   if(tab==='portfolio')renderPortfolio();
   if(tab==='leaderboard')renderLeaderboard();
@@ -2189,6 +2202,36 @@ function currentOnlineMatchForView(){
   if(onlineMatchFocus&&onlineMatchFocus.status!=='cancelled'&&(onlineMatchFocus.host_id===currentUser.id||onlineMatchFocus.guest_id===currentUser.id)) return onlineMatchFocus;
   return null;
 }
+function openMatchLobby(gameType='all'){
+  onlineMatchFilter=gameType||'all';
+  document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-blackjack').style.display='none';
+  document.getElementById('casino-dice').style.display='none';
+  document.getElementById('casino-plinko').style.display='none';
+  document.getElementById('casino-matches').style.display='block';
+  const select=document.getElementById('match-create-game');
+  if(select&&gameType&&gameType!=='all') select.value=gameType;
+  const title=document.getElementById('casino-match-title');
+  const subtitle=document.getElementById('casino-match-subtitle');
+  if(title&&subtitle){
+    if(gameType==='dreidel'){
+      title.textContent='Dreidel Lobby';
+      subtitle.textContent='Spin into a head-to-head dreidel table or open one yourself.';
+    }else if(gameType==='poker'){
+      title.textContent='Poker Lobby';
+      subtitle.textContent='Join a five-card draw table or create your own poker lobby.';
+    }else{
+      title.textContent='Online Matches';
+      subtitle.textContent='Join an open lobby or create your own table.';
+    }
+  }
+  renderMatches();
+}
+function closeMatchLobby(){
+  document.getElementById('casino-matches').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+  onlineMatchFilter='all';
+}
 async function renderMatches(){
   const currentEl=document.getElementById('matches-current');
   const openEl=document.getElementById('matches-open-list');
@@ -2217,9 +2260,9 @@ async function renderMatches(){
 }
 function renderOpenMatchList(){
   const openEl=document.getElementById('matches-open-list');
-  const lobbies=onlineMatches.filter(m=>m.status==='open'&&m.host_id!==currentUser.id);
+  const lobbies=onlineMatches.filter(m=>m.status==='open'&&m.host_id!==currentUser.id&&(!onlineMatchFilter||onlineMatchFilter==='all'||m.game_type===onlineMatchFilter));
   if(!lobbies.length){
-    openEl.innerHTML='<p style="font-size:13px;color:var(--text3);">No open tables right now. Start one and wait for a challenger.</p>';
+    openEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">No ${onlineMatchFilter&&onlineMatchFilter!=='all'?onlineMatchFilter+' ':''}tables are open right now. Start one and wait for a challenger.</p>`;
     return;
   }
   openEl.innerHTML=lobbies.map(match=>`
@@ -3425,6 +3468,7 @@ let bjBusy=false;
 
 function openBlackjack(){
   document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-matches').style.display='none';
   document.getElementById('casino-blackjack').style.display='block';
   document.getElementById('bj-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   bjResetUI();
@@ -3686,10 +3730,12 @@ function initCasino(){
   document.getElementById('casino-dice').style.display='none';
   document.getElementById('casino-blackjack').style.display='none';
   document.getElementById('casino-plinko').style.display='none';
+  document.getElementById('casino-matches').style.display='none';
 }
 
 function openDice(){
   document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-matches').style.display='none';
   document.getElementById('casino-dice').style.display='block';
   updateDiceUI();
   document.getElementById('dice-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
@@ -3842,6 +3888,7 @@ function renderDiceHistory(){
 
 function openPlinko(){
   document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-matches').style.display='none';
   document.getElementById('casino-plinko').style.display='block';
   document.getElementById('plinko-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   document.getElementById('plinko-best').textContent=getPlinkoBestMultiplier().toFixed(2)+'x';
