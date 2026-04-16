@@ -218,6 +218,69 @@
   .feed-market-embed{margin:0 16px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
   .feed-market-label{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
   .feed-market-q{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.4}
+  .bj-table-surface{position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 18px 40px rgba(6,6,16,0.4)}
+  .bj-table-surface::before{content:'';position:absolute;inset:-20% -10% auto;height:180px;background:radial-gradient(circle at top,rgba(124,106,247,0.18),transparent 68%);pointer-events:none;opacity:0.9}
+  .bj-table-surface::after{content:'';position:absolute;inset:auto 12% 12px;height:1px;background:linear-gradient(90deg,transparent,rgba(240,192,64,0.3),transparent);pointer-events:none}
+  .bj-card{width:48px;height:68px;position:relative;transform-style:preserve-3d;transform-origin:center center;animation:bjCardDeal 0.5s cubic-bezier(0.2,0.8,0.2,1) both;animation-delay:var(--deal-delay,0ms)}
+  .bj-card-face,.bj-card-back{position:absolute;inset:0;border-radius:10px;backface-visibility:hidden;display:flex;align-items:center;justify-content:center}
+  .bj-card-face{background:#1e1e2e;border:1px solid #534AB7;box-shadow:0 12px 22px rgba(8,8,20,0.34);flex-direction:column;gap:2px}
+  .bj-card-back{background:linear-gradient(145deg,#26215C,#171437);border:1px solid #534AB7;color:#7c6af7;font-size:20px;font-weight:700}
+  .bj-card.is-hidden .bj-card-face{transform:rotateY(180deg)}
+  .bj-card.is-hidden .bj-card-back{transform:rotateY(0deg)}
+  .bj-card:not(.is-hidden) .bj-card-face{transform:rotateY(0deg)}
+  .bj-card:not(.is-hidden) .bj-card-back{transform:rotateY(180deg)}
+  .bj-card.is-flip{animation:bjCardFlip 0.68s cubic-bezier(0.16,1,0.3,1) both}
+  .bj-hand-shell{flex:1;min-width:120px;padding:14px 14px 12px;border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015));box-shadow:0 10px 30px rgba(0,0,0,0.18)}
+  .bj-hand-shell.is-active{border-color:rgba(124,106,247,0.42);box-shadow:0 0 0 1px rgba(124,106,247,0.15),0 18px 34px rgba(39,22,92,0.3)}
+  .bj-hand-shell.is-win{border-color:rgba(0,208,132,0.36)}
+  .bj-hand-shell.is-loss{border-color:rgba(255,69,96,0.34)}
+  .bj-hand-shell.is-push{border-color:rgba(240,192,64,0.34)}
+  .bj-result-pop{animation:bjResultPop 0.45s cubic-bezier(0.2,0.8,0.2,1)}
+  .mines-board-panel{position:relative;overflow:hidden;background:
+    radial-gradient(circle at top,rgba(124,106,247,0.11),transparent 45%),
+    linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 24px 42px rgba(8,8,18,0.32)}
+  .mines-board-panel::before{content:'';position:absolute;inset:-30% auto auto -10%;width:180px;height:180px;background:radial-gradient(circle,rgba(240,192,64,0.14),transparent 68%);pointer-events:none}
+  .mines-grid{perspective:900px}
+  .mines-tile{position:relative;aspect-ratio:1/1;border:none;background:transparent;padding:0;cursor:pointer;transform-style:preserve-3d;transition:transform 0.18s ease}
+  .mines-tile:not(:disabled):hover{transform:translateY(-2px) scale(1.02)}
+  .mines-tile:disabled{cursor:default}
+  .mines-tile-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform 0.62s cubic-bezier(0.2,0.8,0.2,1)}
+  .mines-tile.is-revealed .mines-tile-inner{transform:rotateY(180deg)}
+  .mines-tile.is-new .mines-tile-inner{animation:minesTilePulse 0.55s ease}
+  .mines-tile.is-enter{animation:minesTileRise 0.45s cubic-bezier(0.2,0.8,0.2,1) both;animation-delay:var(--tile-delay,0ms)}
+  .mines-tile-face{position:absolute;inset:0;border-radius:16px;backface-visibility:hidden;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .mines-tile-front{background:linear-gradient(180deg,#1c1c27,#14141c);border:1px solid rgba(255,255,255,0.09);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 10px 18px rgba(0,0,0,0.18)}
+  .mines-tile-front::after{content:'';width:34%;height:34%;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.02));opacity:0.9}
+  .mines-tile-back{transform:rotateY(180deg);font-size:24px;box-shadow:0 12px 24px rgba(0,0,0,0.18)}
+  .mines-tile-back.safe{background:linear-gradient(180deg,rgba(0,208,132,0.2),rgba(0,208,132,0.08));border:1px solid rgba(0,208,132,0.38);color:var(--green)}
+  .mines-tile-back.mine{background:linear-gradient(180deg,rgba(255,69,96,0.22),rgba(255,69,96,0.08));border:1px solid rgba(255,69,96,0.4);color:var(--red)}
+  .mines-stats-panel{animation:minesStatsFloat 0.45s ease}
+  @keyframes bjCardDeal{
+    0%{opacity:0;transform:translate3d(46px,-22px,0) rotate(-12deg) scale(0.9)}
+    100%{opacity:1;transform:translate3d(0,0,0) rotate(0) scale(1)}
+  }
+  @keyframes bjCardFlip{
+    0%{transform:translate3d(0,0,0) rotateY(0deg)}
+    100%{transform:translate3d(0,0,0) rotateY(180deg)}
+  }
+  @keyframes bjResultPop{
+    0%{opacity:0;transform:translateY(8px) scale(0.96)}
+    100%{opacity:1;transform:translateY(0) scale(1)}
+  }
+  @keyframes minesTilePulse{
+    0%{transform:rotateY(180deg) scale(0.92)}
+    70%{transform:rotateY(180deg) scale(1.05)}
+    100%{transform:rotateY(180deg) scale(1)}
+  }
+  @keyframes minesTileRise{
+    0%{opacity:0;transform:translateY(12px) scale(0.94)}
+    100%{opacity:1;transform:translateY(0) scale(1)}
+  }
+  @keyframes minesStatsFloat{
+    0%{opacity:0.4;transform:translateY(8px)}
+    100%{opacity:1;transform:translateY(0)}
+  }
   .feed-bar-wrap{margin-bottom:5px}
   .feed-bar-label{display:flex;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:3px}
   .feed-bar{height:3px;border-radius:2px;background:var(--bg4);overflow:hidden}
@@ -464,6 +527,8 @@
           <p style="font-size:12px;color:var(--text3);margin-top:3px;">Play games with your credits</p>
         </div>
       </div>
+      <div id="casino-lucky-banner" style="display:none;margin-bottom:14px;padding:14px 16px;border-radius:14px;border:1px solid rgba(240,192,64,0.24);background:rgba(240,192,64,0.08);color:var(--gold);font-size:15px;line-height:1.55;transform:scale(1.15);transform-origin:top left;width:calc(100% / 1.15);"></div>
+      <div id="casino-odds-readout" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;transform:scale(1.15);transform-origin:top left;width:calc(100% / 1.15);"></div>
       
       <!-- GAME LOBBY -->
       <div id="casino-lobby" style="display:block;">
@@ -584,7 +649,7 @@
           </div>
 
           <!-- TABLE -->
-          <div class="panel" style="background:#1a1a2e;border-color:#534AB7;padding:24px;margin-bottom:16px;">
+          <div class="panel bj-table-surface" style="background:#1a1a2e;border-color:#534AB7;padding:24px;margin-bottom:16px;">
 
             <!-- DEALER -->
             <div style="margin-bottom:20px;">
@@ -798,7 +863,7 @@
         </div>
 
         <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(280px,0.95fr);gap:18px;align-items:start;">
-          <div class="panel" style="padding:18px;">
+          <div class="panel mines-board-panel" style="padding:18px;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
               <div>
                 <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Board</div>
@@ -806,7 +871,7 @@
               </div>
               <div id="mines-result-pill" style="padding:8px 14px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text3);">Waiting to start</div>
             </div>
-            <div id="mines-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;"></div>
+            <div id="mines-grid" class="mines-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;"></div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:16px;">
@@ -815,7 +880,7 @@
               <div class="stat-card"><div class="stat-label">Potential Cashout</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="mines-potential">⬡ 0</div></div>
             </div>
 
-            <div class="panel">
+            <div class="panel mines-stats-panel">
               <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Setup</div>
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
                 <input type="number" id="mines-bet-input" placeholder="0" min="1" step="1" oninput="onMinesBetInput()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
@@ -1337,6 +1402,8 @@ let minesBusy=false;
 let minesState=null;
 let minesCount=3;
 let minesResolvedBoard=null;
+let minesLastRevealIndex=null;
+let minesIntroAnimation=true;
 function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
@@ -1616,16 +1683,31 @@ async function loadCasinoConfig(){
   try{
     casinoConfig=await api('GET','/casino/config');
     renderCasinoConfigReadout();
+    renderCasinoLuckyBanner();
   }catch(e){}
+}
+function renderCasinoLuckyBanner(){
+  const el=document.getElementById('casino-lucky-banner');
+  if(!el) return;
+  const luck=casinoConfig?.luckyStreak;
+  if(!luck?.active){
+    el.style.display='none';
+    el.innerHTML='';
+    return;
+  }
+  const minutesLeft=Math.max(1, Math.ceil((Number(luck.expiresAt||0)-Date.now())/60000));
+  el.style.display='block';
+  el.innerHTML=`Lucky Streak active: your casino odds are temporarily boosted by ${luck.boostPercent}% for about ${minutesLeft} more minute${minutesLeft===1?'':'s'}. Granted by ${esc(luck.grantedByName||luck.grantedBy||'admin')}.`;
 }
 function renderCasinoConfigReadout(){
   const el=document.getElementById('casino-odds-readout');
   if(!el) return;
+  const display=casinoConfig?.effective||casinoConfig;
   const items=[
-    ['Dice',casinoConfig.diceOdds],
-    ['Plinko',casinoConfig.plinkoOdds],
-    ['Blackjack',casinoConfig.blackjackOdds],
-    ['Mines',casinoConfig.minesOdds],
+    ['Dice',display.diceOdds],
+    ['Plinko',display.plinkoOdds],
+    ['Blackjack',display.blackjackOdds],
+    ['Mines',display.minesOdds],
   ];
   el.innerHTML=items.map(([label,value])=>{
     const tone=value>100?'var(--green)':value<100?'var(--red)':'var(--text2)';
@@ -3524,7 +3606,7 @@ async function renderAdminTab(){
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.assistance_access?'checked':''} onchange="toggleAssistanceAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:#39c9ff;">`:'—'}
         </td>
-        <td style="color:var(--text)">${esc(u.name)||'—'}</td>
+        <td style="color:var(--text)">${esc(u.name)||'—'}${u.lucky_streak?.active?`<div style="font-size:11px;color:var(--gold);margin-top:4px;">Lucky Streak until ${new Date(u.lucky_streak.expiresAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>`:''}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
         <td>${u.grade||'—'}</td>
         <td><span class="history-pill" style="background:${u.role==='admin'?'var(--accent-bg)':'var(--bg4)'};color:${u.role==='admin'?'var(--accent)':'var(--text3)'}">${u.role}</span></td>
@@ -3536,6 +3618,7 @@ async function renderAdminTab(){
           ${isGrose?(u.role==='student'
             ?`<button class="btn-admin btn-sm btn-warning" onclick="makeAdmin('${u.id}')">Make Admin</button>`
             :`<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="makeStudent('${u.id}')">Demote</button>`):''}
+          <button class="btn-admin btn-sm" style="background:rgba(240,192,64,0.14);border:1px solid rgba(240,192,64,0.34);color:var(--gold);" onclick="grantLuckyStreak('${u.id}')">Add Luck</button>
           <button class="btn-admin btn-sm btn-warning" onclick="roundCredits('${u.id}')">Floor</button>
           <button class="btn-admin btn-sm btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
         </div></td>
@@ -4279,6 +4362,14 @@ async function makeStudent(userId){
   try{await api('POST','/users/'+userId+'/make-student');renderAdminTab();showToast(`${userId} demoted.`);}
   catch(e){alert(e.message);}
 }
+async function grantLuckyStreak(userId){
+  try{
+    const res=await api('POST','/users/'+userId+'/lucky-streak',{});
+    const expiresAt=res?.lucky_streak?.expiresAt ? new Date(res.lucky_streak.expiresAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}) : 'soon';
+    renderAdminTab();
+    showToast(`Lucky Streak active for ${userId} until ${expiresAt}.`);
+  }catch(e){alert(e.message);}
+}
 async function roundCredits(userId){
   try{
     const res=await api('POST','/admin/users/'+userId+'/round-credits');
@@ -4502,6 +4593,9 @@ async function doWheelSpin(){
 // ── BLACKJACK ──
 let bjState=null;
 let bjBusy=false;
+let bjAnimationStamp=0;
+let bjLastDealerCount=0;
+let bjLastPlayerCounts=[];
 
 function openBlackjack(){
   document.getElementById('casino-lobby').style.display='none';
@@ -4528,6 +4622,8 @@ function bjResetUI(){
   document.getElementById('bj-bet-input').value='';
   document.getElementById('bj-bet-display').textContent='⬡ 0';
   bjState=null;
+  bjLastDealerCount=0;
+  bjLastPlayerCounts=[];
 }
 
 function onBjBetInput(){
@@ -4543,38 +4639,58 @@ function setBjBet(amount){
 
 function cardColor(suit){return suit==='♥'||suit==='♦'?'#e06c75':'#c4b9ff';}
 
-function renderCard(card,hidden=false){
-  if(hidden||card.v==='?'){
-    return `<div style="width:48px;height:68px;background:#26215C;border:1px solid #534AB7;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#534AB7;">?</div>`;
-  }
-  return `<div style="width:48px;height:68px;background:#1e1e2e;border:1px solid #534AB7;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
-    <span style="font-size:15px;font-weight:700;color:${cardColor(card.s)};">${card.v}</span>
-    <span style="font-size:13px;color:${cardColor(card.s)};">${card.s}</span>
+function renderCard(card,hidden=false,options={}){
+  const classes=['bj-card'];
+  if(hidden||card.v==='?') classes.push('is-hidden');
+  if(options.flip) classes.push('is-flip');
+  const delay=options.delay||0;
+  return `<div class="${classes.join(' ')}" style="--deal-delay:${delay}ms;">
+    <div class="bj-card-face">
+      <span style="font-size:15px;font-weight:700;color:${cardColor(card.s)};">${card.v}</span>
+      <span style="font-size:13px;color:${cardColor(card.s)};">${card.s}</span>
+    </div>
+    <div class="bj-card-back">?</div>
   </div>`;
 }
 
-function renderDealerCards(cards){
-  document.getElementById('bj-dealer-cards').innerHTML=cards.map(c=>renderCard(c)).join('');
+function renderDealerCards(cards,animation='static'){
+  const shouldFlip=animation==='reveal';
+  document.getElementById('bj-dealer-cards').innerHTML=cards.map((c,index)=>{
+    const hidden=c.v==='?';
+    const delay=animation==='deal' ? index*120 : animation==='reveal' ? index*90 : 0;
+    return renderCard(c,hidden,{delay,flip:shouldFlip&&!hidden});
+  }).join('');
+  bjLastDealerCount=cards.length;
 }
 
-function renderPlayerHands(hands,activeHand,results=[]){
+function renderPlayerHands(hands,activeHand,results=[],animation='static'){
   const el=document.getElementById('bj-player-hands');
   el.innerHTML=hands.map((hand,i)=>{
     const total=handTotal(hand);
     const isActive=i===activeHand&&!results.length;
     const result=results[i];
+    const newCount=bjLastPlayerCounts[i]||0;
+    const shellClasses=['bj-hand-shell'];
+    if(isActive) shellClasses.push('is-active');
+    if(result==='win'||result==='blackjack') shellClasses.push('is-win');
+    else if(result==='loss'||result==='bust') shellClasses.push('is-loss');
+    else if(result==='push') shellClasses.push('is-push');
     let resultColor='',resultLabel='';
     if(result==='win'||result==='blackjack'){resultColor='var(--green)';resultLabel=result==='blackjack'?'Blackjack!':'Win';}
     else if(result==='loss'||result==='bust'){resultColor='var(--red)';resultLabel=result==='bust'?'Bust':'Loss';}
     else if(result==='push'){resultColor='var(--gold)';resultLabel='Push';}
-    return `<div style="flex:1;min-width:120px;">
+    return `<div class="${shellClasses.join(' ')}">
       <div style="font-size:11px;color:${isActive?'var(--accent)':'rgba(196,185,255,0.4)'};font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
         <span>${hands.length>1?'Hand '+(i+1):'Your hand'} ${isActive?'◀':''}</span>
         ${result?`<span style="color:${resultColor};font-size:12px;">${resultLabel}</span>`:`<span style="color:#c4b9ff;">${total}</span>`}
       </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;">${hand.map(c=>renderCard(c)).join('')}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">${hand.map((c,index)=>{
+        const delay=animation==='deal' ? (i*150)+(index*110)+120 : (animation==='hit'||animation==='split'||animation==='double') && index>=newCount ? 60 : 0;
+        return renderCard(c,false,{delay});
+      }).join('')}</div>
     </div>`;
   }).join('');
+  bjLastPlayerCounts=hands.map(hand=>hand.length);
 }
 
 function handTotal(cards){
@@ -4604,8 +4720,8 @@ async function bjDeal(){
     currentUser.credits=data.newBalance;
     document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
     updateTopbar();
-    renderDealerCards(bjState.dealerCards);
-    renderPlayerHands(bjState.playerHands,bjState.activeHand);
+    renderDealerCards(bjState.dealerCards,'deal');
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,[],'deal');
     if(data.state.done){
       bjShowResult(data);
     } else {
@@ -4633,8 +4749,8 @@ async function bjHit(){
   try{
     const data=await api('POST','/casino/blackjack/hit');
     bjState=data.state;
-    renderDealerCards(bjState.dealerCards);
-    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[]);
+    renderDealerCards(bjState.dealerCards,'static');
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[],'hit');
     if(data.state.done){bjShowResult(data);}
     else{
       bjUpdateActionButtons({canSplit:bjState.playerHands[bjState.activeHand]?.length===2&&bjState.playerHands[bjState.activeHand][0]?.v===bjState.playerHands[bjState.activeHand][1]?.v});
@@ -4648,8 +4764,8 @@ async function bjStand(){
   try{
     const data=await api('POST','/casino/blackjack/stand');
     bjState=data.state;
-    renderDealerCards(bjState.dealerCards);
-    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[]);
+    renderDealerCards(bjState.dealerCards,data.state.done?'reveal':'static');
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[],'static');
     if(data.state.done){bjShowResult(data);}
     else if(data.nextHand){
       bjUpdateActionButtons({canSplit:bjState.playerHands[bjState.activeHand]?.length===2&&bjState.playerHands[bjState.activeHand][0]?.v===bjState.playerHands[bjState.activeHand][1]?.v});
@@ -4666,8 +4782,8 @@ async function bjDouble(){
     currentUser.credits=data.newBalance;
     document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
     updateTopbar();
-    renderDealerCards(bjState.dealerCards);
-    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[]);
+    renderDealerCards(bjState.dealerCards,data.state.done?'reveal':'static');
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,data.state.results||[],'double');
     if(data.state.done){bjShowResult(data);}
   }catch(e){showToast(e.message);}
   finally{bjBusy=false;}
@@ -4681,8 +4797,8 @@ async function bjSplit(){
     currentUser.credits=data.newBalance;
     document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
     updateTopbar();
-    renderDealerCards(bjState.dealerCards);
-    renderPlayerHands(bjState.playerHands,bjState.activeHand);
+    renderDealerCards(bjState.dealerCards,'static');
+    renderPlayerHands(bjState.playerHands,bjState.activeHand,[],'split');
     bjUpdateActionButtons({canSplit:data.canSplit,canDouble:true});
   }catch(e){showToast(e.message);}
   finally{bjBusy=false;}
@@ -4694,8 +4810,8 @@ function bjShowResult(data){
   currentUser.credits=data.newBalance;
   document.getElementById('bj-balance').textContent='⬡ '+data.newBalance.toLocaleString();
   updateTopbar();
-  renderDealerCards(data.state.dealerCards);
-  renderPlayerHands(data.state.playerHands,data.state.activeHand,data.state.results||[data.result]);
+  renderDealerCards(data.state.dealerCards,'reveal');
+  renderPlayerHands(data.state.playerHands,data.state.activeHand,data.state.results||[data.result],'static');
   const dealerTotal=data.dealerTotal||handTotal(data.state.dealerCards);
   document.getElementById('bj-dealer-total').textContent=dealerTotal;
   const results=data.state.results||[data.result];
@@ -4703,6 +4819,9 @@ function bjShowResult(data){
   const allLoss=results.every(r=>r==='loss'||r==='bust');
   const banner=document.getElementById('bj-result-banner');
   banner.style.display='block';
+  banner.classList.remove('bj-result-pop');
+  void banner.offsetWidth;
+  banner.classList.add('bj-result-pop');
   if(data.result==='blackjack'||results.includes('blackjack')){
     banner.style.background='rgba(0,208,132,0.15)';banner.style.border='1px solid rgba(0,208,132,0.4)';banner.style.color='var(--green)';
     banner.textContent='Blackjack! +⬡ '+data.profit;
@@ -4764,6 +4883,8 @@ function getPlinkoBestMultiplier(){
 
 function initCasino(){
   renderCasinoConfigReadout();
+  renderCasinoLuckyBanner();
+  loadCasinoConfig();
   document.getElementById('casino-lobby').style.display='block';
   document.getElementById('casino-dice').style.display='none';
   document.getElementById('casino-blackjack').style.display='none';
@@ -4967,6 +5088,8 @@ function openMines(){
   document.getElementById('mines-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   minesState=null;
   minesResolvedBoard=null;
+  minesLastRevealIndex=null;
+  minesIntroAnimation=true;
   renderMinesBoard();
   updateMinesUI();
   loadMinesHistory();
@@ -5010,10 +5133,13 @@ function updateMinesUI(){
   const safeCount=document.getElementById('mines-safe-count');
   const startBtn=document.getElementById('mines-start-btn');
   const cashoutBtn=document.getElementById('mines-cashout-btn');
+  const pill=document.getElementById('mines-result-pill');
   if(balance) balance.textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   if(countLabel) countLabel.textContent=minesCount;
   const currentMultiplier=minesState?.currentMultiplier||1;
   const nextMultiplier=minesState?.nextMultiplier||1;
+  const maxSafeReveals=minesState?(25-minesState.mineCount):0;
+  const allSafeFound=!!(minesState && minesState.revealedSafeCount>=maxSafeReveals);
   if(currentMult) currentMult.textContent=currentMultiplier.toFixed(4)+'x';
   if(nextMult) nextMult.textContent=nextMultiplier.toFixed(4)+'x';
   if(safeCount) safeCount.textContent=String(minesState?.revealedSafeCount||0);
@@ -5022,20 +5148,45 @@ function updateMinesUI(){
   if(potential) potential.textContent='⬡ '+Math.max(0,potentialAmount).toLocaleString();
   if(startBtn) startBtn.disabled=minesBusy||!!minesState;
   if(cashoutBtn) cashoutBtn.disabled=minesBusy||!minesState||!(minesState.revealedSafeCount>0);
+  if(cashoutBtn){
+    cashoutBtn.style.boxShadow=allSafeFound?'0 0 0 1px rgba(240,192,64,0.28), 0 0 22px rgba(240,192,64,0.18)':'none';
+    cashoutBtn.textContent=allSafeFound?'Cash Out Max':'Cash Out';
+  }
+  if(pill && allSafeFound){
+    pill.textContent='All safe tiles found · cash out is ready';
+    pill.style.background='rgba(240,192,64,0.14)';
+    pill.style.border='1px solid rgba(240,192,64,0.30)';
+    pill.style.color='var(--gold)';
+  }
 }
 
 function renderMinesBoard(revealAll=false){
   const grid=document.getElementById('mines-grid');
   if(!grid) return;
   const board=minesState?.board||minesResolvedBoard||Array.from({length:25}, (_, index)=>({index,revealed:false,type:'safe'}));
+  const maxSafeReveals=minesState?(25-minesState.mineCount):0;
+  const allSafeFound=!!(minesState && minesState.revealedSafeCount>=maxSafeReveals);
   grid.innerHTML=board.map(tile=>{
     const revealed=tile.revealed;
-    const face=revealed?(tile.type==='mine'?'💣':'💎'):'';
-    const bg=revealed?(tile.type==='mine'?'rgba(255,69,96,0.16)':'rgba(0,208,132,0.14)'):'var(--bg3)';
-    const border=revealed?(tile.type==='mine'?'1px solid rgba(255,69,96,0.38)':'1px solid rgba(0,208,132,0.34)'):'1px solid var(--border)';
-    const color=revealed?(tile.type==='mine'?'var(--red)':'var(--green)'):'var(--text)';
-    return `<button onclick="revealMinesTile(${tile.index})" ${revealed||!minesState?'disabled':''} style="aspect-ratio:1/1;border-radius:16px;border:${border};background:${bg};color:${color};font-size:24px;font-weight:700;cursor:${revealed||!minesState?'default':'pointer'};font-family:'Inter',sans-serif;transition:all 0.18s;">${face}</button>`;
+    const classes=['mines-tile'];
+    if(revealed) classes.push('is-revealed');
+    if(tile.index===minesLastRevealIndex) classes.push('is-new');
+    if(minesIntroAnimation) classes.push('is-enter');
+    const tileType=tile.type==='mine'?'mine':'safe';
+    return `<button onclick="revealMinesTile(${tile.index})" ${revealed||!minesState||allSafeFound?'disabled':''} class="${classes.join(' ')}" style="--tile-delay:${tile.index*18}ms;">
+      <div class="mines-tile-inner">
+        <div class="mines-tile-face mines-tile-front"></div>
+        <div class="mines-tile-face mines-tile-back ${tileType}">${revealed?(tile.type==='mine'?'💣':'💎'):''}</div>
+      </div>
+    </button>`;
   }).join('');
+  minesIntroAnimation=false;
+  if(minesLastRevealIndex!==null){
+    const revealedIndex=minesLastRevealIndex;
+    setTimeout(()=>{
+      if(minesLastRevealIndex===revealedIndex) minesLastRevealIndex=null;
+    },700);
+  }
 }
 
 async function startMines(){
@@ -5056,6 +5207,8 @@ async function startMines(){
     const data=await api('POST','/casino/mines/start',{betAmount,mineCount:minesCount});
     minesState=data.state;
     minesResolvedBoard=null;
+    minesLastRevealIndex=null;
+    minesIntroAnimation=true;
     currentUser.credits=data.newBalance;
     updateTopbar();
     renderMinesBoard();
@@ -5075,6 +5228,7 @@ async function revealMinesTile(index){
   try{
     const data=await api('POST','/casino/mines/reveal',{index});
     minesState=data.state;
+    minesLastRevealIndex=index;
     currentUser.credits=data.newBalance;
     updateTopbar();
     renderMinesBoard(data.hitMine);
@@ -5118,6 +5272,7 @@ async function cashoutMines(){
     updateTopbar();
     minesState=data.state;
     minesResolvedBoard=data.state.board;
+    minesLastRevealIndex=null;
     renderMinesBoard(true);
     const pill=document.getElementById('mines-result-pill');
     if(pill){

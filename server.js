@@ -194,6 +194,14 @@ async function initDB() {
       payload TEXT DEFAULT '{}',
       created_at INTEGER NOT NULL
     )
+    ;CREATE TABLE IF NOT EXISTS lucky_streaks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      granted_by TEXT NOT NULL,
+      boost_percent INTEGER NOT NULL DEFAULT 15,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    )
 
   `);
   await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
@@ -635,7 +643,8 @@ async function settleOnlineMatch(match, winnerId){
 async function finishBlackjackGame(userId){
   const game=blackjackGames.get(userId);
   if(!game) throw new Error('No active blackjack game');
-  const { blackjackOdds } = await getCasinoConfig();
+  const { effective } = await getCasinoConfig(userId);
+  const blackjackOdds = effective.blackjackOdds;
   const dealerStandThreshold = clampNumber(Math.round(17 + ((blackjackOdds - 100) / 50)), 16, 18);
 
   while(handTotal(game.dealerCards)<dealerStandThreshold){
@@ -700,16 +709,6 @@ async function createNotification(userId, type, title, body, link='') {
   await db.run('INSERT INTO notifications (id,user_id,type,title,body,link,is_read,created_at) VALUES (?,?,?,?,?,?,0,?)',
     [generateId('ntf'),userId,type,String(title||'').slice(0,160),String(body||'').slice(0,500),String(link||'').slice(0,120),Date.now()]);
 }
-async function getCasinoConfig() {
-  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds','casino_mines_odds')");
-  const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
-  return {
-    diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 0, 200),
-    plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 0, 200),
-    blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 0, 200),
-    minesOdds: clampNumber(Number(settings.casino_mines_odds || 100), 0, 200),
-  };
-}
 async function getCasinoStatsBaseline() {
   const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_stats_baseline_wagered','casino_stats_baseline_profit')");
   const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
@@ -717,6 +716,46 @@ async function getCasinoStatsBaseline() {
     wagered: Number(settings.casino_stats_baseline_wagered || 0),
     profit: Number(settings.casino_stats_baseline_profit || 0),
   };
+}
+async function getActiveLuckyStreak(userId){
+  if(!userId) return null;
+  const row = await db.get(
+    `SELECT ls.*,u.name as granted_by_name
+     FROM lucky_streaks ls
+     LEFT JOIN users u ON u.id=ls.granted_by
+     WHERE ls.user_id=? AND ls.expires_at>?
+     ORDER BY ls.expires_at DESC
+     LIMIT 1`,
+    [userId, Date.now()]
+  );
+  if(!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    grantedBy: row.granted_by,
+    grantedByName: row.granted_by_name || row.granted_by,
+    boostPercent: Number(row.boost_percent || 0),
+    expiresAt: Number(row.expires_at || 0),
+    active: true,
+  };
+}
+async function getCasinoConfig(userId=null) {
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds','casino_mines_odds')");
+  const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
+  const base = {
+    diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 0, 200),
+    plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 0, 200),
+    blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 0, 200),
+    minesOdds: clampNumber(Number(settings.casino_mines_odds || 100), 0, 200),
+  };
+  const luckyStreak = await getActiveLuckyStreak(userId);
+  const effective = luckyStreak ? {
+    diceOdds: clampNumber(base.diceOdds + luckyStreak.boostPercent, 0, 200),
+    plinkoOdds: clampNumber(base.plinkoOdds + luckyStreak.boostPercent, 0, 200),
+    blackjackOdds: clampNumber(base.blackjackOdds + luckyStreak.boostPercent, 0, 200),
+    minesOdds: clampNumber(base.minesOdds + luckyStreak.boostPercent, 0, 200),
+  } : { ...base };
+  return { ...base, effective, luckyStreak };
 }
 function parsePage(value, fallback, min, max){
   const num = Math.floor(Number(value));
@@ -822,6 +861,14 @@ async function requireAssistanceVisibility(req,res,next){
 }
 function isGrose(req) { return req.user.id === 'GROSE'; }
 function isAdminUser(user) { return user?.role === 'admin'; }
+async function canGrantLuckyStreak(userId){
+  if(userId === 'GROSE') return true;
+  const user = await db.get('SELECT id,name,email FROM users WHERE id=?',[userId]);
+  if(!user) return false;
+  const name = String(user.name || '').trim().toLowerCase();
+  const email = String(user.email || '').trim().toLowerCase();
+  return name === 'guy tambour' || email === 'guy tambour' || email === 'guy.tambour@emeryweiner.org';
+}
 function lmsrCost(qYes, qNo, b) {
   return b * Math.log(Math.exp(qYes/b) + Math.exp(qNo/b));
 }
@@ -1241,6 +1288,7 @@ app.post('/api/auth/reset-password', async(req,res)=>{
 app.get('/api/me', authMiddleware, async(req,res)=>{
   const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list,bio,popup_access,assistance_access FROM users WHERE id=?',[req.user.id]);
   if(!user) return res.status(404).json({error:'User not found'});
+  user.lucky_streak = await getActiveLuckyStreak(req.user.id);
   res.json(user);
 });
 app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
@@ -1466,7 +1514,12 @@ app.get('/api/assistance/sessions/:id/recording', authMiddleware, requireAssista
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,email,role,credits,grade,on_email_list,popup_access,assistance_access FROM users WHERE id!=?",[req.user.id]));
+  const users = await db.all("SELECT id,name,email,role,credits,grade,on_email_list,popup_access,assistance_access FROM users WHERE id!=?",[req.user.id]);
+  const withLuck = await Promise.all(users.map(async user=>({
+    ...user,
+    lucky_streak: await getActiveLuckyStreak(user.id),
+  })));
+  res.json(withLuck);
 });
 app.get('/api/popup/users', authMiddleware, async(req,res)=>{
   if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
@@ -1534,6 +1587,21 @@ app.post('/api/users/:id/toggle-assistance-access', authMiddleware, adminOnly, a
   await db.run('UPDATE users SET assistance_access=? WHERE id=?',[newVal,req.params.id]);
   res.json({assistance_access:newVal});
 });
+app.post('/api/users/:id/lucky-streak', authMiddleware, async(req,res)=>{
+  try{
+    if(!(await canGrantLuckyStreak(req.user.id))) return res.status(403).json({error:'Only GROSE and Guy Tambour can grant Lucky Streak'});
+    const target=await db.get('SELECT id,name FROM users WHERE id=?',[req.params.id]);
+    if(!target) return res.status(404).json({error:'User not found'});
+    const boostPercent = 15;
+    const expiresAt = Date.now() + (5 * 60 * 1000);
+    await db.run(
+      'INSERT INTO lucky_streaks (id,user_id,granted_by,boost_percent,expires_at,created_at) VALUES (?,?,?,?,?,?)',
+      [generateId('luck'), req.params.id, req.user.id, boostPercent, expiresAt, Date.now()]
+    );
+    await recordTx(req.params.id,0,'lucky_streak',null,`${req.user.id} granted Lucky Streak (+${boostPercent}% casino odds) for 5 minutes`);
+    res.json({success:true, lucky_streak: await getActiveLuckyStreak(req.params.id)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   const {id}=req.params;
   if(id==='GROSE') return res.status(400).json({error:'Cannot delete primary admin'});
@@ -1546,6 +1614,7 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   await db.run('DELETE FROM notifications WHERE user_id=?',[id]);
   await db.run('DELETE FROM post_likes WHERE user_id=?',[id]);
   await db.run('DELETE FROM post_reposts WHERE user_id=?',[id]);
+  await db.run('DELETE FROM lucky_streaks WHERE user_id=? OR granted_by=?',[id,id]);
   await db.run('DELETE FROM assistance_events WHERE session_id IN (SELECT id FROM assistance_sessions WHERE senior_user_id=? OR helper_user_id=?)',[id,id]);
   await db.run('DELETE FROM assistance_sessions WHERE senior_user_id=? OR helper_user_id=?',[id,id]);
   await db.run('DELETE FROM assistance_contacts WHERE user_id=? OR helper_user_id=?',[id,id]);
@@ -2136,7 +2205,7 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
 
 app.get('/api/casino/config', authMiddleware, async(req,res)=>{
   try{
-    res.json(await getCasinoConfig());
+    res.json(await getCasinoConfig(req.user.id));
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>{
@@ -2356,7 +2425,8 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
     if(target===undefined||target<2||target>98) return res.status(400).json({error:'Target must be between 2 and 98'});
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
-    const { diceOdds } = await getCasinoConfig();
+    const { effective } = await getCasinoConfig(req.user.id);
+    const diceOdds = effective.diceOdds;
     const oddsBias = ((diceOdds - 100) / 100) * 10;
     const adjustedTarget = direction==='over'
       ? clampNumber(Number(target) - oddsBias, 2, 98)
@@ -2410,7 +2480,8 @@ app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
     if(!riskTables[risk]) return res.status(400).json({error:'Invalid risk'});
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
-    const { plinkoOdds } = await getCasinoConfig();
+    const { effective } = await getCasinoConfig(req.user.id);
+    const plinkoOdds = effective.plinkoOdds;
 
     const multipliers = riskTables[risk];
     let slotIndex = 0;
@@ -2514,10 +2585,13 @@ app.post('/api/casino/mines/reveal', authMiddleware, adminOnly, async(req,res)=>
   try{
     const game = minesGames.get(req.user.id);
     if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
+    const maxSafeReveals = 25 - game.mineCount;
+    if(game.revealedSafe.size >= maxSafeReveals) return res.status(400).json({error:'No safe tiles remain. Cash out your run.'});
     const index = Math.floor(Number(req.body.index));
     if(index<0 || index>24) return res.status(400).json({error:'Invalid tile'});
     if(game.revealedSafe.has(index)) return res.status(400).json({error:'Tile already revealed'});
-    const { minesOdds } = await getCasinoConfig();
+    const { effective } = await getCasinoConfig(req.user.id);
+    const minesOdds = effective.minesOdds;
     const remainingSafe = 25 - game.mineCount - game.revealedSafe.size;
     const remainingTiles = 25 - game.revealedSafe.size;
     const desiredSafe = remainingSafe>0 && Math.random() < getAdjustedSafeChance(remainingSafe/remainingTiles, minesOdds);
