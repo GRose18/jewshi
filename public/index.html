@@ -947,62 +947,76 @@
             <p style="font-size:12px;color:var(--text3);margin-top:3px;">Traditional outside bets or a straight number.</p>
           </div>
         </div>
-        <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,0.95fr);gap:18px;align-items:start;">
-          <div class="panel" style="padding:18px;background:linear-gradient(180deg,rgba(240,192,64,0.06),rgba(10,10,15,0.92));border-color:rgba(240,192,64,0.2);">
+        <div style="max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px;">
+          <div class="panel" style="padding:22px;background:radial-gradient(circle at top,rgba(255,255,255,0.04),transparent 42%),linear-gradient(180deg,#0a0a0f,#050507);border-color:rgba(255,255,255,0.08);">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
               <div>
                 <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Wheel</div>
-                <div style="font-size:13px;color:var(--text2);margin-top:4px;">0 to 36 with classic red, black, and green.</div>
+                <div style="font-size:13px;color:var(--text2);margin-top:4px;">Classic table layout with straight, dozen, and outside bets.</div>
               </div>
               <div id="roulette-result-pill" style="padding:8px 14px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text3);">Place your bet</div>
             </div>
-            <div style="position:relative;max-width:460px;margin:0 auto;">
-              <div id="roulette-wheel" style="width:100%;aspect-ratio:1/1;border-radius:50%;border:10px solid rgba(255,255,255,0.08);background:conic-gradient(#1f8f5a 0deg 9.73deg,#c2354e 9.73deg 19.46deg,#16161f 19.46deg 29.19deg,#c2354e 29.19deg 38.92deg,#16161f 38.92deg 48.65deg,#c2354e 48.65deg 58.38deg,#16161f 58.38deg 68.11deg,#c2354e 68.11deg 77.84deg,#16161f 77.84deg 87.57deg,#c2354e 87.57deg 97.3deg,#16161f 97.3deg 107.03deg,#16161f 107.03deg 116.76deg,#c2354e 116.76deg 126.49deg,#16161f 126.49deg 136.22deg,#c2354e 136.22deg 145.95deg,#16161f 145.95deg 155.68deg,#c2354e 155.68deg 165.41deg,#16161f 165.41deg 175.14deg,#c2354e 175.14deg 184.87deg,#c2354e 184.87deg 194.6deg,#16161f 194.6deg 204.33deg,#c2354e 204.33deg 214.06deg,#16161f 214.06deg 223.79deg,#c2354e 223.79deg 233.52deg,#16161f 233.52deg 243.25deg,#c2354e 243.25deg 252.98deg,#16161f 252.98deg 262.71deg,#c2354e 262.71deg 272.44deg,#16161f 272.44deg 282.17deg,#16161f 282.17deg 291.9deg,#c2354e 291.9deg 301.63deg,#16161f 301.63deg 311.36deg,#c2354e 311.36deg 321.09deg,#16161f 321.09deg 330.82deg,#c2354e 330.82deg 340.55deg,#16161f 340.55deg 350.28deg,#c2354e 350.28deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 30px 50px rgba(0,0,0,0.35);transition:transform 4.6s cubic-bezier(0.16,1,0.3,1);">
-                <div style="width:34%;height:34%;border-radius:50%;background:radial-gradient(circle,#262135,#0d0b14);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);">
-                  <div id="roulette-winning-pocket" style="width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;background:var(--bg3);color:var(--text);border:1px solid var(--border);">—</div>
+            <div style="position:relative;max-width:360px;margin:0 auto 20px;">
+              <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:28px solid var(--gold);filter:drop-shadow(0 8px 12px rgba(0,0,0,0.25));z-index:4;"></div>
+              <div id="roulette-wheel" style="width:100%;aspect-ratio:1/1;border-radius:50%;border:12px solid rgba(255,255,255,0.08);background:#16161f;display:flex;align-items:center;justify-content:center;box-shadow:0 30px 50px rgba(0,0,0,0.45), inset 0 0 0 10px rgba(0,0,0,0.35);transition:transform 4.6s cubic-bezier(0.16,1,0.3,1);position:relative;overflow:hidden;">
+                <div id="roulette-wheel-labels" style="position:absolute;inset:0;"></div>
+                <div style="position:absolute;inset:14%;border-radius:50%;background:radial-gradient(circle,#2c2c33,#101015);box-shadow:inset 0 0 0 12px rgba(255,255,255,0.03);"></div>
+                <div style="position:absolute;width:34%;height:34%;border-radius:50%;background:radial-gradient(circle,#262135,#0d0b14);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);z-index:2;">
+                  <div style="position:absolute;width:54%;height:54%;background:rgba(255,255,255,0.04);clip-path:polygon(50% 0%,60% 32%,100% 50%,60% 68%,50% 100%,40% 68%,0% 50%,40% 32%);filter:blur(0.2px);"></div>
+                  <div id="roulette-winning-pocket" style="width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;background:var(--bg3);color:var(--text);border:1px solid var(--border);z-index:2;">—</div>
                 </div>
               </div>
-              <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:28px solid var(--gold);filter:drop-shadow(0 8px 12px rgba(0,0,0,0.25));"></div>
             </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:16px;">
-            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-              <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="roulette-balance">⬡ 0</div></div>
-              <div class="stat-card"><div class="stat-label">Potential Payout</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="roulette-potential">⬡ 0</div></div>
-            </div>
-            <div class="panel">
-              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Bet Setup</div>
-              <div class="form-group"><label>Bet Type</label>
-                <select id="roulette-bet-type" onchange="onRouletteBetTypeChange()">
-                  <option value="red">Red</option>
-                  <option value="black">Black</option>
-                  <option value="even">Even</option>
-                  <option value="odd">Odd</option>
-                  <option value="low">1-18</option>
-                  <option value="high">19-36</option>
-                  <option value="dozen1">1st 12</option>
-                  <option value="dozen2">2nd 12</option>
-                  <option value="dozen3">3rd 12</option>
-                  <option value="number">Straight Number</option>
-                </select>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start;">
+              <div class="panel" style="padding:16px;background:#050507;border-color:rgba(255,255,255,0.08);">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+                  <div style="font-size:11px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;">Table</div>
+                  <div id="roulette-selected-label" style="font-size:12px;color:var(--gold);font-weight:700;">Selected: Red</div>
+                </div>
+                <div id="roulette-board"></div>
               </div>
-              <div class="form-group" id="roulette-number-wrap" style="display:none;"><label>Number</label><input type="number" id="roulette-number-input" min="0" max="36" value="0" oninput="updateRoulettePotential()"></div>
-              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-                <input type="number" id="roulette-bet-input" placeholder="0" min="1" step="1" oninput="updateRoulettePotential()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
-                <button onclick="setRouletteBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
-                <button onclick="setRouletteBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+
+              <div style="display:flex;flex-direction:column;gap:16px;">
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+                  <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="roulette-balance">⬡ 0</div></div>
+                  <div class="stat-card"><div class="stat-label">Potential Payout</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="roulette-potential">⬡ 0</div></div>
+                </div>
+                <div class="panel">
+                  <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Bet Setup</div>
+                  <div class="form-group" style="display:none;"><label>Bet Type</label>
+                    <select id="roulette-bet-type" onchange="onRouletteBetTypeChange()">
+                      <option value="red">Red</option>
+                      <option value="black">Black</option>
+                      <option value="even">Even</option>
+                      <option value="odd">Odd</option>
+                      <option value="low">1-18</option>
+                      <option value="high">19-36</option>
+                      <option value="dozen1">1st 12</option>
+                      <option value="dozen2">2nd 12</option>
+                      <option value="dozen3">3rd 12</option>
+                      <option value="number">Straight Number</option>
+                    </select>
+                  </div>
+                  <div class="form-group" id="roulette-number-wrap" style="display:none;"><label>Number</label><input type="number" id="roulette-number-input" min="0" max="36" value="0" oninput="updateRoulettePotential()"></div>
+                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+                    <input type="number" id="roulette-bet-input" placeholder="0" min="1" step="1" oninput="updateRoulettePotential()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                    <button onclick="setRouletteBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+                    <button onclick="setRouletteBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-bottom:14px;">
+                    <button onclick="setRouletteBet(10)" class="quick-btn">10</button>
+                    <button onclick="setRouletteBet(25)" class="quick-btn">25</button>
+                    <button onclick="setRouletteBet(50)" class="quick-btn">50</button>
+                    <button onclick="setRouletteBet(100)" class="quick-btn">100</button>
+                  </div>
+                  <button id="roulette-spin-btn" onclick="spinRoulette()" style="width:100%;padding:15px;background:linear-gradient(135deg,var(--gold),#ff9f43);color:#0a0a0f;border:none;border-radius:var(--radius);font-size:16px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;">Spin Wheel</button>
+                </div>
+                <div class="panel">
+                  <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Spins</div>
+                  <div id="roulette-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+                </div>
               </div>
-              <div style="display:flex;gap:8px;margin-bottom:14px;">
-                <button onclick="setRouletteBet(10)" class="quick-btn">10</button>
-                <button onclick="setRouletteBet(25)" class="quick-btn">25</button>
-                <button onclick="setRouletteBet(50)" class="quick-btn">50</button>
-                <button onclick="setRouletteBet(100)" class="quick-btn">100</button>
-              </div>
-              <button id="roulette-spin-btn" onclick="spinRoulette()" style="width:100%;padding:15px;background:linear-gradient(135deg,var(--gold),#ff9f43);color:#0a0a0f;border:none;border-radius:var(--radius);font-size:16px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;">Spin Wheel</button>
-            </div>
-            <div class="panel">
-              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Spins</div>
-              <div id="roulette-history" style="display:flex;flex-direction:column;gap:6px;"></div>
             </div>
           </div>
         </div>
@@ -5058,6 +5072,77 @@ function buildRouletteWheelBackground(){
   return `conic-gradient(from -90deg,${stops})`;
 }
 
+function rouletteLabelForSelection(betType, value){
+  if(betType==='number') return `Selected: Number ${value}`;
+  const labels={
+    red:'Selected: Red',
+    black:'Selected: Black',
+    even:'Selected: Even',
+    odd:'Selected: Odd',
+    low:'Selected: 1 to 18',
+    high:'Selected: 19 to 36',
+    dozen1:'Selected: 1st 12',
+    dozen2:'Selected: 13 to 24',
+    dozen3:'Selected: 25 to 36',
+  };
+  return labels[betType]||'Selected bet';
+}
+
+function setRouletteSelection(betType, value=null){
+  const typeEl=document.getElementById('roulette-bet-type');
+  const numberEl=document.getElementById('roulette-number-input');
+  if(typeEl) typeEl.value=betType;
+  if(numberEl && value!==null) numberEl.value=Math.max(0,Math.min(36,Math.floor(Number(value)||0)));
+  onRouletteBetTypeChange();
+}
+
+function renderRouletteWheelLabels(){
+  const el=document.getElementById('roulette-wheel-labels');
+  if(!el) return;
+  const segment=360/ROULETTE_ORDER.length;
+  el.innerHTML=ROULETTE_ORDER.map((number,index)=>{
+    const angle=(index*segment)+(segment/2);
+    const color=number===0?'#8df0bf':ROULETTE_RED_NUMBERS.has(number)?'#fff4f4':'#f2f2f8';
+    return `<div style="position:absolute;left:50%;top:50%;width:100%;height:100%;transform:translate(-50%,-50%) rotate(${angle}deg);pointer-events:none;z-index:1;">
+      <div style="position:absolute;left:50%;top:7%;transform:translateX(-50%) rotate(180deg);font-size:11px;font-weight:800;color:${color};letter-spacing:-0.02em;">${number}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderRouletteBoard(){
+  const board=document.getElementById('roulette-board');
+  if(!board) return;
+  const selectedType=document.getElementById('roulette-bet-type')?.value||'red';
+  const selectedNumber=Math.floor(Number(document.getElementById('roulette-number-input')?.value||0));
+  const rowA=[3,6,9,12,15,18,21,24,27,30,33,36];
+  const rowB=[2,5,8,11,14,17,20,23,26,29,32,35];
+  const rowC=[1,4,7,10,13,16,19,22,25,28,31,34];
+  const makeCell=(label,betType,value,extraStyle='')=>{
+    const isNumber=betType==='number';
+    const active=isNumber?selectedType==='number'&&selectedNumber===value:selectedType===betType;
+    const number=Number(label);
+    const bg=isNumber?(number===0?'#24a31a':ROULETTE_RED_NUMBERS.has(number)?'#e11d2e':'#3a3a40'):(betType==='red'?'#e11d2e':betType==='black'?'#3a3a40':'#111216');
+    const color=isNumber&&number===0?'#f5fff1':'#fff';
+    return `<button onclick="setRouletteSelection('${betType}'${value!==null?`,${value}`:''})" style="min-height:48px;border-radius:6px;border:${active?'2px solid var(--gold)':'1px solid rgba(255,255,255,0.16)'};background:${bg};color:${color};font-size:${isNumber?'15px':'13px'};font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:${active?'0 0 0 1px rgba(240,192,64,0.15), 0 0 18px rgba(240,192,64,0.14)':'none'};${extraStyle}">${label}</button>`;
+  };
+  board.innerHTML=`
+    <div style="display:grid;grid-template-columns:48px repeat(12,minmax(40px,1fr));gap:6px;align-items:stretch;">
+      <div style="grid-row:1 / span 3;">${makeCell('0','number',0,'height:100%;min-height:156px;')}</div>
+      ${rowA.map(n=>makeCell(String(n),'number',n)).join('')}
+      ${rowB.map(n=>makeCell(String(n),'number',n)).join('')}
+      ${rowC.map(n=>makeCell(String(n),'number',n)).join('')}
+      <div style="grid-column:2 / span 4;">${makeCell('1 to 12','dozen1',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:6 / span 4;">${makeCell('13 to 24','dozen2',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:10 / span 4;">${makeCell('25 to 36','dozen3',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:2 / span 2;">${makeCell('1 to 18','low',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:4 / span 2;">${makeCell('EVEN','even',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:6 / span 2;">${makeCell('RED','red',null,'min-height:42px;')}</div>
+      <div style="grid-column:8 / span 2;">${makeCell('BLACK','black',null,'min-height:42px;')}</div>
+      <div style="grid-column:10 / span 2;">${makeCell('ODD','odd',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:12 / span 2;">${makeCell('19 to 36','high',null,'min-height:42px;background:#0c0c11;')}</div>
+    </div>`;
+}
+
 function hideCasinoGameViews(){
   ['casino-dice','casino-blackjack','casino-plinko','casino-mines','casino-matches','casino-roulette','casino-coinflip'].forEach(id=>{
     const el=document.getElementById(id);
@@ -5283,6 +5368,7 @@ function openRoulette(){
   rouletteSpinning=false;
   const wheel=document.getElementById('roulette-wheel');
   if(wheel) wheel.style.background=buildRouletteWheelBackground();
+  renderRouletteWheelLabels();
   document.getElementById('roulette-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   document.getElementById('roulette-result-pill').textContent='Place your bet';
   document.getElementById('roulette-result-pill').style.background='var(--bg3)';
@@ -5292,6 +5378,7 @@ function openRoulette(){
   document.getElementById('roulette-winning-pocket').style.background='var(--bg3)';
   document.getElementById('roulette-winning-pocket').style.color='var(--text)';
   document.getElementById('roulette-wheel').style.transform=`rotate(${rouletteRotation}deg)`;
+  renderRouletteBoard();
   onRouletteBetTypeChange();
   document.getElementById('roulette-history').innerHTML='';
   loadRouletteHistory();
@@ -5319,6 +5406,9 @@ function onRouletteBetTypeChange(){
   const betType=document.getElementById('roulette-bet-type')?.value||'red';
   const wrap=document.getElementById('roulette-number-wrap');
   if(wrap) wrap.style.display=betType==='number'?'block':'none';
+  const selected=document.getElementById('roulette-selected-label');
+  if(selected) selected.textContent=rouletteLabelForSelection(betType, document.getElementById('roulette-number-input')?.value||0);
+  renderRouletteBoard();
   updateRoulettePotential();
 }
 
