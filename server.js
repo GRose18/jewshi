@@ -646,7 +646,7 @@ async function finishBlackjackGame(userId){
       return 'blackjack';
     }
     if(dealerTotal>21 || total>dealerTotal){
-      const payout=bet*2;
+      const payout=Math.floor(bet*1.5);
       totalPayout+=payout;
       return 'win';
     }

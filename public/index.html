@@ -4803,10 +4803,22 @@ async function dropPlinko(){
     document.getElementById('plinko-last-payout').textContent='⬡ '+data.payout.toLocaleString();
     updateTopbar();
     renderPlinkoMultiplierGrid(data.slotIndex);
-    pill.textContent=data.won?`Hit ${data.multiplier.toFixed(data.multiplier%1?1:0)}x`:`House edge · ${data.multiplier.toFixed(1)}x`;
-    pill.style.background=data.won?'rgba(0,208,132,0.14)':'rgba(255,69,96,0.12)';
-    pill.style.border=`1px solid ${data.won?'rgba(0,208,132,0.35)':'rgba(255,69,96,0.28)'}`;
-    pill.style.color=data.won?'var(--green)':'var(--red)';
+    if(data.profit>0){
+      pill.textContent=`Hit ${data.multiplier.toFixed(data.multiplier%1?1:0)}x · +⬡ ${data.profit}`;
+      pill.style.background='rgba(0,208,132,0.14)';
+      pill.style.border='1px solid rgba(0,208,132,0.35)';
+      pill.style.color='var(--green)';
+    }else if(data.profit===0){
+      pill.textContent=`Returned ⬡ ${data.payout} · 0 change`;
+      pill.style.background='rgba(240,192,64,0.12)';
+      pill.style.border='1px solid rgba(240,192,64,0.28)';
+      pill.style.color='var(--gold)';
+    }else{
+      pill.textContent=`Returned ⬡ ${data.payout} · -⬡ ${Math.abs(data.profit)}`;
+      pill.style.background='rgba(255,69,96,0.12)';
+      pill.style.border='1px solid rgba(255,69,96,0.28)';
+      pill.style.color='var(--red)';
+    }
     addPlinkoHistoryRow(data,betAmount);
     if(data.multiplier>=2.5) launchSpinConfetti();
   }catch(e){
@@ -4891,7 +4903,7 @@ async function loadPlinkoHistory(){
         <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
           <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${Number(b.payout/b.bet_amount||0).toFixed(1)}x</span>
           <span style="font-size:13px;color:var(--text2);">${b.risk_level?b.risk_level.toUpperCase()+' · ':''}⬡ ${b.bet_amount} bet</span>
-          <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+          <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:`⬡ ${b.payout} returned · -⬡ ${Math.abs(b.profit)}`}</span>
         </div>`).join('')
       :'<p style="font-size:13px;color:var(--text3);">No plinko drops yet.</p>';
   }catch(e){}
@@ -4902,7 +4914,7 @@ function renderPlinkoHistory(){
     <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
       <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.risk?b.risk.toUpperCase():'LOW'} · Slot ${b.slotIndex+1}</span>
       <span style="font-size:12px;color:var(--text3);">${b.multiplier.toFixed(b.multiplier%1?1:0)}x · ⬡ ${b.betAmount}</span>
-      <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.betAmount}</span>
+      <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:`⬡ ${b.payout} returned · -⬡ ${Math.abs(b.profit)}`}</span>
     </div>`).join('');
 }
 // ── CANCEL BET ──
