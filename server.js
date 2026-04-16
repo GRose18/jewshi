@@ -2558,7 +2558,7 @@ app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/mines/start', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/mines/start', authMiddleware, async(req,res)=>{
   try{
     const amount = Math.floor(Number(req.body.betAmount));
     const mineCount = clampNumber(Math.floor(Number(req.body.mineCount || 3)), 1, 24);
@@ -2581,7 +2581,7 @@ app.post('/api/casino/mines/start', authMiddleware, adminOnly, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/mines/reveal', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/mines/reveal', authMiddleware, async(req,res)=>{
   try{
     const game = minesGames.get(req.user.id);
     if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
@@ -2624,7 +2624,7 @@ app.post('/api/casino/mines/reveal', authMiddleware, adminOnly, async(req,res)=>
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/mines/cashout', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/mines/cashout', authMiddleware, async(req,res)=>{
   try{
     const game = minesGames.get(req.user.id);
     if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
