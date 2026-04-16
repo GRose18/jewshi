@@ -272,6 +272,13 @@
   }
   #assistance-banner-text{font-size:13px !important}
   #assistance-banner-subtext{font-size:11px !important}
+  .dreidel-stage{display:flex;align-items:center;justify-content:center;min-height:220px;border-radius:20px;border:1px solid rgba(240,192,64,0.2);background:radial-gradient(circle at top,rgba(240,192,64,0.12),transparent 42%),linear-gradient(180deg,#17141f,#100d15)}
+  .dreidel-body{width:104px;height:104px;position:relative;transform-style:preserve-3d;transition:transform 0.2s linear,filter 0.25s ease}
+  .dreidel-body.spinning{animation:dreidel-spin 0.9s linear infinite}
+  .dreidel-body::before{content:'';position:absolute;left:50%;top:-22px;transform:translateX(-50%);width:18px;height:26px;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,#f7d777,#c39223);box-shadow:0 4px 8px rgba(0,0,0,0.18)}
+  .dreidel-face{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);background:linear-gradient(135deg,#f7d777,#d0a13b);color:#24160a;font-size:46px;font-weight:900;text-shadow:0 1px 0 rgba(255,255,255,0.35);box-shadow:0 12px 28px rgba(0,0,0,0.25)}
+  .dreidel-shadow{width:120px;height:22px;border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,0.45),rgba(0,0,0,0));filter:blur(2px);margin:18px auto 0}
+  @keyframes dreidel-spin{from{transform:rotate(0deg) scale(1)}to{transform:rotate(360deg) scale(1.04)}}
   @media (max-width: 900px){.assistance-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -1113,6 +1120,7 @@ let assistanceSnapshotBusy=false;
 let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
+let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
 function canUseAssistanceTab(){
   return !!(currentUser&&currentUser.id==='GROSE');
 }
@@ -1479,7 +1487,7 @@ function renderAssistanceTab(){
           </div>
           <button class="btn-admin btn-sm btn-danger" onclick="stopAssistanceSessionById('${session.id}')">Stop</button>
         </div>
-        ${preview?.image?`<img id="assist-preview-img-${session.id}" class="assistance-preview" src="${preview.image}" alt="Live Jewshi preview for ${esc(session.senior_name)}">`:`<div id="assist-preview-empty-${session.id}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Jewshi preview from ${esc(session.senior_name)}.</div>`}
+        ${renderAssistancePreviewMarkup(session.id, preview, session.senior_name)}
         <div style="font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;">Send a calm spoken instruction. The assisted person keeps full control of the page.</div>
         <textarea id="assist-voice-${session.id}" placeholder="Example: The messages tab is open. Look near the left side for your conversations." style="width:100%;min-height:84px;resize:vertical;margin-top:10px;"></textarea>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
@@ -1506,6 +1514,16 @@ function renderAssistanceTab(){
 }
 function getSelectedAssistanceTargets(){
   return [...document.querySelectorAll('.assistance-target-check:checked')].map(el=>el.value).filter(Boolean);
+}
+function buildAssistancePreviewDoc(preview){
+  if(!preview||!preview.html||!preview.styles) return '';
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#0f1117;overflow:hidden;font-family:Inter,sans-serif;}body{transform:scale(.82);transform-origin:top left;width:122%;}${preview.styles}</style></head><body>${preview.html}</body></html>`;
+}
+function renderAssistancePreviewMarkup(sessionId, preview, seniorName){
+  if(!preview?.html||!preview?.styles){
+    return `<div id="assist-preview-empty-${sessionId}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Jewshi preview from ${esc(seniorName)}.</div>`;
+  }
+  return `<iframe id="assist-preview-frame-${sessionId}" class="assistance-preview" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(preview))}"></iframe>`;
 }
 function setAllAssistanceTargets(checked){
   document.querySelectorAll('.assistance-target-check').forEach(el=>{el.checked=!!checked;});
@@ -1721,41 +1739,13 @@ async function createAssistanceSnapshotData(){
     else if(field.tagName==='SELECT') field.value=original.value||'';
     else field.setAttribute('value', original.value||'');
   });
-  const rect=activePane.getBoundingClientRect();
-  const width=Math.max(520, Math.min(900, Math.round(rect.width||900)));
-  const height=Math.max(320, Math.min(620, Math.round(window.innerHeight*0.62)));
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <foreignObject width="100%" height="100%">
-      <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden;background:#0f1117;">
-        <style>${styleTag.textContent}</style>
-        ${clone.outerHTML}
-      </div>
-    </foreignObject>
-  </svg>`;
-  const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  try{
-    const img=await new Promise((resolve,reject)=>{
-      const image=new Image();
-      image.onload=()=>resolve(image);
-      image.onerror=reject;
-      image.src=url;
-    });
-    const canvas=document.createElement('canvas');
-    canvas.width=width;
-    canvas.height=height;
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(img,0,0,width,height);
-    return {
-      image:canvas.toDataURL('image/jpeg',0.68),
-      tab:getCurrentVisibleTabName(),
-      capturedAt:Date.now(),
-    };
-  }catch(e){
-    return null;
-  }finally{
-    URL.revokeObjectURL(url);
-  }
+  clone.querySelectorAll('script').forEach(el=>el.remove());
+  return {
+    html:clone.outerHTML,
+    styles:styleTag.textContent||'',
+    tab:getCurrentVisibleTabName(),
+    capturedAt:Date.now(),
+  };
 }
 async function maybeShareAssistanceSnapshot(){
   const seniorSession=getSeniorAssistanceSession();
@@ -1847,14 +1837,14 @@ function applyAssistanceEvent(event, sessionId){
   if(!session) return;
   const payload=event.payload||{};
   if(event.event_type==='snapshot'&&session.helper_user_id===currentUser.id){
-    assistancePreviewFrames[session.id]={image:payload.image||'',tab:payload.tab||'Jewshi',capturedAt:payload.capturedAt||Date.now()};
-    const img=document.getElementById(`assist-preview-img-${session.id}`);
+    assistancePreviewFrames[session.id]={html:payload.html||'',styles:payload.styles||'',tab:payload.tab||'Jewshi',capturedAt:payload.capturedAt||Date.now()};
+    const frame=document.getElementById(`assist-preview-frame-${session.id}`);
     const empty=document.getElementById(`assist-preview-empty-${session.id}`);
     const meta=document.getElementById(`assist-preview-meta-${session.id}`);
-    if(img){
-      img.src=payload.image||img.src;
-    }else if(empty&&payload.image){
-      empty.outerHTML=`<img id="assist-preview-img-${session.id}" class="assistance-preview" src="${payload.image}" alt="Live Jewshi preview">`;
+    if(frame){
+      frame.srcdoc=buildAssistancePreviewDoc(assistancePreviewFrames[session.id]);
+    }else if(empty&&(payload.html||payload.styles)){
+      empty.outerHTML=`<iframe id="assist-preview-frame-${session.id}" class="assistance-preview" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(assistancePreviewFrames[session.id]))}"></iframe>`;
     }else if(document.getElementById('tab-assistance')?.classList.contains('active')){
       renderAssistanceTab();
     }
@@ -2225,6 +2215,18 @@ function getMatchOpponent(match){
 function getMyMatchFromList(matches){
   return matches.find(m=>m.host_id===currentUser.id||m.guest_id===currentUser.id)||null;
 }
+function dreidelSpinDisplay(code){
+  const map={
+    N:{face:'נ',label:'Nun'},
+    G:{face:'ג',label:'Gimel'},
+    H:{face:'ה',label:'Hey'},
+    S:{face:'ש',label:'Shin'},
+  };
+  return map[code]||map.N;
+}
+function getVisibleLobbyGameType(){
+  return onlineMatchFilter&&onlineMatchFilter!=='all'?onlineMatchFilter:null;
+}
 function renderMatchesSummary(){
   const openCount=onlineMatches.filter(m=>m.status==='open').length;
   const activeCount=onlineMatches.filter(m=>m.status==='active').length;
@@ -2284,6 +2286,12 @@ async function renderMatches(){
   if(!currentEl||!openEl) return;
   const wagerInput=document.getElementById('match-create-wager');
   if(wagerInput&&!wagerInput.value) wagerInput.value='25';
+  const gameSelect=document.getElementById('match-create-game');
+  const visibleGame=getVisibleLobbyGameType();
+  if(gameSelect){
+    if(visibleGame){gameSelect.value=visibleGame;gameSelect.disabled=true;}
+    else gameSelect.disabled=false;
+  }
   currentEl.innerHTML='<div class="loading">Loading your table…</div>';
   openEl.innerHTML='<div class="loading">Loading tables…</div>';
   try{
@@ -2308,7 +2316,7 @@ function renderOpenMatchList(){
   const openEl=document.getElementById('matches-open-list');
   const lobbies=onlineMatches.filter(m=>m.status==='open'&&m.host_id!==currentUser.id&&(!onlineMatchFilter||onlineMatchFilter==='all'||m.game_type===onlineMatchFilter));
   if(!lobbies.length){
-    openEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">No ${onlineMatchFilter&&onlineMatchFilter!=='all'?onlineMatchFilter+' ':''}tables are open right now. Start one and wait for a challenger.</p>`;
+    openEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">No ${onlineMatchFilter&&onlineMatchFilter!=='all'?onlineMatchFilter+' ':''}tables are open right now. Create a ${onlineMatchFilter&&onlineMatchFilter!=='all'?onlineMatchFilter:'new'} lobby to get the game going.</p>`;
     return;
   }
   openEl.innerHTML=lobbies.map(match=>`
@@ -2340,12 +2348,13 @@ function renderCurrentMatch(){
   el.innerHTML=renderPokerMatch(match);
 }
 function renderOpenOwnedMatch(match){
+  const gameLabel=match.game_type==='dreidel'?'Dreidel':'Poker';
   return `
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div style="padding:16px;border-radius:var(--radius-lg);border:1px solid var(--accent-dim);background:var(--accent-bg);">
         <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:6px;">Lobby Open</div>
-        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">${match.game_type==='dreidel'?'Dreidel':'Poker'} table for ⬡ ${Number(match.wager||0).toLocaleString()}</div>
-        <div style="font-size:13px;color:var(--text2);">Waiting for someone else to join your match.</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">${gameLabel} table for ⬡ ${Number(match.wager||0).toLocaleString()}</div>
+        <div style="font-size:13px;color:var(--text2);">${gameLabel==='Dreidel'?'Waiting for another spinner to join your table.':'Waiting for another player to sit down for five-card draw.'}</div>
       </div>
       <button class="btn-admin btn-danger" style="width:max-content;" onclick="cancelOnlineMatch('${match.id}')">Cancel Lobby</button>
     </div>`;
@@ -2358,8 +2367,19 @@ function renderDreidelMatch(match){
   const myTurn=state.turnUserId===currentUser.id&&match.status==='active';
   const finished=match.status==='finished'||state.phase==='finished';
   const winnerLabel=state.winnerId===currentUser.id?'You won!':state.winnerId?`${esc(opponent?.name||state.winnerId)} won.`:'Match complete.';
+  const spinCode=dreidelAnimation.matchId===match.id?dreidelAnimation.face:(state.lastSpin?.spin||'N');
+  const spinInfo=dreidelAnimation.matchId===match.id?{face:dreidelAnimation.face,label:dreidelAnimation.label}:dreidelSpinDisplay(spinCode);
   return `
     <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="dreidel-stage">
+        <div style="text-align:center;">
+          <div class="dreidel-body ${dreidelAnimation.matchId===match.id&&dreidelAnimation.spinning?'spinning':''}" style="${finished?'filter:drop-shadow(0 10px 20px rgba(0,208,132,0.18));':''}">
+            <div class="dreidel-face">${spinInfo.face}</div>
+          </div>
+          <div class="dreidel-shadow"></div>
+          <div style="font-size:13px;color:var(--text3);margin-top:8px;">${dreidelAnimation.matchId===match.id&&dreidelAnimation.spinning?'Spinning...':`Current face: ${spinInfo.label}`}</div>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;">
         <div class="stat-card"><div class="stat-label">You</div><div class="stat-value" style="font-size:20px;">${myTokens}</div></div>
         <div class="stat-card"><div class="stat-label">Pot</div><div class="stat-value" style="font-size:20px;color:var(--gold);">${Number(state.pot||0)}</div></div>
@@ -2369,7 +2389,7 @@ function renderDreidelMatch(match){
         <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">${finished?winnerLabel:(myTurn?'Your turn to spin.':`${esc(opponent?.name||'Opponent')} is up.`)}</div>
         <div style="font-size:12px;color:var(--text3);">${state.lastSpin?`${esc(state.lastSpin.userId)} last spun ${esc(state.lastSpin.name)}.`:'The dreidel is ready.'}</div>
       </div>
-      ${finished?'':`<button class="btn-admin" style="width:max-content;" ${myTurn?'':'disabled'} onclick="playDreidelSpin('${match.id}')">Spin Dreidel</button>`}
+      ${finished?'':`<button class="btn-admin" style="width:max-content;" ${myTurn&&!(dreidelAnimation.matchId===match.id&&dreidelAnimation.spinning)?'':'disabled'} onclick="playDreidelSpin('${match.id}')">${dreidelAnimation.matchId===match.id&&dreidelAnimation.spinning?'Spinning...':'Spin Dreidel'}</button>`}
       <div>
         <div style="font-size:12px;color:var(--text3);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">Match Log</div>
         <div style="display:flex;flex-direction:column;gap:8px;">${(state.log||[]).slice(0,8).map(entry=>`<div style="padding:10px 12px;border-radius:var(--radius);background:var(--bg3);border:1px solid var(--border);font-size:13px;color:var(--text2);">${esc(entry)}</div>`).join('')||'<div style="font-size:13px;color:var(--text3);">No spins yet.</div>'}</div>
@@ -2421,7 +2441,7 @@ function renderPokerMatch(match){
     </div>`;
 }
 async function createOnlineMatch(){
-  const gameType=document.getElementById('match-create-game').value;
+  const gameType=getVisibleLobbyGameType()||document.getElementById('match-create-game').value;
   const wager=Math.floor(Number(document.getElementById('match-create-wager').value));
   if(!wager||wager<1){showToast('Enter a valid wager.');return;}
   try{
@@ -2449,12 +2469,31 @@ async function cancelOnlineMatch(matchId){
   }catch(e){showToast(e.message);}
 }
 async function playDreidelSpin(matchId){
+  if(dreidelAnimation.matchId===matchId&&dreidelAnimation.spinning) return;
   try{
-    onlineMatchFocus=await api('POST',`/matches/${matchId}/action`,{action:'spin'});
+    const faces=['N','G','H','S'];
+    dreidelAnimation={matchId,spinning:true,face:'נ',label:'Nun'};
+    renderCurrentMatch();
+    const spinInterval=setInterval(()=>{
+      const next=dreidelSpinDisplay(faces[Math.floor(Math.random()*faces.length)]);
+      dreidelAnimation={matchId,spinning:true,face:next.face,label:next.label};
+      renderCurrentMatch();
+    },120);
+    const response=await api('POST',`/matches/${matchId}/action`,{action:'spin'});
+    onlineMatchFocus=response;
+    const landed=dreidelSpinDisplay(response.state?.lastSpin?.spin||'N');
+    await new Promise(resolve=>setTimeout(resolve,900));
+    clearInterval(spinInterval);
+    dreidelAnimation={matchId,spinning:false,face:landed.face,label:landed.label};
     await refreshUser();
     await renderMatches();
     if(onlineMatchFocus.status==='finished') showToast(onlineMatchFocus.state?.winnerId===currentUser.id?'You won the dreidel match.':'Dreidel match complete.');
-  }catch(e){showToast(e.message);}
+    else showToast(`Spin result: ${landed.label}.`);
+  }catch(e){
+    dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
+    renderCurrentMatch();
+    showToast(e.message);
+  }
 }
 async function submitPokerDraw(matchId){
   const checked=[...document.querySelectorAll('.match-discard-box:checked')].map(el=>Number(el.value));
