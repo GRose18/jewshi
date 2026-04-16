@@ -403,12 +403,14 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
-    <div class="nav-tab admin-only" data-tab="casino" onclick="switchTab('casino')" style="display:none;">Casino</div>
+    <div class="nav-tab" data-tab="casino" onclick="switchTab('casino')">Casino</div>
     <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
+    <div class="nav-tab" data-tab="notifications" onclick="switchTab('notifications')">Notifications <span id="notifications-badge" style="display:none;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
+    <div class="nav-tab" data-tab="suggestions" onclick="switchTab('suggestions')">Suggestions</div>
     <div class="nav-tab assistance-only" data-tab="assistance" onclick="switchTab('assistance')" style="display:none;">Assistance</div>
     <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
@@ -463,13 +465,13 @@
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Beat the dealer to 21</div>
             <span class="status-tag status-open">Individual</span>
           </div>
-          <div class="market-card" onclick="openMatchLobby('dreidel')" style="text-align:center;padding:24px 18px;">
+          <div class="market-card" id="casino-dreidel-card" onclick="openMatchLobby('dreidel')" style="text-align:center;padding:24px 18px;">
             <div style="font-size:36px;margin-bottom:10px;">🕎</div>
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Dreidel</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Head-to-head spin match</div>
             <span class="status-tag status-open">Join Lobby</span>
           </div>
-          <div class="market-card" onclick="openMatchLobby('poker')" style="text-align:center;padding:24px 18px;">
+          <div class="market-card" id="casino-poker-card" onclick="openMatchLobby('poker')" style="text-align:center;padding:24px 18px;">
             <div style="font-size:36px;margin-bottom:10px;">♠️</div>
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Poker</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Five-card draw against another player</div>
@@ -818,6 +820,41 @@
       </div>
     </div>
 
+    <div id="tab-notifications" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Notification Center</h2>
+          <p style="font-size:12px;color:var(--text3);">Bet wins, new messages, and JewGram activity all show up here.</p>
+        </div>
+        <button class="btn-admin btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
+      </div>
+      <div class="panel">
+        <div id="notifications-list"><div class="loading">Loading notifications…</div></div>
+      </div>
+    </div>
+
+    <div id="tab-suggestions" class="tab-content">
+      <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Suggestions</h2>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Send bug reports and product ideas to admin. Suggestions are not anonymous, and each account can send up to 2 per day.</p>
+      <div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:16px;align-items:start;">
+        <div class="panel">
+          <div class="panel-title">Send To Admin</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Sent as <span id="suggestions-identity" style="color:var(--text);font-weight:600;"></span></div>
+          <div id="suggestions-status"></div>
+          <div class="form-group">
+            <label>Suggestion</label>
+            <textarea id="suggestion-text" placeholder="Describe the bug, where it happened, and what would help fix it."></textarea>
+          </div>
+          <button class="btn-admin" style="width:100%;" onclick="submitSuggestion()">Send Suggestion</button>
+          <div style="font-size:12px;color:var(--text3);margin-top:12px;">2 suggestions per day, tied to your account.</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title" id="suggestions-list-title">Your Recent Suggestions</div>
+          <div id="suggestions-list"><div class="loading">Loading suggestions…</div></div>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-assistance" class="tab-content">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
@@ -1145,7 +1182,7 @@ const CREDITS_PER_DOLLAR=100;
 let authToken=localStorage.getItem('ew_token');
 let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
-let unreadPollInterval=null,resolutionPollInterval=null;
+let unreadPollInterval=null,resolutionPollInterval=null,notificationPollInterval=null;
 let liveInterval=null,countdownInterval=null,liveMarketsData=[];
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
@@ -1178,8 +1215,12 @@ let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
 let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
+let notificationState={items:[],unreadCount:0};
 function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
+}
+function canUseOnlineMatches(){
+  return !!(currentUser&&currentUser.role==='admin');
 }
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
@@ -1404,6 +1445,8 @@ function doLogout(){
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
   unreadPollInterval=null;resolutionPollInterval=null;
+  clearInterval(notificationPollInterval);
+  notificationPollInterval=null;
   clearInterval(popupPollInterval);
   popupPollInterval=null;
   hideIncomingPopup();
@@ -1426,6 +1469,9 @@ async function enterApp(){
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
   unreadPollInterval=setInterval(pollUnreadCount,5000);pollUnreadCount();
   resolutionPollInterval=setInterval(pollResolutions,8000);pollResolutions();
+  clearInterval(notificationPollInterval);
+  notificationPollInterval=setInterval(pollNotifications,7000);
+  pollNotifications();
   clearInterval(popupPollInterval);
   popupPollInterval=setInterval(pollIncomingPopup,3000);
   pollIncomingPopup();
@@ -1455,6 +1501,8 @@ function switchTab(tab){
   if(tab==='leaderboard')renderLeaderboard();
   if(tab==='store')renderStore();
   if(tab==='messages')renderMessages();
+  if(tab==='notifications')renderNotifications();
+  if(tab==='suggestions')renderSuggestions();
   if(tab==='assistance')renderAssistanceTab();
   if(tab==='admin')renderAdminTab();
   if(tab==='popup')renderPopupTab();
@@ -2620,6 +2668,10 @@ function currentOnlineMatchForView(){
   return null;
 }
 function openMatchLobby(gameType='all'){
+  if(!canUseOnlineMatches()){
+    showToast('Poker and dreidel are private for admin development right now.');
+    return;
+  }
   onlineMatchFilter=gameType||'all';
   document.getElementById('casino-lobby').style.display='none';
   document.getElementById('casino-blackjack').style.display='none';
@@ -2650,6 +2702,13 @@ function closeMatchLobby(){
   onlineMatchFilter='all';
 }
 async function renderMatches(){
+  if(!canUseOnlineMatches()){
+    const currentEl=document.getElementById('matches-current');
+    const openEl=document.getElementById('matches-open-list');
+    if(currentEl) currentEl.innerHTML='<p style="color:var(--text3);font-size:13px;">Poker and dreidel are private for admin development right now.</p>';
+    if(openEl) openEl.innerHTML='';
+    return;
+  }
   const currentEl=document.getElementById('matches-current');
   const openEl=document.getElementById('matches-open-list');
   if(!currentEl||!openEl) return;
@@ -2968,6 +3027,132 @@ async function showNewDM(){
   const match=users.find(u=>u.name.toLowerCase().includes(name.toLowerCase())||u.id.toLowerCase()===name.toLowerCase());
   if(!match){alert('User not found.');return;}
   openThread(match.id,match.name);
+}
+function notificationLinkLabel(link){
+  if(link==='messages') return 'Open Messages';
+  if(link==='portfolio') return 'Open My Bets';
+  if(link==='feed') return 'Open JewGram';
+  return 'Open';
+}
+async function renderNotifications(){
+  const list=document.getElementById('notifications-list');
+  if(!list) return;
+  list.innerHTML='<div class="loading">Loading notifications…</div>';
+  try{
+    const data=await api('GET','/notifications');
+    notificationState=data||{items:[],unreadCount:0};
+    updateNotificationBadge();
+    if(!notificationState.items.length){
+      list.innerHTML='<p style="color:var(--text3);font-size:13px;">No notifications yet.</p>';
+      return;
+    }
+    list.innerHTML=notificationState.items.map(item=>`
+      <div onclick="openNotification('${item.id}','${esc(item.link||'').replace(/'/g,"\\'")}')" style="padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;${item.is_read?'opacity:0.72;':''}">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;">${esc(item.title)} ${item.is_read?'':`<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-dim);">New</span>`}</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.55;margin-top:5px;white-space:pre-wrap;">${esc(item.body)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:7px;">${timeAgo(item.created_at)}${item.link?` · ${notificationLinkLabel(item.link)}`:''}</div>
+          </div>
+        </div>
+      </div>`).join('');
+  }catch(e){
+    list.innerHTML='<p style="color:var(--red);font-size:13px;">Failed to load notifications.</p>';
+  }
+}
+function updateNotificationBadge(){
+  const badge=document.getElementById('notifications-badge');
+  if(!badge) return;
+  const count=notificationState?.unreadCount||0;
+  if(count>0){
+    badge.textContent=count>99?'99+':count;
+    badge.style.display='inline';
+  }else{
+    badge.style.display='none';
+  }
+}
+async function pollNotifications(){
+  if(!authToken||!currentUser) return;
+  try{
+    const data=await api('GET','/notifications');
+    notificationState=data||{items:[],unreadCount:0};
+    updateNotificationBadge();
+    if(document.getElementById('tab-notifications')?.classList.contains('active')) renderNotifications();
+  }catch(e){}
+}
+async function openNotification(id,link){
+  try{
+    await api('POST',`/notifications/${id}/read`,{});
+  }catch(e){}
+  if(notificationState?.items){
+    const match=notificationState.items.find(item=>item.id===id);
+    if(match) match.is_read=1;
+    notificationState.unreadCount=Math.max(0,(notificationState.unreadCount||0)-1);
+    updateNotificationBadge();
+  }
+  if(link) switchTab(link);
+  else if(document.getElementById('tab-notifications')?.classList.contains('active')) renderNotifications();
+}
+async function markAllNotificationsRead(){
+  try{
+    await api('POST','/notifications/read-all',{});
+    notificationState.items=(notificationState.items||[]).map(item=>({...item,is_read:1}));
+    notificationState.unreadCount=0;
+    updateNotificationBadge();
+    if(document.getElementById('tab-notifications')?.classList.contains('active')) renderNotifications();
+  }catch(e){
+    showToast(e.message);
+  }
+}
+async function renderSuggestions(){
+  const identity=document.getElementById('suggestions-identity');
+  const title=document.getElementById('suggestions-list-title');
+  const list=document.getElementById('suggestions-list');
+  const status=document.getElementById('suggestions-status');
+  if(identity) identity.textContent=currentUser?`${currentUser.name} (${currentUser.id})`:'';
+  if(status) status.innerHTML='';
+  if(title) title.textContent=currentUser?.role==='admin'?'Recent Suggestions From Users':'Your Recent Suggestions';
+  if(!list) return;
+  list.innerHTML='<div class="loading">Loading suggestions…</div>';
+  try{
+    const data=await api('GET','/suggestions');
+    const items=currentUser?.role==='admin'?(data.received||[]):(data.sent||[]);
+    if(!items.length){
+      list.innerHTML=`<p style="color:var(--text3);font-size:13px;">${currentUser?.role==='admin'?'No suggestions yet.':'You have not sent any suggestions yet.'}</p>`;
+      return;
+    }
+    list.innerHTML=items.map(item=>{
+      const byline=currentUser?.role==='admin'
+        ? `${esc(item.sender_name||item.sender_id)} · ${esc(item.sender_id)}`
+        : `${new Date(item.timestamp).toLocaleString()}`;
+      const meta=currentUser?.role==='admin'
+        ? `${byline} · ${timeAgo(item.timestamp)}`
+        : `${timeAgo(item.timestamp)} · ${new Date(item.timestamp).toLocaleString()}`;
+      return `<div style="padding:14px 0;border-bottom:1px solid var(--border);">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">${meta}</div>
+        <div style="font-size:14px;color:var(--text);line-height:1.55;white-space:pre-wrap;">${esc(item.text)}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    list.innerHTML='<p style="color:var(--red);font-size:13px;">Failed to load suggestions.</p>';
+  }
+}
+async function submitSuggestion(){
+  const input=document.getElementById('suggestion-text');
+  const status=document.getElementById('suggestions-status');
+  const text=input?.value.trim()||'';
+  if(!text){
+    if(status) showNotif('suggestions-status','Write a suggestion first.','error');
+    return;
+  }
+  try{
+    await api('POST','/suggestions',{text});
+    input.value='';
+    showNotif('suggestions-status','Suggestion sent to admin.','success');
+    await renderSuggestions();
+  }catch(e){
+    showNotif('suggestions-status',e.message,'error');
+  }
 }
 async function pollUnreadCount(){
   if(!authToken||!currentUser) return;
@@ -4191,6 +4376,10 @@ function initCasino(){
   document.getElementById('casino-blackjack').style.display='none';
   document.getElementById('casino-plinko').style.display='none';
   document.getElementById('casino-matches').style.display='none';
+  const dreidelCard=document.getElementById('casino-dreidel-card');
+  const pokerCard=document.getElementById('casino-poker-card');
+  if(dreidelCard) dreidelCard.style.display=canUseOnlineMatches()?'block':'none';
+  if(pokerCard) pokerCard.style.display=canUseOnlineMatches()?'block':'none';
 }
 
 function openDice(){

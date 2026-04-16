@@ -84,6 +84,20 @@ async function initDB() {
       id TEXT PRIMARY KEY, sender_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
       text TEXT NOT NULL, is_read INTEGER DEFAULT 0, timestamp INTEGER
     );
+    CREATE TABLE IF NOT EXISTS suggestions (
+      id TEXT PRIMARY KEY, sender_id TEXT NOT NULL,
+      text TEXT NOT NULL, timestamp INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      link TEXT DEFAULT '',
+      is_read INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS posts (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, caption TEXT NOT NULL,
       image TEXT DEFAULT NULL, timestamp INTEGER, repost_count INTEGER DEFAULT 0
@@ -671,6 +685,11 @@ async function recordTx(userId, amount, type, refId=null, desc='') {
   await db.run('INSERT INTO transactions (id,user_id,amount,type,reference_id,description,timestamp) VALUES (?,?,?,?,?,?,?)',
     [generateId('tx'),userId,amount,type,refId,desc,Date.now()]);
 }
+async function createNotification(userId, type, title, body, link='') {
+  if(!userId) return;
+  await db.run('INSERT INTO notifications (id,user_id,type,title,body,link,is_read,created_at) VALUES (?,?,?,?,?,?,0,?)',
+    [generateId('ntf'),userId,type,String(title||'').slice(0,160),String(body||'').slice(0,500),String(link||'').slice(0,120),Date.now()]);
+}
 function authMiddleware(req,res,next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({error:'No token'});
@@ -697,6 +716,7 @@ async function requireAssistanceVisibility(req,res,next){
   next();
 }
 function isGrose(req) { return req.user.id === 'GROSE'; }
+function isAdminUser(user) { return user?.role === 'admin'; }
 function lmsrCost(qYes, qNo, b) {
   return b * Math.log(Math.exp(qYes/b) + Math.exp(qNo/b));
 }
@@ -1417,6 +1437,8 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
   await db.run('DELETE FROM stripe_sessions WHERE user_id=?',[id]);
   await db.run('DELETE FROM messages WHERE sender_id=? OR recipient_id=?',[id,id]);
+  await db.run('DELETE FROM suggestions WHERE sender_id=?',[id]);
+  await db.run('DELETE FROM notifications WHERE user_id=?',[id]);
   await db.run('DELETE FROM post_likes WHERE user_id=?',[id]);
   await db.run('DELETE FROM post_reposts WHERE user_id=?',[id]);
   await db.run('DELETE FROM assistance_events WHERE session_id IN (SELECT id FROM assistance_sessions WHERE senior_user_id=? OR helper_user_id=?)',[id,id]);
@@ -1479,6 +1501,7 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
       await db.run("UPDATE bets SET status='won',payout=? WHERE id=?",[pay,b.id]);
       await db.run('UPDATE users SET credits=credits+? WHERE id=?',[pay,b.user_id]);
       await recordTx(b.user_id,pay,'bet_won',b.id,`Won: ${m.question}`);
+      await createNotification(b.user_id,'bet_win','Bet Won',`${m.question} resolved ${outcome}. You won ⬡${pay}.`,'portfolio');
     }
     await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
     res.json({success:true,outcome,pool:m.pool,wins:wins.map(b=>({id:b.id,user_id:b.user_id,amount:b.amount,payout:Math.round((b.amount/total)*m.pool)}))});
@@ -1499,6 +1522,7 @@ app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(
       await db.run("UPDATE bets SET status='won',payout=? WHERE id=?",[pay,b.id]);
       await db.run('UPDATE users SET credits=credits+? WHERE id=?',[pay,b.user_id]);
       await recordTx(b.user_id,pay,'bet_won',b.id,`Won O/U: ${m.question}`);
+      await createNotification(b.user_id,'bet_win','Bet Won',`${m.question} resolved ${outcome}. You won ⬡${pay}.`,'portfolio');
     }
     await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
     res.json({success:true,outcome,actual,line:m.line});
@@ -1558,6 +1582,7 @@ app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
 
 // ── ONLINE MATCHES ──
 app.get('/api/matches', authMiddleware, async(req,res)=>{
+  if(!isAdminUser(req.user)) return res.status(403).json({error:'Online matches are private for admin development right now'});
   try{
     const rows=await db.all(`SELECT m.*,
       host.name as host_name,
@@ -1577,6 +1602,7 @@ app.get('/api/matches', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/matches', authMiddleware, async(req,res)=>{
+  if(!isAdminUser(req.user)) return res.status(403).json({error:'Online matches are private for admin development right now'});
   try{
     const gameType = ['dreidel','poker'].includes(req.body.gameType) ? req.body.gameType : null;
     const wager = Math.max(1, Math.floor(Number(req.body.wager)||0));
@@ -1596,6 +1622,7 @@ app.post('/api/matches', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/matches/:id/join', authMiddleware, async(req,res)=>{
+  if(!isAdminUser(req.user)) return res.status(403).json({error:'Online matches are private for admin development right now'});
   try{
     const match=await fetchOnlineMatch(req.params.id);
     if(!match) return res.status(404).json({error:'Match not found'});
@@ -1615,6 +1642,7 @@ app.post('/api/matches/:id/join', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/matches/:id/cancel', authMiddleware, async(req,res)=>{
+  if(!isAdminUser(req.user)) return res.status(403).json({error:'Online matches are private for admin development right now'});
   try{
     const match=await fetchOnlineMatch(req.params.id);
     if(!match) return res.status(404).json({error:'Match not found'});
@@ -1627,6 +1655,7 @@ app.post('/api/matches/:id/cancel', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/matches/:id', authMiddleware, async(req,res)=>{
+  if(!isAdminUser(req.user)) return res.status(403).json({error:'Online matches are private for admin development right now'});
   try{
     const match=await fetchOnlineMatch(req.params.id);
     if(!match) return res.status(404).json({error:'Match not found'});
@@ -1635,6 +1664,7 @@ app.get('/api/matches/:id', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/matches/:id/action', authMiddleware, async(req,res)=>{
+  if(!isAdminUser(req.user)) return res.status(403).json({error:'Online matches are private for admin development right now'});
   try{
     let match=await fetchOnlineMatch(req.params.id);
     if(!match) return res.status(404).json({error:'Match not found'});
@@ -1714,6 +1744,7 @@ app.post('/api/messages', authMiddleware, async(req,res)=>{
     const id=generateId('msg');
     await db.run('INSERT INTO messages (id,sender_id,recipient_id,text,is_read,timestamp) VALUES (?,?,?,?,0,?)',
       [id,req.user.id,recipientId,text.trim(),Date.now()]);
+    await createNotification(recipientId,'message','New Message',`${req.user.name||req.user.id}: ${text.trim().slice(0,120)}`,'messages');
     res.json({id,success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1751,6 +1782,73 @@ app.get('/api/messages/users', authMiddleware, async(req,res)=>{
   res.json(await db.all("SELECT id,name,grade,role FROM users WHERE id!=? ORDER BY name ASC",[req.user.id]));
 });
 
+// ── SUGGESTIONS ──
+app.get('/api/suggestions', authMiddleware, async(req,res)=>{
+  try{
+    if(isAdminUser(req.user)){
+      const received = await db.all(`SELECT s.*,u.name as sender_name,u.role as sender_role
+        FROM suggestions s
+        JOIN users u ON u.id=s.sender_id
+        ORDER BY s.timestamp DESC
+        LIMIT 100`);
+      return res.json({received, sent:[]});
+    }
+    const sent = await db.all(`SELECT s.*,u.name as sender_name,u.role as sender_role
+      FROM suggestions s
+      JOIN users u ON u.id=s.sender_id
+      WHERE s.sender_id=?
+      ORDER BY s.timestamp DESC
+      LIMIT 50`, [req.user.id]);
+    res.json({received:[], sent});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/suggestions', authMiddleware, async(req,res)=>{
+  try{
+    const text = String(req.body.text || '').trim();
+    if(!text) return res.status(400).json({error:'Write a suggestion first'});
+    if(text.length > 1000) return res.status(400).json({error:'Suggestion is too long'});
+    const dayStart = new Date();
+    dayStart.setHours(0,0,0,0);
+    const sentToday = await db.get('SELECT COUNT(*) as c FROM suggestions WHERE sender_id=? AND timestamp>=?',[req.user.id, dayStart.getTime()]);
+    if((sentToday?.c||0) >= 2) return res.status(429).json({error:'Daily limit reached. You can send up to 2 suggestions per day.'});
+    const id = generateId('sug');
+    const timestamp = Date.now();
+    await db.run('INSERT INTO suggestions (id,sender_id,text,timestamp) VALUES (?,?,?,?)',[id, req.user.id, text, timestamp]);
+    res.json({
+      success:true,
+      suggestion:{
+        id,
+        sender_id:req.user.id,
+        sender_name:req.user.name,
+        sender_role:req.user.role,
+        text,
+        timestamp,
+      }
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+// ── NOTIFICATIONS ──
+app.get('/api/notifications', authMiddleware, async(req,res)=>{
+  try{
+    const items = await db.all('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100',[req.user.id]);
+    const unread = await db.get('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0',[req.user.id]);
+    res.json({items, unreadCount:unread?.c||0});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/notifications/read-all', authMiddleware, async(req,res)=>{
+  try{
+    await db.run('UPDATE notifications SET is_read=1 WHERE user_id=?',[req.user.id]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/notifications/:id/read', authMiddleware, async(req,res)=>{
+  try{
+    await db.run('UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?',[req.params.id, req.user.id]);
+    res.json({success:true});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 // ── POSTS / FEED ──
 app.get('/api/feed', authMiddleware, async(req,res)=>{
   try{
@@ -1785,6 +1883,10 @@ app.post('/api/posts', authMiddleware, adminOnly, async(req,res)=>{
     const id=generateId('post');
     await db.run('INSERT INTO posts (id,user_id,caption,image,timestamp,repost_count) VALUES (?,?,?,?,?,0)',
       [id,req.user.id,caption.trim(),image||null,Date.now()]);
+    const recipients = await db.all('SELECT id FROM users WHERE id!=?',[req.user.id]);
+    for(const recipient of recipients){
+      await createNotification(recipient.id,'jewgram_post','New JewGram Post',`${req.user.name||req.user.id} posted: ${caption.trim().slice(0,120)}`,'feed');
+    }
     res.json(await db.get('SELECT * FROM posts WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1801,6 +1903,8 @@ app.delete('/api/posts/:id', authMiddleware, adminOnly, async(req,res)=>{
 
 app.post('/api/posts/:id/like', authMiddleware, async(req,res)=>{
   try{
+    const post = await db.get('SELECT p.id,p.user_id,p.caption,u.name as author_name FROM posts p JOIN users u ON u.id=p.user_id WHERE p.id=?',[req.params.id]);
+    if(!post) return res.status(404).json({error:'Post not found'});
     const existing=await db.get('SELECT id FROM post_likes WHERE post_id=? AND user_id=?',[req.params.id,req.user.id]);
     if(existing){
       await db.run('DELETE FROM post_likes WHERE post_id=? AND user_id=?',[req.params.id,req.user.id]);
@@ -1808,6 +1912,9 @@ app.post('/api/posts/:id/like', authMiddleware, async(req,res)=>{
     } else {
       await db.run('INSERT INTO post_likes (id,post_id,user_id,timestamp) VALUES (?,?,?,?)',
         [generateId('lk'),req.params.id,req.user.id,Date.now()]);
+      if(post.user_id!==req.user.id){
+        await createNotification(post.user_id,'jewgram_like','JewGram Like',`${req.user.name||req.user.id} liked your post: ${String(post.caption||'').slice(0,120)}`,'feed');
+      }
       res.json({liked:true});
     }
   }catch(e){res.status(500).json({error:e.message});}
