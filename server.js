@@ -256,6 +256,8 @@ async function seedIfEmpty() {
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_plinko_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_blackjack_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_mines_odds','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_roulette_odds','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_coinflip_odds','100')");
   console.log('Database seeded.');
 }
 
@@ -740,13 +742,15 @@ async function getActiveLuckyStreak(userId){
   };
 }
 async function getCasinoConfig(userId=null) {
-  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds','casino_mines_odds')");
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds','casino_mines_odds','casino_roulette_odds','casino_coinflip_odds')");
   const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
   const base = {
     diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 0, 200),
     plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 0, 200),
     blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 0, 200),
     minesOdds: clampNumber(Number(settings.casino_mines_odds || 100), 0, 200),
+    rouletteOdds: clampNumber(Number(settings.casino_roulette_odds || 100), 0, 200),
+    coinflipOdds: clampNumber(Number(settings.casino_coinflip_odds || 100), 0, 200),
   };
   const luckyStreak = await getActiveLuckyStreak(userId);
   const effective = luckyStreak ? {
@@ -754,6 +758,8 @@ async function getCasinoConfig(userId=null) {
     plinkoOdds: clampNumber(base.plinkoOdds + luckyStreak.boostPercent, 0, 200),
     blackjackOdds: clampNumber(base.blackjackOdds + luckyStreak.boostPercent, 0, 200),
     minesOdds: clampNumber(base.minesOdds + luckyStreak.boostPercent, 0, 200),
+    rouletteOdds: clampNumber(base.rouletteOdds + luckyStreak.boostPercent, 0, 200),
+    coinflipOdds: clampNumber(base.coinflipOdds + luckyStreak.boostPercent, 0, 200),
   } : { ...base };
   return { ...base, effective, luckyStreak };
 }
@@ -776,6 +782,41 @@ function getMinesMultiplier(revealedCount, mineCount){
   const safeTiles = 25 - mineCount;
   const fair = combination(25, revealedCount) / combination(safeTiles, revealedCount);
   return Number((fair * 0.97).toFixed(4));
+}
+const ROULETTE_RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const ROULETTE_NUMBERS = Array.from({length:37}, (_, i)=>i);
+function getRoulettePayoutMultiplier(betType){
+  if(betType==='number') return 36;
+  if(['red','black','even','odd','low','high'].includes(betType)) return 2;
+  if(['dozen1','dozen2','dozen3'].includes(betType)) return 3;
+  return 0;
+}
+function getRouletteWinningNumbers(betType, value){
+  if(betType==='number') return new Set([clampNumber(Math.floor(Number(value||0)), 0, 36)]);
+  if(betType==='red') return new Set([...ROULETTE_RED_NUMBERS]);
+  if(betType==='black') return new Set(ROULETTE_NUMBERS.filter(n=>n!==0 && !ROULETTE_RED_NUMBERS.has(n)));
+  if(betType==='even') return new Set(ROULETTE_NUMBERS.filter(n=>n!==0 && n%2===0));
+  if(betType==='odd') return new Set(ROULETTE_NUMBERS.filter(n=>n%2===1));
+  if(betType==='low') return new Set(ROULETTE_NUMBERS.filter(n=>n>=1 && n<=18));
+  if(betType==='high') return new Set(ROULETTE_NUMBERS.filter(n=>n>=19 && n<=36));
+  if(betType==='dozen1') return new Set(ROULETTE_NUMBERS.filter(n=>n>=1 && n<=12));
+  if(betType==='dozen2') return new Set(ROULETTE_NUMBERS.filter(n=>n>=13 && n<=24));
+  if(betType==='dozen3') return new Set(ROULETTE_NUMBERS.filter(n=>n>=25 && n<=36));
+  return new Set();
+}
+function getRouletteMeta(number){
+  if(number===0) return {label:'0', color:'green'};
+  return {
+    label:String(number),
+    color:ROULETTE_RED_NUMBERS.has(number)?'red':'black',
+  };
+}
+function pickRouletteNumber(winningSet, odds){
+  const winNumbers=[...winningSet];
+  const loseNumbers=ROULETTE_NUMBERS.filter(n=>!winningSet.has(n));
+  const useWin = odds<=0 ? false : odds>=200 ? true : Math.random() < (odds/200);
+  const pool=(useWin?winNumbers:loseNumbers).length ? (useWin?winNumbers:loseNumbers) : (useWin?loseNumbers:winNumbers);
+  return pool[Math.floor(Math.random()*pool.length)];
 }
 function makeMineSet(mineCount){
   const pool = Array.from({length:25}, (_, idx)=>idx);
@@ -2215,10 +2256,14 @@ app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>
     const plinkoOdds = clampNumber(Math.round(Number(req.body.plinkoOdds ?? 100)), 0, 200);
     const blackjackOdds = clampNumber(Math.round(Number(req.body.blackjackOdds ?? 100)), 0, 200);
     const minesOdds = clampNumber(Math.round(Number(req.body.minesOdds ?? 100)), 0, 200);
+    const rouletteOdds = clampNumber(Math.round(Number(req.body.rouletteOdds ?? 100)), 0, 200);
+    const coinflipOdds = clampNumber(Math.round(Number(req.body.coinflipOdds ?? 100)), 0, 200);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_dice_odds',?)",[String(diceOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_plinko_odds',?)",[String(plinkoOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_blackjack_odds',?)",[String(blackjackOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_mines_odds',?)",[String(minesOdds)]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_roulette_odds',?)",[String(rouletteOdds)]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_coinflip_odds',?)",[String(coinflipOdds)]);
     res.json(await getCasinoConfig());
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -2646,6 +2691,74 @@ app.post('/api/casino/mines/cashout', authMiddleware, async(req,res)=>{
       profit,
       multiplier,
       newBalance:Math.floor(updated.credits),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/coinflip', authMiddleware, async(req,res)=>{
+  try{
+    const amount = Math.floor(Number(req.body.betAmount));
+    const side = String(req.body.side||'heads').toLowerCase();
+    if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    if(!['heads','tails'].includes(side)) return res.status(400).json({error:'Choose heads or tails'});
+    const user = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+    const { effective } = await getCasinoConfig(req.user.id);
+    const coinflipOdds = effective.coinflipOdds;
+    const landed = coinflipOdds<=0
+      ? (side==='heads'?'tails':'heads')
+      : coinflipOdds>=200
+        ? side
+        : (Math.random() < (coinflipOdds/200) ? side : (side==='heads'?'tails':'heads'));
+    const won = landed===side;
+    const payout = won ? amount*2 : 0;
+    const profit = payout - amount;
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
+    if(won) await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,req.user.id]);
+    const betId=generateId('cbc');
+    await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [betId,req.user.id,'coinflip',amount,won?'win':'loss',payout,profit,Date.now()]);
+    await recordTx(req.user.id, profit, 'casino_coinflip', betId, `Coin Flip: ${side} — ${won?'won':'lost'} ⬡${amount}`);
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({landed, won, payout, profit, newBalance:Math.floor(updated.credits)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/roulette', authMiddleware, async(req,res)=>{
+  try{
+    const amount = Math.floor(Number(req.body.betAmount));
+    const betType = String(req.body.betType||'red').toLowerCase();
+    const value = req.body.value;
+    const validTypes = new Set(['red','black','even','odd','low','high','dozen1','dozen2','dozen3','number']);
+    if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    if(!validTypes.has(betType)) return res.status(400).json({error:'Invalid roulette bet'});
+    if(betType==='number' && (value===undefined || Number(value)<0 || Number(value)>36)) return res.status(400).json({error:'Choose a number from 0 to 36'});
+    const user = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+    const multiplier = getRoulettePayoutMultiplier(betType);
+    const winningSet = getRouletteWinningNumbers(betType, value);
+    const { effective } = await getCasinoConfig(req.user.id);
+    const number = pickRouletteNumber(winningSet, effective.rouletteOdds);
+    const won = winningSet.has(number);
+    const payout = won ? amount * multiplier : 0;
+    const profit = payout - amount;
+    const meta = getRouletteMeta(number);
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
+    if(won) await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,req.user.id]);
+    const betId=generateId('cbr');
+    await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [betId,req.user.id,'roulette',amount,won?'win':'loss',payout,profit,Date.now()]);
+    await recordTx(req.user.id, profit, 'casino_roulette', betId, `Roulette: ${betType}${betType==='number' ? ' '+value : ''} — ${won?'won':'lost'} ⬡${amount}`);
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      number,
+      color: meta.color,
+      label: meta.label,
+      won,
+      payout,
+      profit,
+      multiplier,
+      newBalance: Math.floor(updated.credits),
     });
   }catch(e){res.status(500).json({error:e.message});}
 });

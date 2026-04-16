@@ -556,6 +556,18 @@
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Reveal safe tiles and cash out before you hit a mine.</div>
             <span class="status-tag status-open">Individual</span>
           </div>
+          <div class="market-card" onclick="openRoulette()" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">🎡</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Roulette</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Traditional wheel with classic bets</div>
+            <span class="status-tag status-open">Spin</span>
+          </div>
+          <div class="market-card" onclick="openCoinFlip()" style="text-align:center;padding:24px 18px;">
+            <div style="font-size:36px;margin-bottom:10px;">₪</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Coin Flip</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Call the shekel in the air</div>
+            <span class="status-tag status-open">Quick</span>
+          </div>
           <div class="market-card" id="casino-dreidel-card" onclick="openMatchLobby('dreidel')" style="text-align:center;padding:24px 18px;">
             <div style="font-size:36px;margin-bottom:10px;">🕎</div>
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Dreidel</div>
@@ -922,6 +934,125 @@
             <div class="panel">
               <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Runs</div>
               <div id="mines-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="casino-roulette" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closeRoulette()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <div>
+            <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Roulette</h2>
+            <p style="font-size:12px;color:var(--text3);margin-top:3px;">Traditional outside bets or a straight number.</p>
+          </div>
+        </div>
+        <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,0.95fr);gap:18px;align-items:start;">
+          <div class="panel" style="padding:18px;background:linear-gradient(180deg,rgba(240,192,64,0.06),rgba(10,10,15,0.92));border-color:rgba(240,192,64,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+              <div>
+                <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Wheel</div>
+                <div style="font-size:13px;color:var(--text2);margin-top:4px;">0 to 36 with classic red, black, and green.</div>
+              </div>
+              <div id="roulette-result-pill" style="padding:8px 14px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text3);">Place your bet</div>
+            </div>
+            <div style="position:relative;max-width:460px;margin:0 auto;">
+              <div id="roulette-wheel" style="width:100%;aspect-ratio:1/1;border-radius:50%;border:10px solid rgba(255,255,255,0.08);background:conic-gradient(#1f8f5a 0deg 9.73deg,#c2354e 9.73deg 19.46deg,#16161f 19.46deg 29.19deg,#c2354e 29.19deg 38.92deg,#16161f 38.92deg 48.65deg,#c2354e 48.65deg 58.38deg,#16161f 58.38deg 68.11deg,#c2354e 68.11deg 77.84deg,#16161f 77.84deg 87.57deg,#c2354e 87.57deg 97.3deg,#16161f 97.3deg 107.03deg,#16161f 107.03deg 116.76deg,#c2354e 116.76deg 126.49deg,#16161f 126.49deg 136.22deg,#c2354e 136.22deg 145.95deg,#16161f 145.95deg 155.68deg,#c2354e 155.68deg 165.41deg,#16161f 165.41deg 175.14deg,#c2354e 175.14deg 184.87deg,#c2354e 184.87deg 194.6deg,#16161f 194.6deg 204.33deg,#c2354e 204.33deg 214.06deg,#16161f 214.06deg 223.79deg,#c2354e 223.79deg 233.52deg,#16161f 233.52deg 243.25deg,#c2354e 243.25deg 252.98deg,#16161f 252.98deg 262.71deg,#c2354e 262.71deg 272.44deg,#16161f 272.44deg 282.17deg,#16161f 282.17deg 291.9deg,#c2354e 291.9deg 301.63deg,#16161f 301.63deg 311.36deg,#c2354e 311.36deg 321.09deg,#16161f 321.09deg 330.82deg,#c2354e 330.82deg 340.55deg,#16161f 340.55deg 350.28deg,#c2354e 350.28deg 360deg);display:flex;align-items:center;justify-content:center;box-shadow:0 30px 50px rgba(0,0,0,0.35);transition:transform 4.6s cubic-bezier(0.16,1,0.3,1);">
+                <div style="width:34%;height:34%;border-radius:50%;background:radial-gradient(circle,#262135,#0d0b14);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);">
+                  <div id="roulette-winning-pocket" style="width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;background:var(--bg3);color:var(--text);border:1px solid var(--border);">—</div>
+                </div>
+              </div>
+              <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:28px solid var(--gold);filter:drop-shadow(0 8px 12px rgba(0,0,0,0.25));"></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+              <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="roulette-balance">⬡ 0</div></div>
+              <div class="stat-card"><div class="stat-label">Potential Payout</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="roulette-potential">⬡ 0</div></div>
+            </div>
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Bet Setup</div>
+              <div class="form-group"><label>Bet Type</label>
+                <select id="roulette-bet-type" onchange="onRouletteBetTypeChange()">
+                  <option value="red">Red</option>
+                  <option value="black">Black</option>
+                  <option value="even">Even</option>
+                  <option value="odd">Odd</option>
+                  <option value="low">1-18</option>
+                  <option value="high">19-36</option>
+                  <option value="dozen1">1st 12</option>
+                  <option value="dozen2">2nd 12</option>
+                  <option value="dozen3">3rd 12</option>
+                  <option value="number">Straight Number</option>
+                </select>
+              </div>
+              <div class="form-group" id="roulette-number-wrap" style="display:none;"><label>Number</label><input type="number" id="roulette-number-input" min="0" max="36" value="0" oninput="updateRoulettePotential()"></div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+                <input type="number" id="roulette-bet-input" placeholder="0" min="1" step="1" oninput="updateRoulettePotential()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                <button onclick="setRouletteBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+                <button onclick="setRouletteBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <button onclick="setRouletteBet(10)" class="quick-btn">10</button>
+                <button onclick="setRouletteBet(25)" class="quick-btn">25</button>
+                <button onclick="setRouletteBet(50)" class="quick-btn">50</button>
+                <button onclick="setRouletteBet(100)" class="quick-btn">100</button>
+              </div>
+              <button id="roulette-spin-btn" onclick="spinRoulette()" style="width:100%;padding:15px;background:linear-gradient(135deg,var(--gold),#ff9f43);color:#0a0a0f;border:none;border-radius:var(--radius);font-size:16px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;">Spin Wheel</button>
+            </div>
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Spins</div>
+              <div id="roulette-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="casino-coinflip" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closeCoinFlip()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <div>
+            <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Coin Flip</h2>
+            <p style="font-size:12px;color:var(--text3);margin-top:3px;">Call the shekel and let it fly.</p>
+          </div>
+        </div>
+        <div style="max-width:900px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:18px;align-items:start;">
+          <div class="panel" style="padding:28px;background:linear-gradient(180deg,rgba(240,192,64,0.08),rgba(10,10,15,0.94));border-color:rgba(240,192,64,0.24);text-align:center;">
+            <div id="coinflip-result-pill" style="display:inline-flex;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text3);margin-bottom:18px;">Choose a side</div>
+            <div style="perspective:1200px;display:flex;justify-content:center;align-items:center;min-height:320px;">
+              <div id="coinflip-shekel" style="width:180px;height:180px;border-radius:50%;position:relative;transform-style:preserve-3d;transition:transform 1.9s cubic-bezier(0.18,0.9,0.2,1);">
+                <div style="position:absolute;inset:0;border-radius:50%;backface-visibility:hidden;background:radial-gradient(circle at 30% 30%,#fff6cf,#d4a73d 68%,#8c6421 100%);border:6px solid rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800;color:#6d4b11;box-shadow:0 28px 45px rgba(0,0,0,0.35);">₪</div>
+                <div style="position:absolute;inset:0;border-radius:50%;backface-visibility:hidden;transform:rotateY(180deg);background:radial-gradient(circle at 30% 30%,#fff6cf,#d4a73d 68%,#8c6421 100%);border:6px solid rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#6d4b11;box-shadow:0 28px 45px rgba(0,0,0,0.35);">✡</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+              <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="coinflip-balance">⬡ 0</div></div>
+              <div class="stat-card"><div class="stat-label">Potential Payout</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="coinflip-potential">⬡ 0</div></div>
+            </div>
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Call The Toss</div>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">
+                <button id="coinflip-heads-btn" onclick="setCoinFlipSide('heads')" style="padding:13px;border-radius:var(--radius);border:2px solid var(--gold);background:rgba(240,192,64,0.12);color:var(--gold);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Heads ₪</button>
+                <button id="coinflip-tails-btn" onclick="setCoinFlipSide('tails')" style="padding:13px;border-radius:var(--radius);border:1px solid var(--border-hi);background:var(--bg3);color:var(--text2);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Tails ✡</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+                <input type="number" id="coinflip-bet-input" placeholder="0" min="1" step="1" oninput="updateCoinFlipPotential()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                <button onclick="setCoinFlipBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+                <button onclick="setCoinFlipBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <button onclick="setCoinFlipBet(10)" class="quick-btn">10</button>
+                <button onclick="setCoinFlipBet(25)" class="quick-btn">25</button>
+                <button onclick="setCoinFlipBet(50)" class="quick-btn">50</button>
+                <button onclick="setCoinFlipBet(100)" class="quick-btn">100</button>
+              </div>
+              <button id="coinflip-launch-btn" onclick="flipCoin()" style="width:100%;padding:15px;background:linear-gradient(135deg,var(--gold),#ffd36a);color:#17120a;border:none;border-radius:var(--radius);font-size:16px;font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;">Flip Coin</button>
+            </div>
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Flips</div>
+              <div id="coinflip-history" style="display:flex;flex-direction:column;gap:6px;"></div>
             </div>
           </div>
         </div>
@@ -1394,7 +1525,7 @@ let onlineMatchFilter='all';
 let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
 let notificationState={items:[],unreadCount:0};
 let notificationsPanelOpen=false;
-let casinoConfig={diceOdds:100,plinkoOdds:100,blackjackOdds:100,minesOdds:100};
+let casinoConfig={diceOdds:100,plinkoOdds:100,blackjackOdds:100,minesOdds:100,rouletteOdds:100,coinflipOdds:100};
 let adminTxnState={items:[],search:'',offset:0,limit:100,total:0,hasMore:false};
 let adminCasinoState={bets:[],search:'',offset:0,limit:100,total:0,hasMore:false};
 let minesBusy=false;
@@ -1707,6 +1838,8 @@ function renderCasinoConfigReadout(){
     ['Plinko',display.plinkoOdds],
     ['Blackjack',display.blackjackOdds],
     ['Mines',display.minesOdds],
+    ['Roulette',display.rouletteOdds],
+    ['Coin Flip',display.coinflipOdds],
   ];
   el.innerHTML=items.map(([label,value])=>{
     const tone=value>100?'var(--green)':value<100?'var(--red)':'var(--text2)';
@@ -3355,10 +3488,14 @@ function syncCasinoOddsSliders(){
   const plinko=document.getElementById('casino-plinko-odds');
   const blackjack=document.getElementById('casino-blackjack-odds');
   const mines=document.getElementById('casino-mines-odds');
+  const roulette=document.getElementById('casino-roulette-odds');
+  const coinflip=document.getElementById('casino-coinflip-odds');
   const diceValue=Number(dice?.value||casinoConfig.diceOdds);
   const plinkoValue=Number(plinko?.value||casinoConfig.plinkoOdds);
   const blackjackValue=Number(blackjack?.value||casinoConfig.blackjackOdds);
   const minesValue=Number(mines?.value||casinoConfig.minesOdds);
+  const rouletteValue=Number(roulette?.value||casinoConfig.rouletteOdds);
+  const coinflipValue=Number(coinflip?.value||casinoConfig.coinflipOdds);
   const diceBias=((diceValue-100)/100)*10;
   const blackjackStand=Math.min(18,Math.max(16,Math.round(17+((blackjackValue-100)/50))));
   const plinkoPower=(plinkoValue-100)/50;
@@ -3366,6 +3503,8 @@ function syncCasinoOddsSliders(){
   if(document.getElementById('casino-plinko-odds-value')) document.getElementById('casino-plinko-odds-value').textContent=`${plinkoValue}%`;
   if(document.getElementById('casino-blackjack-odds-value')) document.getElementById('casino-blackjack-odds-value').textContent=`${blackjackValue}%`;
   if(document.getElementById('casino-mines-odds-value')) document.getElementById('casino-mines-odds-value').textContent=`${minesValue}%`;
+  if(document.getElementById('casino-roulette-odds-value')) document.getElementById('casino-roulette-odds-value').textContent=`${rouletteValue}%`;
+  if(document.getElementById('casino-coinflip-odds-value')) document.getElementById('casino-coinflip-odds-value').textContent=`${coinflipValue}%`;
   if(document.getElementById('casino-dice-odds-detail')) document.getElementById('casino-dice-odds-detail').textContent=diceValue<=0
     ?'0%: automatic loss.'
     : diceValue>=200
@@ -3386,6 +3525,16 @@ function syncCasinoOddsSliders(){
     : minesValue>=200
       ? '200%: every reveal is safe until the board runs out of safe tiles.'
       : `Safe-tile interpolation from fair chance: ${minesValue<100?'harder':'friendlier'} than baseline. 100% = fair board odds.`;
+  if(document.getElementById('casino-roulette-odds-detail')) document.getElementById('casino-roulette-odds-detail').textContent=rouletteValue<=0
+    ? '0%: the wheel avoids every winning pocket.'
+    : rouletteValue>=200
+      ? '200%: the wheel lands inside your winning set every time.'
+      : `Approximate winning-pocket bias: ${(rouletteValue/2).toFixed(0)}% of spins land in your covered set, with the rest falling outside it.`;
+  if(document.getElementById('casino-coinflip-odds-detail')) document.getElementById('casino-coinflip-odds-detail').textContent=coinflipValue<=0
+    ? '0%: forced miss.'
+    : coinflipValue>=200
+      ? '200%: forced hit.'
+      : `Approximate called-side hit rate: ${(coinflipValue/2).toFixed(0)}%.`;
   updatePlinkoOddsNumerics(plinkoValue);
 }
 function getPlinkoOddsSummary(slider, risk){
@@ -3427,6 +3576,8 @@ async function saveCasinoOdds(){
       plinkoOdds:Number(document.getElementById('casino-plinko-odds')?.value||casinoConfig.plinkoOdds),
       blackjackOdds:Number(document.getElementById('casino-blackjack-odds')?.value||casinoConfig.blackjackOdds),
       minesOdds:Number(document.getElementById('casino-mines-odds')?.value||casinoConfig.minesOdds),
+      rouletteOdds:Number(document.getElementById('casino-roulette-odds')?.value||casinoConfig.rouletteOdds),
+      coinflipOdds:Number(document.getElementById('casino-coinflip-odds')?.value||casinoConfig.coinflipOdds),
     });
     casinoConfig=next;
     syncCasinoOddsSliders();
@@ -3654,6 +3805,16 @@ async function renderAdminTab(){
           <label>Mines Odds <span id="casino-mines-odds-value">${casinoConfig.minesOdds}%</span></label>
           <input type="range" id="casino-mines-odds" min="0" max="200" step="1" value="${casinoConfig.minesOdds}" oninput="syncCasinoOddsSliders()">
           <div id="casino-mines-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
+        </div>
+        <div class="form-group">
+          <label>Roulette Odds <span id="casino-roulette-odds-value">${casinoConfig.rouletteOdds||100}%</span></label>
+          <input type="range" id="casino-roulette-odds" min="0" max="200" step="1" value="${casinoConfig.rouletteOdds||100}" oninput="syncCasinoOddsSliders()">
+          <div id="casino-roulette-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
+        </div>
+        <div class="form-group">
+          <label>Coin Flip Odds <span id="casino-coinflip-odds-value">${casinoConfig.coinflipOdds||100}%</span></label>
+          <input type="range" id="casino-coinflip-odds" min="0" max="200" step="1" value="${casinoConfig.coinflipOdds||100}" oninput="syncCasinoOddsSliders()">
+          <div id="casino-coinflip-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -4595,10 +4756,16 @@ let bjBusy=false;
 let bjAnimationStamp=0;
 let bjLastDealerCount=0;
 let bjLastPlayerCounts=[];
+const ROULETTE_ORDER=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const ROULETTE_RED_NUMBERS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+let rouletteSpinning=false;
+let rouletteRotation=0;
+let coinFlipSide='heads';
+let coinFlipBusy=false;
 
 function openBlackjack(){
   document.getElementById('casino-lobby').style.display='none';
-  document.getElementById('casino-matches').style.display='none';
+  hideCasinoGameViews();
   document.getElementById('casino-blackjack').style.display='block';
   document.getElementById('bj-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   bjResetUI();
@@ -4880,16 +5047,19 @@ function getPlinkoBestMultiplier(){
   return Math.max(...getPlinkoMultipliers());
 }
 
+function hideCasinoGameViews(){
+  ['casino-dice','casino-blackjack','casino-plinko','casino-mines','casino-matches','casino-roulette','casino-coinflip'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display='none';
+  });
+}
+
 function initCasino(){
   renderCasinoConfigReadout();
   renderCasinoLuckyBanner();
   loadCasinoConfig();
   document.getElementById('casino-lobby').style.display='block';
-  document.getElementById('casino-dice').style.display='none';
-  document.getElementById('casino-blackjack').style.display='none';
-  document.getElementById('casino-plinko').style.display='none';
-  document.getElementById('casino-mines').style.display='none';
-  document.getElementById('casino-matches').style.display='none';
+  hideCasinoGameViews();
   const dreidelCard=document.getElementById('casino-dreidel-card');
   const pokerCard=document.getElementById('casino-poker-card');
   const minesCard=document.getElementById('casino-mines-card');
@@ -4900,8 +5070,7 @@ function initCasino(){
 
 function openDice(){
   document.getElementById('casino-lobby').style.display='none';
-  document.getElementById('casino-matches').style.display='none';
-  document.getElementById('casino-mines').style.display='none';
+  hideCasinoGameViews();
   document.getElementById('casino-dice').style.display='block';
   updateDiceUI();
   document.getElementById('dice-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
@@ -5054,8 +5223,7 @@ function renderDiceHistory(){
 
 function openPlinko(){
   document.getElementById('casino-lobby').style.display='none';
-  document.getElementById('casino-matches').style.display='none';
-  document.getElementById('casino-mines').style.display='none';
+  hideCasinoGameViews();
   document.getElementById('casino-plinko').style.display='block';
   document.getElementById('plinko-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   document.getElementById('plinko-best').textContent=getPlinkoBestMultiplier().toFixed(2)+'x';
@@ -5075,10 +5243,7 @@ function closePlinko(){
 
 function openMines(){
   document.getElementById('casino-lobby').style.display='none';
-  document.getElementById('casino-matches').style.display='none';
-  document.getElementById('casino-dice').style.display='none';
-  document.getElementById('casino-blackjack').style.display='none';
-  document.getElementById('casino-plinko').style.display='none';
+  hideCasinoGameViews();
   document.getElementById('casino-mines').style.display='block';
   document.getElementById('mines-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   minesState=null;
@@ -5093,6 +5258,267 @@ function openMines(){
 function closeMines(){
   document.getElementById('casino-mines').style.display='none';
   document.getElementById('casino-lobby').style.display='block';
+}
+
+function openRoulette(){
+  document.getElementById('casino-lobby').style.display='none';
+  hideCasinoGameViews();
+  document.getElementById('casino-roulette').style.display='block';
+  rouletteSpinning=false;
+  document.getElementById('roulette-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  document.getElementById('roulette-result-pill').textContent='Place your bet';
+  document.getElementById('roulette-result-pill').style.background='var(--bg3)';
+  document.getElementById('roulette-result-pill').style.border='1px solid var(--border)';
+  document.getElementById('roulette-result-pill').style.color='var(--text3)';
+  document.getElementById('roulette-winning-pocket').textContent='—';
+  document.getElementById('roulette-winning-pocket').style.background='var(--bg3)';
+  document.getElementById('roulette-winning-pocket').style.color='var(--text)';
+  document.getElementById('roulette-wheel').style.transform=`rotate(${rouletteRotation}deg)`;
+  onRouletteBetTypeChange();
+  document.getElementById('roulette-history').innerHTML='';
+  loadRouletteHistory();
+}
+
+function closeRoulette(){
+  document.getElementById('casino-roulette').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function setRouletteBet(amount){
+  const floored=Math.floor(amount);
+  const input=document.getElementById('roulette-bet-input');
+  if(input) input.value=floored>0?floored:'';
+  updateRoulettePotential();
+}
+
+function getRouletteMultiplier(betType){
+  if(betType==='number') return 36;
+  if(['dozen1','dozen2','dozen3'].includes(betType)) return 3;
+  return 2;
+}
+
+function onRouletteBetTypeChange(){
+  const betType=document.getElementById('roulette-bet-type')?.value||'red';
+  const wrap=document.getElementById('roulette-number-wrap');
+  if(wrap) wrap.style.display=betType==='number'?'block':'none';
+  updateRoulettePotential();
+}
+
+function updateRoulettePotential(){
+  const betAmount=Math.floor(Number(document.getElementById('roulette-bet-input')?.value)||0);
+  const betType=document.getElementById('roulette-bet-type')?.value||'red';
+  const payout=betAmount>0?betAmount*getRouletteMultiplier(betType):0;
+  const el=document.getElementById('roulette-potential');
+  if(el) el.textContent='⬡ '+payout.toLocaleString();
+}
+
+function getRoulettePocketTone(color){
+  if(color==='red') return {bg:'rgba(194,53,78,0.18)',border:'rgba(194,53,78,0.42)',color:'#ff9aad'};
+  if(color==='black') return {bg:'rgba(22,22,31,0.95)',border:'rgba(196,185,255,0.20)',color:'#f3f0ff'};
+  return {bg:'rgba(31,143,90,0.18)',border:'rgba(31,143,90,0.42)',color:'#8df0bf'};
+}
+
+async function spinRoulette(){
+  if(rouletteSpinning) return;
+  const betAmount=Math.floor(Number(document.getElementById('roulette-bet-input')?.value));
+  const betType=document.getElementById('roulette-bet-type')?.value||'red';
+  const rawNumber=Math.floor(Number(document.getElementById('roulette-number-input')?.value||0));
+  if(!betAmount||betAmount<1){showToast('Enter a bet amount.');return;}
+  if(betAmount>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  if(betType==='number' && (rawNumber<0||rawNumber>36)){showToast('Pick a number from 0 to 36.');return;}
+  rouletteSpinning=true;
+  const btn=document.getElementById('roulette-spin-btn');
+  const pill=document.getElementById('roulette-result-pill');
+  btn.disabled=true;
+  btn.textContent='Spinning…';
+  pill.textContent='Wheel spinning';
+  pill.style.background='rgba(240,192,64,0.12)';
+  pill.style.border='1px solid rgba(240,192,64,0.28)';
+  pill.style.color='var(--gold)';
+  try{
+    const data=await api('POST','/casino/roulette',{betAmount,betType,value:betType==='number'?rawNumber:undefined});
+    const wheel=document.getElementById('roulette-wheel');
+    const pocketIndex=Math.max(0,ROULETTE_ORDER.indexOf(data.number));
+    const segment=360/ROULETTE_ORDER.length;
+    const centerAngle=(pocketIndex*segment)+(segment/2);
+    rouletteRotation += 2160 - centerAngle;
+    wheel.style.transform=`rotate(${rouletteRotation}deg)`;
+    setTimeout(()=>{
+      const tone=getRoulettePocketTone(data.color);
+      const pocket=document.getElementById('roulette-winning-pocket');
+      pocket.textContent=data.label;
+      pocket.style.background=tone.bg;
+      pocket.style.border=`1px solid ${tone.border}`;
+      pocket.style.color=tone.color;
+      pill.textContent=data.won
+        ? `${data.label} ${data.color.toUpperCase()} · +⬡ ${data.profit}`
+        : `${data.label} ${data.color.toUpperCase()} · -⬡ ${betAmount}`;
+      pill.style.background=data.won?'rgba(0,208,132,0.14)':'rgba(255,69,96,0.12)';
+      pill.style.border=data.won?'1px solid rgba(0,208,132,0.30)':'1px solid rgba(255,69,96,0.28)';
+      pill.style.color=data.won?'var(--green)':'var(--red)';
+      currentUser.credits=data.newBalance;
+      document.getElementById('roulette-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+      updateTopbar();
+      if(data.won){
+        launchSpinConfetti();
+        showResultPopup({
+          won:true,
+          question:`Roulette landed on ${data.label} ${data.color}`,
+          side:betType==='number'?`Number ${rawNumber}`:betType.toUpperCase(),
+          betAmount,
+          payout:data.payout
+        });
+      }
+      loadRouletteHistory();
+      rouletteSpinning=false;
+      btn.disabled=false;
+      btn.textContent='Spin Wheel';
+    },4700);
+  }catch(e){
+    rouletteSpinning=false;
+    btn.disabled=false;
+    btn.textContent='Spin Wheel';
+    showToast(e.message);
+  }
+}
+
+async function loadRouletteHistory(){
+  try{
+    const bets=await api('GET','/casino/my-bets');
+    const rouletteBets=bets.filter(b=>b.game==='roulette').slice(0,10);
+    const history=document.getElementById('roulette-history');
+    if(!history) return;
+    history.innerHTML=rouletteBets.length ? rouletteBets.map(b=>{
+      const meta=(b.description||'').replace(/^Roulette:\s*/,'');
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
+        <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'WIN':'LOSS'}</span>
+        <span style="font-size:12px;color:var(--text3);">${esc(meta||'Roulette spin')}</span>
+        <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+      </div>`;
+    }).join('') : '<p style="font-size:13px;color:var(--text3);">No roulette spins yet.</p>';
+  }catch(e){}
+}
+
+function openCoinFlip(){
+  document.getElementById('casino-lobby').style.display='none';
+  hideCasinoGameViews();
+  document.getElementById('casino-coinflip').style.display='block';
+  coinFlipBusy=false;
+  document.getElementById('coinflip-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  document.getElementById('coinflip-result-pill').textContent='Choose a side';
+  document.getElementById('coinflip-result-pill').style.background='var(--bg3)';
+  document.getElementById('coinflip-result-pill').style.border='1px solid var(--border)';
+  document.getElementById('coinflip-result-pill').style.color='var(--text3)';
+  document.getElementById('coinflip-shekel').style.transform='rotateY(0deg) translateY(0)';
+  setCoinFlipSide(coinFlipSide);
+  updateCoinFlipPotential();
+  document.getElementById('coinflip-history').innerHTML='';
+  loadCoinFlipHistory();
+}
+
+function closeCoinFlip(){
+  document.getElementById('casino-coinflip').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function setCoinFlipSide(side){
+  coinFlipSide=side==='tails'?'tails':'heads';
+  const heads=document.getElementById('coinflip-heads-btn');
+  const tails=document.getElementById('coinflip-tails-btn');
+  if(heads){
+    const active=coinFlipSide==='heads';
+    heads.style.border=active?'2px solid var(--gold)':'1px solid var(--border-hi)';
+    heads.style.background=active?'rgba(240,192,64,0.12)':'var(--bg3)';
+    heads.style.color=active?'var(--gold)':'var(--text2)';
+  }
+  if(tails){
+    const active=coinFlipSide==='tails';
+    tails.style.border=active?'2px solid var(--accent)':'1px solid var(--border-hi)';
+    tails.style.background=active?'rgba(124,106,247,0.14)':'var(--bg3)';
+    tails.style.color=active?'var(--accent)':'var(--text2)';
+  }
+}
+
+function setCoinFlipBet(amount){
+  const floored=Math.floor(amount);
+  const input=document.getElementById('coinflip-bet-input');
+  if(input) input.value=floored>0?floored:'';
+  updateCoinFlipPotential();
+}
+
+function updateCoinFlipPotential(){
+  const betAmount=Math.floor(Number(document.getElementById('coinflip-bet-input')?.value)||0);
+  const el=document.getElementById('coinflip-potential');
+  if(el) el.textContent='⬡ '+(betAmount>0?betAmount*2:0).toLocaleString();
+}
+
+async function flipCoin(){
+  if(coinFlipBusy) return;
+  const betAmount=Math.floor(Number(document.getElementById('coinflip-bet-input')?.value));
+  if(!betAmount||betAmount<1){showToast('Enter a bet amount.');return;}
+  if(betAmount>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  coinFlipBusy=true;
+  const btn=document.getElementById('coinflip-launch-btn');
+  const coin=document.getElementById('coinflip-shekel');
+  const pill=document.getElementById('coinflip-result-pill');
+  btn.disabled=true;
+  btn.textContent='Flipping…';
+  pill.textContent='Shekel in the air';
+  pill.style.background='rgba(240,192,64,0.12)';
+  pill.style.border='1px solid rgba(240,192,64,0.28)';
+  pill.style.color='var(--gold)';
+  try{
+    const data=await api('POST','/casino/coinflip',{betAmount,side:coinFlipSide});
+    const finalDeg=data.landed==='heads'?0:180;
+    const spins=coinFlipSide===data.landed?1980:2160;
+    coin.style.transform=`rotateY(${spins+finalDeg}deg) translateY(-14px)`;
+    setTimeout(()=>{
+      coin.style.transform=`rotateY(${spins+finalDeg}deg) translateY(0)`;
+      pill.textContent=data.won?`${data.landed.toUpperCase()} · +⬡ ${data.profit}`:`${data.landed.toUpperCase()} · -⬡ ${betAmount}`;
+      pill.style.background=data.won?'rgba(0,208,132,0.14)':'rgba(255,69,96,0.12)';
+      pill.style.border=data.won?'1px solid rgba(0,208,132,0.30)':'1px solid rgba(255,69,96,0.28)';
+      pill.style.color=data.won?'var(--green)':'var(--red)';
+      currentUser.credits=data.newBalance;
+      document.getElementById('coinflip-balance').textContent='⬡ '+data.newBalance.toLocaleString();
+      updateTopbar();
+      if(data.won){
+        launchSpinConfetti();
+        showResultPopup({
+          won:true,
+          question:`Coin Flip landed on ${data.landed}`,
+          side:coinFlipSide.toUpperCase(),
+          betAmount,
+          payout:data.payout
+        });
+      }
+      loadCoinFlipHistory();
+      coinFlipBusy=false;
+      btn.disabled=false;
+      btn.textContent='Flip Coin';
+    },1900);
+  }catch(e){
+    coinFlipBusy=false;
+    btn.disabled=false;
+    btn.textContent='Flip Coin';
+    showToast(e.message);
+  }
+}
+
+async function loadCoinFlipHistory(){
+  try{
+    const bets=await api('GET','/casino/my-bets');
+    const coinBets=bets.filter(b=>b.game==='coinflip').slice(0,10);
+    const history=document.getElementById('coinflip-history');
+    if(!history) return;
+    history.innerHTML=coinBets.length ? coinBets.map(b=>{
+      const meta=(b.description||'').replace(/^Coin Flip:\s*/,'');
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
+        <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'WIN':'LOSS'}</span>
+        <span style="font-size:12px;color:var(--text3);">${esc(meta||'Coin flip')}</span>
+        <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+      </div>`;
+    }).join('') : '<p style="font-size:13px;color:var(--text3);">No coin flips yet.</p>';
+  }catch(e){}
 }
 
 function setMinesCount(value){
