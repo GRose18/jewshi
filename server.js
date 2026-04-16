@@ -28,6 +28,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let db;
 const blackjackGames = new Map();
+const minesGames = new Map();
 
 async function initDB() {
   db = createClient({
@@ -246,6 +247,7 @@ async function seedIfEmpty() {
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_dice_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_plinko_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_blackjack_odds','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_mines_odds','100')");
   console.log('Database seeded.');
 }
 
@@ -648,24 +650,13 @@ async function finishBlackjackGame(userId){
     const total=handTotal(hand);
     totalBet+=bet;
     if(total>21) return 'bust';
-    if(blackjackOdds<=0) return 'loss';
-    if(blackjackOdds>=200){
-      if(isBlackjack(hand)){
-        const payout=Math.floor(bet*2.5);
-        totalPayout+=payout;
-        return 'blackjack';
-      }
-      const payout=Math.floor(bet*1.5);
-      totalPayout+=payout;
-      return 'win';
-    }
     if(isBlackjack(hand)){
       const payout=Math.floor(bet*2.5);
       totalPayout+=payout;
       return 'blackjack';
     }
     if(dealerTotal>21 || total>dealerTotal){
-      const payout=Math.floor(bet*1.5);
+      const payout=Math.floor(bet*2);
       totalPayout+=payout;
       return 'win';
     }
@@ -710,13 +701,99 @@ async function createNotification(userId, type, title, body, link='') {
     [generateId('ntf'),userId,type,String(title||'').slice(0,160),String(body||'').slice(0,500),String(link||'').slice(0,120),Date.now()]);
 }
 async function getCasinoConfig() {
-  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds')");
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds','casino_mines_odds')");
   const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
   return {
     diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 0, 200),
     plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 0, 200),
     blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 0, 200),
+    minesOdds: clampNumber(Number(settings.casino_mines_odds || 100), 0, 200),
   };
+}
+async function getCasinoStatsBaseline() {
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_stats_baseline_wagered','casino_stats_baseline_profit')");
+  const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
+  return {
+    wagered: Number(settings.casino_stats_baseline_wagered || 0),
+    profit: Number(settings.casino_stats_baseline_profit || 0),
+  };
+}
+function parsePage(value, fallback, min, max){
+  const num = Math.floor(Number(value));
+  if(!Number.isFinite(num)) return fallback;
+  return clampNumber(num, min, max);
+}
+function combination(n, k){
+  if(k<0 || k>n) return 0;
+  const limit = Math.min(k, n-k);
+  let result = 1;
+  for(let i=1;i<=limit;i++){
+    result = (result * (n - limit + i)) / i;
+  }
+  return result;
+}
+function getMinesMultiplier(revealedCount, mineCount){
+  if(revealedCount<=0) return 1;
+  const safeTiles = 25 - mineCount;
+  const fair = combination(25, revealedCount) / combination(safeTiles, revealedCount);
+  return Number((fair * 0.97).toFixed(4));
+}
+function makeMineSet(mineCount){
+  const pool = Array.from({length:25}, (_, idx)=>idx);
+  for(let i=pool.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [pool[i],pool[j]]=[pool[j],pool[i]];
+  }
+  return new Set(pool.slice(0, mineCount));
+}
+function getAdjustedSafeChance(baseSafeChance, slider){
+  if(slider<=0) return 0;
+  if(slider>=200) return 1;
+  if(slider<100) return baseSafeChance * (slider/100);
+  return baseSafeChance + (1 - baseSafeChance) * ((slider - 100) / 100);
+}
+function serializeMinesState(game, revealAll=false){
+  const revealed = new Set(game.revealedSafe || []);
+  if(revealAll){
+    (game.mineSet || []).forEach(idx=>revealed.add(idx));
+  }
+  const currentMultiplier = getMinesMultiplier(game.revealedSafe.size, game.mineCount);
+  const nextMultiplier = game.revealedSafe.size < (25 - game.mineCount)
+    ? getMinesMultiplier(game.revealedSafe.size + 1, game.mineCount)
+    : currentMultiplier;
+  return {
+    status: game.status,
+    mineCount: game.mineCount,
+    revealedSafeCount: game.revealedSafe.size,
+    currentMultiplier,
+    nextMultiplier,
+    potentialPayout: Math.floor(game.betAmount * currentMultiplier),
+    betAmount: game.betAmount,
+    board: Array.from({length:25}, (_, idx)=>({
+      index: idx,
+      revealed: revealed.has(idx),
+      type: revealAll || revealed.has(idx) ? (game.mineSet.has(idx) ? 'mine' : 'safe') : null,
+    })),
+  };
+}
+function flipMineCell(game, index, shouldBeSafe){
+  if(shouldBeSafe === !game.mineSet.has(index)) return true;
+  const candidates = [];
+  for(let idx=0;idx<25;idx++){
+    if(idx===index) continue;
+    if(game.revealedSafe.has(idx)) continue;
+    if(shouldBeSafe ? !game.mineSet.has(idx) : game.mineSet.has(idx)) candidates.push(idx);
+  }
+  if(!candidates.length) return false;
+  const swapIndex = candidates[Math.floor(Math.random()*candidates.length)];
+  if(shouldBeSafe){
+    game.mineSet.delete(index);
+    game.mineSet.add(swapIndex);
+  }else{
+    game.mineSet.delete(swapIndex);
+    game.mineSet.add(index);
+  }
+  return true;
 }
 function authMiddleware(req,res,next) {
   const token = req.headers.authorization?.split(' ')[1];
@@ -1972,7 +2049,41 @@ app.get('/api/admin/volunteer-rate', authMiddleware, async(req,res)=>{
   res.json({rate:parseInt(row?.value||'100')});
 });
 app.get('/api/admin/transactions', authMiddleware, adminOnly, async(req,res)=>{
-  res.json(await db.all(`SELECT t.*,u.name as user_name FROM transactions t JOIN users u ON t.user_id=u.id ORDER BY t.timestamp DESC LIMIT 200`));
+  try{
+    const search = String(req.query.search || '').trim();
+    const limit = parsePage(req.query.limit, 100, 20, 500);
+    const offset = parsePage(req.query.offset, 0, 0, 100000);
+    if(search){
+      const like = `%${search}%`;
+      const items = await db.all(
+        `SELECT t.*,u.name as user_name
+         FROM transactions t
+         JOIN users u ON t.user_id=u.id
+         WHERE LOWER(t.user_id) LIKE LOWER(?) OR LOWER(COALESCE(u.name,'')) LIKE LOWER(?) OR LOWER(COALESCE(t.description,'')) LIKE LOWER(?) OR LOWER(COALESCE(t.type,'')) LIKE LOWER(?)
+         ORDER BY t.timestamp DESC
+         LIMIT ? OFFSET ?`,
+        [like,like,like,like,limit,offset]
+      );
+      const totalRow = await db.get(
+        `SELECT COUNT(*) as c
+         FROM transactions t
+         JOIN users u ON t.user_id=u.id
+         WHERE LOWER(t.user_id) LIKE LOWER(?) OR LOWER(COALESCE(u.name,'')) LIKE LOWER(?) OR LOWER(COALESCE(t.description,'')) LIKE LOWER(?) OR LOWER(COALESCE(t.type,'')) LIKE LOWER(?)`,
+        [like,like,like,like]
+      );
+      return res.json({items,total:totalRow?.c||0,hasMore:offset + items.length < (totalRow?.c||0)});
+    }
+    const items = await db.all(
+      `SELECT t.*,u.name as user_name
+       FROM transactions t
+       JOIN users u ON t.user_id=u.id
+       ORDER BY t.timestamp DESC
+       LIMIT ? OFFSET ?`,
+      [limit,offset]
+    );
+    const totalRow = await db.get(`SELECT COUNT(*) as c FROM transactions`);
+    res.json({items,total:totalRow?.c||0,hasMore:offset + items.length < (totalRow?.c||0)});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
   const students=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c;
@@ -2034,10 +2145,23 @@ app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>
     const diceOdds = clampNumber(Math.round(Number(req.body.diceOdds ?? 100)), 0, 200);
     const plinkoOdds = clampNumber(Math.round(Number(req.body.plinkoOdds ?? 100)), 0, 200);
     const blackjackOdds = clampNumber(Math.round(Number(req.body.blackjackOdds ?? 100)), 0, 200);
+    const minesOdds = clampNumber(Math.round(Number(req.body.minesOdds ?? 100)), 0, 200);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_dice_odds',?)",[String(diceOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_plinko_odds',?)",[String(plinkoOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_blackjack_odds',?)",[String(blackjackOdds)]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_mines_odds',?)",[String(minesOdds)]);
     res.json(await getCasinoConfig());
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/admin/casino/reset-stats', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can reset casino stats'});
+    const stats = await db.get(`SELECT COALESCE(SUM(bet_amount),0) as total_wagered, COALESCE(SUM(profit),0) as house_profit FROM casino_bets`);
+    const baselineWagered = Number(stats?.total_wagered || 0);
+    const baselineProfit = Number(stats?.house_profit || 0);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_stats_baseline_wagered',?)",[String(baselineWagered)]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_stats_baseline_profit',?)",[String(baselineProfit)]);
+    res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -2233,16 +2357,31 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
     const { diceOdds } = await getCasinoConfig();
-    const roll = parseFloat((Math.random()*100).toFixed(2));
     const oddsBias = ((diceOdds - 100) / 100) * 10;
     const adjustedTarget = direction==='over'
       ? clampNumber(Number(target) - oddsBias, 2, 98)
       : clampNumber(Number(target) + oddsBias, 2, 98);
-    const won = diceOdds<=0
-      ? false
-      : diceOdds>=200
-        ? true
-        : (direction==='over' ? roll>adjustedTarget : roll<adjustedTarget);
+    const randomBetween=(min,max)=>parseFloat((min + Math.random()*(max-min)).toFixed(2));
+    const forceDisplayedLossRoll=()=>{
+      if(direction==='over') return randomBetween(0, Math.max(0, Number(target)));
+      return randomBetween(Math.min(100, Number(target)), 100);
+    };
+    const forceDisplayedWinRoll=()=>{
+      if(direction==='over') return randomBetween(Math.min(100, Number(target)+0.01), 100);
+      return randomBetween(0, Math.max(0, Number(target)-0.01));
+    };
+    let roll;
+    let won;
+    if(diceOdds<=0){
+      roll=forceDisplayedLossRoll();
+      won=false;
+    }else if(diceOdds>=200){
+      roll=forceDisplayedWinRoll();
+      won=true;
+    }else{
+      roll=parseFloat((Math.random()*100).toFixed(2));
+      won=direction==='over' ? roll>adjustedTarget : roll<adjustedTarget;
+    }
     const winChance = direction==='over' ? 100-target : target;
     const multiplier = 99/winChance;
     const payout = won ? Math.floor(amount*multiplier) : 0;
@@ -2348,6 +2487,95 @@ app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
+app.post('/api/casino/mines/start', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const amount = Math.floor(Number(req.body.betAmount));
+    const mineCount = clampNumber(Math.floor(Number(req.body.mineCount || 3)), 1, 24);
+    if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    if(minesGames.has(req.user.id)) return res.status(400).json({error:'Finish or cash out your current Mines game first'});
+    const user = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+    await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
+    const game = {
+      betAmount: amount,
+      mineCount,
+      mineSet: makeMineSet(mineCount),
+      revealedSafe: new Set(),
+      status: 'active',
+      startedAt: Date.now(),
+    };
+    minesGames.set(req.user.id, game);
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({state:serializeMinesState(game), newBalance:Math.floor(updated.credits)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/mines/reveal', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const game = minesGames.get(req.user.id);
+    if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
+    const index = Math.floor(Number(req.body.index));
+    if(index<0 || index>24) return res.status(400).json({error:'Invalid tile'});
+    if(game.revealedSafe.has(index)) return res.status(400).json({error:'Tile already revealed'});
+    const { minesOdds } = await getCasinoConfig();
+    const remainingSafe = 25 - game.mineCount - game.revealedSafe.size;
+    const remainingTiles = 25 - game.revealedSafe.size;
+    const desiredSafe = remainingSafe>0 && Math.random() < getAdjustedSafeChance(remainingSafe/remainingTiles, minesOdds);
+    flipMineCell(game, index, desiredSafe);
+    const hitMine = game.mineSet.has(index);
+    if(hitMine){
+      minesGames.delete(req.user.id);
+      const betId = generateId('cbm');
+      await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+        [betId,req.user.id,'mines',game.betAmount,'loss',0,-game.betAmount,Date.now()]);
+      await recordTx(req.user.id, -game.betAmount, 'casino_mines', betId, `Mines: hit a mine with ${game.mineCount} mine${game.mineCount===1?'':'s'}`);
+      game.status='lost';
+      return res.json({
+        hitMine:true,
+        state:serializeMinesState(game,true),
+        payout:0,
+        profit:-game.betAmount,
+        newBalance:Math.floor((await db.get('SELECT credits FROM users WHERE id=?',[req.user.id])).credits),
+      });
+    }
+    game.revealedSafe.add(index);
+    const state = serializeMinesState(game);
+    res.json({
+      hitMine:false,
+      state,
+      payout:state.potentialPayout,
+      profit:state.potentialPayout - game.betAmount,
+      newBalance:Math.floor((await db.get('SELECT credits FROM users WHERE id=?',[req.user.id])).credits),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/casino/mines/cashout', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const game = minesGames.get(req.user.id);
+    if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
+    if(game.revealedSafe.size<1) return res.status(400).json({error:'Reveal at least one safe tile before cashing out'});
+    const multiplier = getMinesMultiplier(game.revealedSafe.size, game.mineCount);
+    const payout = Math.floor(game.betAmount * multiplier);
+    const profit = payout - game.betAmount;
+    await db.run('UPDATE users SET credits=credits+? WHERE id=?',[payout,req.user.id]);
+    const betId = generateId('cbm');
+    await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
+      [betId,req.user.id,'mines',game.betAmount,'win',payout,profit,Date.now()]);
+    await recordTx(req.user.id, profit, 'casino_mines', betId, `Mines: cashed out after ${game.revealedSafe.size} safe pick${game.revealedSafe.size===1?'':'s'} with ${game.mineCount} mine${game.mineCount===1?'':'s'}`);
+    game.status='cashed';
+    minesGames.delete(req.user.id);
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      state:serializeMinesState(game,true),
+      payout,
+      profit,
+      multiplier,
+      newBalance:Math.floor(updated.credits),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 app.get('/api/casino/my-bets', authMiddleware, async(req,res)=>{
   try{
     const bets = await db.all('SELECT * FROM casino_bets WHERE user_id=? ORDER BY timestamp DESC LIMIT 20',[req.user.id]);
@@ -2357,9 +2585,48 @@ app.get('/api/casino/my-bets', authMiddleware, async(req,res)=>{
 
 app.get('/api/admin/casino', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    const bets = await db.all(`SELECT cb.*,u.name as user_name FROM casino_bets cb JOIN users u ON cb.user_id=u.id ORDER BY cb.timestamp DESC LIMIT 200`);
+    const search = String(req.query.search || '').trim();
+    const limit = parsePage(req.query.limit, 100, 20, 500);
+    const offset = parsePage(req.query.offset, 0, 0, 100000);
+    let bets;
+    let totalRow;
+    if(search){
+      const like = `%${search}%`;
+      bets = await db.all(
+        `SELECT cb.*,u.name as user_name
+         FROM casino_bets cb
+         JOIN users u ON cb.user_id=u.id
+         WHERE LOWER(cb.user_id) LIKE LOWER(?) OR LOWER(COALESCE(u.name,'')) LIKE LOWER(?) OR LOWER(COALESCE(cb.game,'')) LIKE LOWER(?) OR LOWER(COALESCE(cb.outcome,'')) LIKE LOWER(?)
+         ORDER BY cb.timestamp DESC
+         LIMIT ? OFFSET ?`,
+        [like,like,like,like,limit,offset]
+      );
+      totalRow = await db.get(
+        `SELECT COUNT(*) as c
+         FROM casino_bets cb
+         JOIN users u ON cb.user_id=u.id
+         WHERE LOWER(cb.user_id) LIKE LOWER(?) OR LOWER(COALESCE(u.name,'')) LIKE LOWER(?) OR LOWER(COALESCE(cb.game,'')) LIKE LOWER(?) OR LOWER(COALESCE(cb.outcome,'')) LIKE LOWER(?)`,
+        [like,like,like,like]
+      );
+    }else{
+      bets = await db.all(
+        `SELECT cb.*,u.name as user_name
+         FROM casino_bets cb
+         JOIN users u ON cb.user_id=u.id
+         ORDER BY cb.timestamp DESC
+         LIMIT ? OFFSET ?`,
+        [limit,offset]
+      );
+      totalRow = await db.get(`SELECT COUNT(*) as c FROM casino_bets`);
+    }
     const stats = await db.get(`SELECT COUNT(*) as total_bets, SUM(bet_amount) as total_wagered, SUM(profit) as house_profit FROM casino_bets`);
-    res.json({bets, stats});
+    const baseline = await getCasinoStatsBaseline();
+    const adjustedStats = {
+      ...stats,
+      total_wagered: Math.max(0, Number(stats?.total_wagered || 0) - baseline.wagered),
+      house_profit: Number(stats?.house_profit || 0) - baseline.profit,
+    };
+    res.json({bets, stats:adjustedStats, total:totalRow?.c||0, hasMore:offset + bets.length < (totalRow?.c||0)});
   }catch(e){res.status(500).json({error:e.message});}
 });
 

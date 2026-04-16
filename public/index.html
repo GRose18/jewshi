@@ -486,6 +486,12 @@
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Beat the dealer to 21</div>
             <span class="status-tag status-open">Individual</span>
           </div>
+          <div class="market-card" id="casino-mines-card" onclick="openMines()" style="text-align:center;padding:24px 18px;display:none;">
+            <div style="font-size:36px;margin-bottom:10px;">💣</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Mines</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Admin testing only for now</div>
+            <span class="status-tag status-open">Testing</span>
+          </div>
           <div class="market-card" id="casino-dreidel-card" onclick="openMatchLobby('dreidel')" style="text-align:center;padding:24px 18px;">
             <div style="font-size:36px;margin-bottom:10px;">🕎</div>
             <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">Dreidel</div>
@@ -781,6 +787,81 @@
           </div>
         </div>
       </div>
+
+      <div id="casino-mines" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <button onclick="closeMines()" style="background:var(--bg3);border:1px solid var(--border-hi);color:var(--text2);padding:6px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;">← Back</button>
+          <div>
+            <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Mines</h2>
+            <p style="font-size:12px;color:var(--text3);margin-top:3px;">Admin-only testing game inspired by grid mines.</p>
+          </div>
+        </div>
+
+        <div style="max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(280px,0.95fr);gap:18px;align-items:start;">
+          <div class="panel" style="padding:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+              <div>
+                <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">Board</div>
+                <div style="font-size:13px;color:var(--text2);margin-top:4px;">Cash out before you uncover a mine.</div>
+              </div>
+              <div id="mines-result-pill" style="padding:8px 14px;border-radius:999px;font-size:12px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text3);">Waiting to start</div>
+            </div>
+            <div id="mines-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;"></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+              <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value" style="color:var(--green);font-size:20px;" id="mines-balance">⬡ 0</div></div>
+              <div class="stat-card"><div class="stat-label">Potential Cashout</div><div class="stat-value" style="color:var(--gold);font-size:20px;" id="mines-potential">⬡ 0</div></div>
+            </div>
+
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Setup</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+                <input type="number" id="mines-bet-input" placeholder="0" min="1" step="1" oninput="onMinesBetInput()" style="flex:1;padding:11px 14px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:18px;font-weight:700;font-family:'Inter',sans-serif;color:var(--text);outline:none;">
+                <button onclick="setMinesBet(Math.floor((currentUser?.credits||0)/2))" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">½</button>
+                <button onclick="setMinesBet(currentUser?.credits||0)" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;font-family:'Inter',sans-serif;">Max</button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <button onclick="setMinesBet(10)" class="quick-btn">10</button>
+                <button onclick="setMinesBet(25)" class="quick-btn">25</button>
+                <button onclick="setMinesBet(50)" class="quick-btn">50</button>
+                <button onclick="setMinesBet(100)" class="quick-btn">100</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Mines</span>
+                <span id="mines-count-label" style="font-size:18px;font-weight:700;color:var(--text);">3</span>
+              </div>
+              <input type="range" id="mines-count-slider" min="1" max="10" step="1" value="3" oninput="setMinesCount(this.value)" style="width:100%;accent-color:var(--red);margin-bottom:12px;">
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+                <button onclick="setMinesCount(1)" class="quick-btn">1</button>
+                <button onclick="setMinesCount(3)" class="quick-btn">3</button>
+                <button onclick="setMinesCount(5)" class="quick-btn">5</button>
+                <button onclick="setMinesCount(7)" class="quick-btn">7</button>
+                <button onclick="setMinesCount(10)" class="quick-btn">10</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;">
+                <button id="mines-start-btn" onclick="startMines()" style="padding:13px;background:linear-gradient(135deg,var(--accent),#9d8fff);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Start Game</button>
+                <button id="mines-cashout-btn" onclick="cashoutMines()" style="padding:13px;background:rgba(240,192,64,0.15);border:1px solid rgba(240,192,64,0.36);color:var(--gold);border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;" disabled>Cash Out</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Run Stats</div>
+              <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2);">
+                <div style="display:flex;justify-content:space-between;gap:12px;"><span>Safe Picks</span><strong id="mines-safe-count" style="color:var(--text);">0</strong></div>
+                <div style="display:flex;justify-content:space-between;gap:12px;"><span>Current Multiplier</span><strong id="mines-multiplier" style="color:var(--accent);">1.0000x</strong></div>
+                <div style="display:flex;justify-content:space-between;gap:12px;"><span>Next Safe Tile</span><strong id="mines-next-multiplier" style="color:var(--green);">1.0000x</strong></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Recent Runs</div>
+              <div id="mines-history" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- FEED -->
@@ -1039,9 +1120,32 @@
         <div id="admin-store-list"></div>
       </div>
       <div class="panel"><div class="panel-title">Student Accounts</div><div id="admin-users-list"></div></div>
-      <div class="panel"><div class="panel-title">Transaction Log</div><div id="admin-txn-list"><div class="loading">Loading…</div></div></div>
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          <div class="panel-title" style="margin:0;">Transaction Log</div>
+          <div id="admin-txn-meta" style="font-size:12px;color:var(--text3);">Loading…</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <input type="text" id="admin-txn-search" placeholder="Search player, description, or type" style="flex:1;min-width:220px;" onkeydown="handleAdminLogSearchKey(event,'transactions')">
+          <button class="btn-admin btn-sm" onclick="loadAdminTransactions(true)">Search</button>
+        </div>
+        <div id="admin-txn-list" style="max-height:420px;overflow:auto;"><div class="loading">Loading…</div></div>
+        <div id="admin-txn-more" style="margin-top:12px;"></div>
+      </div>
       <div class="panel" id="admin-casino-controls-panel" style="display:none;"><div class="panel-title">Casino Controls</div><div id="admin-casino-controls"></div></div>
-      <div class="panel"><div class="panel-title">Casino Activity</div><div id="admin-casino-stats" style="margin-bottom:14px;"></div><div id="admin-casino-list"><div class="loading">Loading…</div></div></div>
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          <div class="panel-title" style="margin:0;">Casino Activity</div>
+          <div id="admin-casino-meta" style="font-size:12px;color:var(--text3);">Loading…</div>
+        </div>
+        <div id="admin-casino-stats" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <input type="text" id="admin-casino-search" placeholder="Search player, game, or outcome" style="flex:1;min-width:220px;" onkeydown="handleAdminLogSearchKey(event,'casino')">
+          <button class="btn-admin btn-sm" onclick="loadAdminCasinoActivity(true)">Search</button>
+        </div>
+        <div id="admin-casino-list" style="max-height:420px;overflow:auto;"><div class="loading">Loading…</div></div>
+        <div id="admin-casino-more" style="margin-top:12px;"></div>
+      </div>
     </div>
 
   </div>
@@ -1226,7 +1330,13 @@ let onlineMatchFilter='all';
 let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
 let notificationState={items:[],unreadCount:0};
 let notificationsPanelOpen=false;
-let casinoConfig={diceOdds:100,plinkoOdds:100,blackjackOdds:100};
+let casinoConfig={diceOdds:100,plinkoOdds:100,blackjackOdds:100,minesOdds:100};
+let adminTxnState={items:[],search:'',offset:0,limit:100,total:0,hasMore:false};
+let adminCasinoState={bets:[],search:'',offset:0,limit:100,total:0,hasMore:false};
+let minesBusy=false;
+let minesState=null;
+let minesCount=3;
+let minesResolvedBoard=null;
 function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
@@ -1515,6 +1625,7 @@ function renderCasinoConfigReadout(){
     ['Dice',casinoConfig.diceOdds],
     ['Plinko',casinoConfig.plinkoOdds],
     ['Blackjack',casinoConfig.blackjackOdds],
+    ['Mines',casinoConfig.minesOdds],
   ];
   el.innerHTML=items.map(([label,value])=>{
     const tone=value>100?'var(--green)':value<100?'var(--red)':'var(--text2)';
@@ -3162,30 +3273,38 @@ function syncCasinoOddsSliders(){
   const dice=document.getElementById('casino-dice-odds');
   const plinko=document.getElementById('casino-plinko-odds');
   const blackjack=document.getElementById('casino-blackjack-odds');
+  const mines=document.getElementById('casino-mines-odds');
   const diceValue=Number(dice?.value||casinoConfig.diceOdds);
   const plinkoValue=Number(plinko?.value||casinoConfig.plinkoOdds);
   const blackjackValue=Number(blackjack?.value||casinoConfig.blackjackOdds);
+  const minesValue=Number(mines?.value||casinoConfig.minesOdds);
   const diceBias=((diceValue-100)/100)*10;
   const blackjackStand=Math.min(18,Math.max(16,Math.round(17+((blackjackValue-100)/50))));
   const plinkoPower=(plinkoValue-100)/50;
   if(document.getElementById('casino-dice-odds-value')) document.getElementById('casino-dice-odds-value').textContent=`${diceValue}%`;
   if(document.getElementById('casino-plinko-odds-value')) document.getElementById('casino-plinko-odds-value').textContent=`${plinkoValue}%`;
   if(document.getElementById('casino-blackjack-odds-value')) document.getElementById('casino-blackjack-odds-value').textContent=`${blackjackValue}%`;
+  if(document.getElementById('casino-mines-odds-value')) document.getElementById('casino-mines-odds-value').textContent=`${minesValue}%`;
   if(document.getElementById('casino-dice-odds-detail')) document.getElementById('casino-dice-odds-detail').textContent=diceValue<=0
     ?'0%: automatic loss.'
     : diceValue>=200
       ? '200%: automatic win.'
       : `Effective target shift: ${diceBias>=0?'+':''}${diceBias.toFixed(1)} points for players. Every 10 slider points changes the effective target by 1.0.`;
   if(document.getElementById('casino-blackjack-odds-detail')) document.getElementById('casino-blackjack-odds-detail').textContent=blackjackValue<=0
-    ? '0%: every non-bust hand loses.'
+    ? 'Lowest setting: dealer stands on 16.'
     : blackjackValue>=200
-      ? '200%: every non-bust hand wins.'
-      : `Dealer stands on ${blackjackStand}. 0-49 => 16, 100 => 17, 150-200 => 18.`;
+      ? 'Highest setting: dealer stands on 18.'
+      : `Dealer stands on ${blackjackStand}. Lower settings are tougher for players; higher settings are friendlier.`;
   if(document.getElementById('casino-plinko-odds-detail')) document.getElementById('casino-plinko-odds-detail').textContent=plinkoValue<=0
     ? '0%: automatic worst slot.'
     : plinkoValue>=200
       ? '200%: automatic best slot.'
       : `Weighting power: ${plinkoPower>=0?'+':''}${plinkoPower.toFixed(2)}. Higher favors better multipliers.`;
+  if(document.getElementById('casino-mines-odds-detail')) document.getElementById('casino-mines-odds-detail').textContent=minesValue<=0
+    ? '0%: every reveal becomes a mine.'
+    : minesValue>=200
+      ? '200%: every reveal is safe until the board runs out of safe tiles.'
+      : `Safe-tile interpolation from fair chance: ${minesValue<100?'harder':'friendlier'} than baseline. 100% = fair board odds.`;
   updatePlinkoOddsNumerics(plinkoValue);
 }
 function getPlinkoOddsSummary(slider, risk){
@@ -3226,6 +3345,7 @@ async function saveCasinoOdds(){
       diceOdds:Number(document.getElementById('casino-dice-odds')?.value||casinoConfig.diceOdds),
       plinkoOdds:Number(document.getElementById('casino-plinko-odds')?.value||casinoConfig.plinkoOdds),
       blackjackOdds:Number(document.getElementById('casino-blackjack-odds')?.value||casinoConfig.blackjackOdds),
+      minesOdds:Number(document.getElementById('casino-mines-odds')?.value||casinoConfig.minesOdds),
     });
     casinoConfig=next;
     syncCasinoOddsSliders();
@@ -3233,6 +3353,19 @@ async function saveCasinoOdds(){
     const status=document.getElementById('casino-odds-save-status');
     if(status) status.textContent='Saved. The disclosed casino odds banner updates live for players.';
     showToast('Casino odds updated.');
+  }catch(e){
+    const status=document.getElementById('casino-odds-save-status');
+    if(status) status.textContent=`Failed: ${e.message}`;
+    showToast(e.message);
+  }
+}
+async function resetCasinoStats(){
+  try{
+    await api('POST','/admin/casino/reset-stats');
+    const status=document.getElementById('casino-odds-save-status');
+    if(status) status.textContent='Displayed casino totals reset to zero. History is still preserved.';
+    await loadAdminCasinoActivity(true);
+    showToast('Casino stats reset.');
   }catch(e){
     const status=document.getElementById('casino-odds-save-status');
     if(status) status.textContent=`Failed: ${e.message}`;
@@ -3322,11 +3455,11 @@ async function pollResolutions(){
 // ── ADMIN ──
 async function renderAdminTab(){
   if(!currentUser||currentUser.role!=='admin')return;
-  const _fallbacks=[{students:0,openMarkets:0,totalBets:0,pendingVol:0},[],[],[],[],{stats:{},bets:[]}];
+  const _fallbacks=[{students:0,openMarkets:0,totalBets:0,pendingVol:0},[],[],[],{stats:{},bets:[],total:0,hasMore:false}];
   const _results=await Promise.allSettled([
-    api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/transactions'),api('GET','/admin/casino'),
+    api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/casino'),
   ]);
-  const [stats,markets,users,storeItems,txns,casinoData]=_results.map((r,i)=>r.status==='fulfilled'?r.value:(_fallbacks[i]??{}));
+  const [stats,markets,users,storeItems,casinoData]=_results.map((r,i)=>r.status==='fulfilled'?r.value:(_fallbacks[i]??{}));
   document.getElementById('admin-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
@@ -3435,10 +3568,18 @@ async function renderAdminTab(){
           <input type="range" id="casino-blackjack-odds" min="0" max="200" step="1" value="${casinoConfig.blackjackOdds}" oninput="syncCasinoOddsSliders()">
           <div id="casino-blackjack-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
         </div>
+        <div class="form-group">
+          <label>Mines Odds <span id="casino-mines-odds-value">${casinoConfig.minesOdds}%</span></label>
+          <input type="range" id="casino-mines-odds" min="0" max="200" step="1" value="${casinoConfig.minesOdds}" oninput="syncCasinoOddsSliders()">
+          <div id="casino-mines-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
+        </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
         <div id="casino-odds-save-status" style="font-size:12px;color:var(--text3);">Banner text/size stays editable directly in the casino HTML.</div>
-        <button class="btn-admin" onclick="saveCasinoOdds()">Save Odds</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2);" onclick="resetCasinoStats()">Reset Displayed Stats</button>
+          <button class="btn-admin" onclick="saveCasinoOdds()">Save Odds</button>
+        </div>
       </div>`;
   }else{
     controlsPanel.style.display='none';
@@ -3451,8 +3592,96 @@ async function renderAdminTab(){
       <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${-(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(-(cs.house_profit||0)).toLocaleString()}</div></div>
     </div>`;
   if(currentUser.id==='GROSE') syncCasinoOddsSliders();
-  document.getElementById('admin-casino-list').innerHTML=!casinoData.bets?.length?'<p style="color:var(--text3);font-size:13px;margin-top:12px;">No casino bets yet.</p>'
-    :`<table class="portfolio-table" style="margin-top:14px;"><thead><tr><th>User</th><th>Game</th><th>Bet</th><th>Outcome</th><th>Profit</th><th>Time</th></tr></thead><tbody>${casinoData.bets.slice(0,50).map(b=>`<tr>
+  adminCasinoState={bets:casinoData.bets||[],search:document.getElementById('admin-casino-search')?.value||'',offset:(casinoData.bets||[]).length,limit:100,total:casinoData.total||0,hasMore:!!casinoData.hasMore};
+  renderAdminCasinoLog();
+  adminTxnState.search=document.getElementById('admin-txn-search')?.value||adminTxnState.search||'';
+  await loadAdminTransactions(true);
+}
+
+function handleAdminLogSearchKey(event, type){
+  if(event.key!=='Enter') return;
+  if(type==='transactions') loadAdminTransactions(true);
+  if(type==='casino') loadAdminCasinoActivity(true);
+}
+
+async function loadAdminTransactions(reset=false){
+  if(!currentUser||currentUser.role!=='admin') return;
+  const searchEl=document.getElementById('admin-txn-search');
+  const nextSearch=String(searchEl?.value||'').trim();
+  if(reset){
+    adminTxnState={...adminTxnState,items:[],offset:0,search:nextSearch};
+  }
+  const box=document.getElementById('admin-txn-list');
+  if(box && !adminTxnState.items.length) box.innerHTML='<div class="loading">Loading…</div>';
+  try{
+    const qs=`/admin/transactions?search=${encodeURIComponent(adminTxnState.search)}&offset=${adminTxnState.offset}&limit=${adminTxnState.limit}`;
+    const data=await api('GET',qs);
+    adminTxnState.items=reset?data.items:[...adminTxnState.items,...data.items];
+    adminTxnState.offset=adminTxnState.items.length;
+    adminTxnState.total=data.total||0;
+    adminTxnState.hasMore=!!data.hasMore;
+    renderAdminTransactionLog();
+  }catch(e){
+    if(box) box.innerHTML=`<p style="color:var(--red);font-size:13px;">${esc(e.message)}</p>`;
+  }
+}
+
+async function loadAdminCasinoActivity(reset=false){
+  if(!currentUser||currentUser.role!=='admin') return;
+  const searchEl=document.getElementById('admin-casino-search');
+  const nextSearch=String(searchEl?.value||'').trim();
+  if(reset){
+    adminCasinoState={...adminCasinoState,bets:[],offset:0,search:nextSearch};
+  }
+  const box=document.getElementById('admin-casino-list');
+  if(box && !adminCasinoState.bets.length) box.innerHTML='<div class="loading">Loading…</div>';
+  try{
+    const qs=`/admin/casino?search=${encodeURIComponent(adminCasinoState.search)}&offset=${adminCasinoState.offset}&limit=${adminCasinoState.limit}`;
+    const data=await api('GET',qs);
+    adminCasinoState.bets=reset?data.bets:[...adminCasinoState.bets,...data.bets];
+    adminCasinoState.offset=adminCasinoState.bets.length;
+    adminCasinoState.total=data.total||0;
+    adminCasinoState.hasMore=!!data.hasMore;
+    if(data.stats){
+      const cs=data.stats||{};
+      document.getElementById('admin-casino-stats').innerHTML=`
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+          <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${cs.total_bets||0}</div></div>
+          <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value" style="color:var(--accent)">⬡ ${(cs.total_wagered||0).toLocaleString()}</div></div>
+          <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${-(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(-(cs.house_profit||0)).toLocaleString()}</div></div>
+        </div>`;
+    }
+    renderAdminCasinoLog();
+  }catch(e){
+    if(box) box.innerHTML=`<p style="color:var(--red);font-size:13px;">${esc(e.message)}</p>`;
+  }
+}
+
+function renderAdminTransactionLog(){
+  const meta=document.getElementById('admin-txn-meta');
+  const more=document.getElementById('admin-txn-more');
+  const list=document.getElementById('admin-txn-list');
+  if(meta) meta.textContent=`Showing ${adminTxnState.items.length.toLocaleString()} of ${Number(adminTxnState.total||0).toLocaleString()} entries`;
+  if(!list) return;
+  list.innerHTML=!adminTxnState.items.length?'<p style="color:var(--text3);font-size:13px;">No transactions found.</p>'
+    :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${adminTxnState.items.map(t=>`<tr>
+      <td style="color:var(--text)">${esc(t.user_name||t.user_id)}</td>
+      <td style="${t.amount>0?'color:var(--green)':'color:var(--red)'};font-weight:600;">${t.amount>0?'+':''}${t.amount}</td>
+      <td><span class="history-pill" style="background:var(--bg4);color:var(--text3)">${esc(getTransactionTypeLabel(t))}</span></td>
+      <td style="color:var(--text3)">${esc(t.description)||'—'}</td>
+      <td style="color:var(--text3)">${new Date(t.timestamp).toLocaleString()}</td>
+    </tr>`).join('')}</tbody></table>`;
+  if(more) more.innerHTML=adminTxnState.hasMore?'<button class="btn-admin btn-sm" onclick="loadAdminTransactions(false)">Load More</button>':'';
+}
+
+function renderAdminCasinoLog(){
+  const meta=document.getElementById('admin-casino-meta');
+  const more=document.getElementById('admin-casino-more');
+  const list=document.getElementById('admin-casino-list');
+  if(meta) meta.textContent=`Showing ${adminCasinoState.bets.length.toLocaleString()} of ${Number(adminCasinoState.total||0).toLocaleString()} bets`;
+  if(!list) return;
+  list.innerHTML=!adminCasinoState.bets.length?'<p style="color:var(--text3);font-size:13px;margin-top:12px;">No casino bets found.</p>'
+    :`<table class="portfolio-table"><thead><tr><th>User</th><th>Game</th><th>Bet</th><th>Outcome</th><th>Profit</th><th>Time</th></tr></thead><tbody>${adminCasinoState.bets.map(b=>`<tr>
       <td style="color:var(--text)">${esc(b.user_name||b.user_id)}</td>
       <td><span class="history-pill" style="background:var(--accent-bg);color:var(--accent)">${b.game}</span></td>
       <td>⬡ ${b.bet_amount}</td>
@@ -3460,14 +3689,7 @@ async function renderAdminTab(){
       <td style="color:${b.profit>=0?'var(--green)':'var(--red)'};font-weight:600;">${b.profit>=0?'+':''}${b.profit}</td>
       <td style="color:var(--text3)">${new Date(b.timestamp).toLocaleString()}</td>
     </tr>`).join('')}</tbody></table>`;
-  document.getElementById('admin-txn-list').innerHTML=!txns.length?'<p style="color:var(--text3);font-size:13px;">No transactions yet.</p>'
-    :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
-      <td style="color:var(--text)">${esc(t.user_name||t.user_id)}</td>
-      <td style="${t.amount>0?'color:var(--green)':'color:var(--red)'};font-weight:600;">${t.amount>0?'+':''}${t.amount}</td>
-      <td><span class="history-pill" style="background:var(--bg4);color:var(--text3)">${esc(getTransactionTypeLabel(t))}</span></td>
-      <td style="color:var(--text3)">${esc(t.description)||'—'}</td>
-      <td style="color:var(--text3)">${new Date(t.timestamp).toLocaleString()}</td>
-    </tr>`).join('')}</tbody></table>`;
+  if(more) more.innerHTML=adminCasinoState.hasMore?'<button class="btn-admin btn-sm" onclick="loadAdminCasinoActivity(false)">Load More</button>':'';
 }
 
 function renderPopupTab(){
@@ -4546,16 +4768,20 @@ function initCasino(){
   document.getElementById('casino-dice').style.display='none';
   document.getElementById('casino-blackjack').style.display='none';
   document.getElementById('casino-plinko').style.display='none';
+  document.getElementById('casino-mines').style.display='none';
   document.getElementById('casino-matches').style.display='none';
   const dreidelCard=document.getElementById('casino-dreidel-card');
   const pokerCard=document.getElementById('casino-poker-card');
+  const minesCard=document.getElementById('casino-mines-card');
   if(dreidelCard) dreidelCard.style.display=canUseOnlineMatches()?'block':'none';
   if(pokerCard) pokerCard.style.display=canUseOnlineMatches()?'block':'none';
+  if(minesCard) minesCard.style.display=canUseOnlineMatches()?'block':'none';
 }
 
 function openDice(){
   document.getElementById('casino-lobby').style.display='none';
   document.getElementById('casino-matches').style.display='none';
+  document.getElementById('casino-mines').style.display='none';
   document.getElementById('casino-dice').style.display='block';
   updateDiceUI();
   document.getElementById('dice-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
@@ -4709,6 +4935,7 @@ function renderDiceHistory(){
 function openPlinko(){
   document.getElementById('casino-lobby').style.display='none';
   document.getElementById('casino-matches').style.display='none';
+  document.getElementById('casino-mines').style.display='none';
   document.getElementById('casino-plinko').style.display='block';
   document.getElementById('plinko-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   document.getElementById('plinko-best').textContent=getPlinkoBestMultiplier().toFixed(2)+'x';
@@ -4724,6 +4951,207 @@ function openPlinko(){
 function closePlinko(){
   document.getElementById('casino-plinko').style.display='none';
   document.getElementById('casino-lobby').style.display='block';
+}
+
+function openMines(){
+  if(!canUseOnlineMatches()){
+    showToast('Mines is admin-only during testing.');
+    return;
+  }
+  document.getElementById('casino-lobby').style.display='none';
+  document.getElementById('casino-matches').style.display='none';
+  document.getElementById('casino-dice').style.display='none';
+  document.getElementById('casino-blackjack').style.display='none';
+  document.getElementById('casino-plinko').style.display='none';
+  document.getElementById('casino-mines').style.display='block';
+  document.getElementById('mines-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  minesState=null;
+  minesResolvedBoard=null;
+  renderMinesBoard();
+  updateMinesUI();
+  loadMinesHistory();
+}
+
+function closeMines(){
+  document.getElementById('casino-mines').style.display='none';
+  document.getElementById('casino-lobby').style.display='block';
+}
+
+function setMinesCount(value){
+  minesCount=Math.max(1,Math.min(10,Math.floor(Number(value)||1)));
+  const slider=document.getElementById('mines-count-slider');
+  const label=document.getElementById('mines-count-label');
+  if(slider) slider.value=minesCount;
+  if(label) label.textContent=minesCount;
+  updateMinesUI();
+}
+
+function onMinesBetInput(){
+  const input=document.getElementById('mines-bet-input');
+  let val=Math.floor(Number(input.value));
+  if(val<0) val=0;
+  input.value=val||'';
+  updateMinesUI();
+}
+
+function setMinesBet(amount){
+  const floored=Math.floor(amount);
+  const input=document.getElementById('mines-bet-input');
+  if(input) input.value=floored>0?floored:'';
+  updateMinesUI();
+}
+
+function updateMinesUI(){
+  const balance=document.getElementById('mines-balance');
+  const potential=document.getElementById('mines-potential');
+  const countLabel=document.getElementById('mines-count-label');
+  const currentMult=document.getElementById('mines-multiplier');
+  const nextMult=document.getElementById('mines-next-multiplier');
+  const safeCount=document.getElementById('mines-safe-count');
+  const startBtn=document.getElementById('mines-start-btn');
+  const cashoutBtn=document.getElementById('mines-cashout-btn');
+  if(balance) balance.textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
+  if(countLabel) countLabel.textContent=minesCount;
+  const currentMultiplier=minesState?.currentMultiplier||1;
+  const nextMultiplier=minesState?.nextMultiplier||1;
+  if(currentMult) currentMult.textContent=currentMultiplier.toFixed(4)+'x';
+  if(nextMult) nextMult.textContent=nextMultiplier.toFixed(4)+'x';
+  if(safeCount) safeCount.textContent=String(minesState?.revealedSafeCount||0);
+  const betAmount=minesState?.betAmount||Math.floor(Number(document.getElementById('mines-bet-input')?.value)||0);
+  const potentialAmount=minesState?.potentialPayout||Math.floor(betAmount*currentMultiplier);
+  if(potential) potential.textContent='⬡ '+Math.max(0,potentialAmount).toLocaleString();
+  if(startBtn) startBtn.disabled=minesBusy||!!minesState;
+  if(cashoutBtn) cashoutBtn.disabled=minesBusy||!minesState||!(minesState.revealedSafeCount>0);
+}
+
+function renderMinesBoard(revealAll=false){
+  const grid=document.getElementById('mines-grid');
+  if(!grid) return;
+  const board=minesState?.board||minesResolvedBoard||Array.from({length:25}, (_, index)=>({index,revealed:false,type:'safe'}));
+  grid.innerHTML=board.map(tile=>{
+    const revealed=tile.revealed;
+    const face=revealed?(tile.type==='mine'?'💣':'💎'):'';
+    const bg=revealed?(tile.type==='mine'?'rgba(255,69,96,0.16)':'rgba(0,208,132,0.14)'):'var(--bg3)';
+    const border=revealed?(tile.type==='mine'?'1px solid rgba(255,69,96,0.38)':'1px solid rgba(0,208,132,0.34)'):'1px solid var(--border)';
+    const color=revealed?(tile.type==='mine'?'var(--red)':'var(--green)'):'var(--text)';
+    return `<button onclick="revealMinesTile(${tile.index})" ${revealed||!minesState?'disabled':''} style="aspect-ratio:1/1;border-radius:16px;border:${border};background:${bg};color:${color};font-size:24px;font-weight:700;cursor:${revealed||!minesState?'default':'pointer'};font-family:'Inter',sans-serif;transition:all 0.18s;">${face}</button>`;
+  }).join('');
+}
+
+async function startMines(){
+  if(minesBusy||minesState) return;
+  const betAmount=Math.floor(Number(document.getElementById('mines-bet-input')?.value));
+  if(!betAmount||betAmount<1){showToast('Enter a bet amount.');return;}
+  if(betAmount>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
+  minesBusy=true;
+  const pill=document.getElementById('mines-result-pill');
+  if(pill){
+    pill.textContent='Board live';
+    pill.style.background='rgba(124,106,247,0.18)';
+    pill.style.border='1px solid rgba(124,106,247,0.35)';
+    pill.style.color='var(--accent)';
+  }
+  updateMinesUI();
+  try{
+    const data=await api('POST','/casino/mines/start',{betAmount,mineCount:minesCount});
+    minesState=data.state;
+    minesResolvedBoard=null;
+    currentUser.credits=data.newBalance;
+    updateTopbar();
+    renderMinesBoard();
+    updateMinesUI();
+  }catch(e){
+    showToast(e.message);
+  }finally{
+    minesBusy=false;
+    updateMinesUI();
+  }
+}
+
+async function revealMinesTile(index){
+  if(minesBusy||!minesState) return;
+  minesBusy=true;
+  updateMinesUI();
+  try{
+    const data=await api('POST','/casino/mines/reveal',{index});
+    minesState=data.state;
+    currentUser.credits=data.newBalance;
+    updateTopbar();
+    renderMinesBoard(data.hitMine);
+    updateMinesUI();
+    const pill=document.getElementById('mines-result-pill');
+    if(data.hitMine){
+      if(pill){
+        pill.textContent=`Mine hit · -⬡ ${Math.abs(data.profit)}`;
+        pill.style.background='rgba(255,69,96,0.14)';
+        pill.style.border='1px solid rgba(255,69,96,0.32)';
+        pill.style.color='var(--red)';
+      }
+      minesResolvedBoard=data.state.board;
+      minesState=null;
+      renderMinesBoard(true);
+      updateMinesUI();
+      loadMinesHistory();
+    }else{
+      if(pill){
+        pill.textContent=`Safe pick ${data.state.revealedSafeCount} · ${data.state.currentMultiplier.toFixed(4)}x live`;
+        pill.style.background='rgba(0,208,132,0.14)';
+        pill.style.border='1px solid rgba(0,208,132,0.32)';
+        pill.style.color='var(--green)';
+      }
+    }
+  }catch(e){
+    showToast(e.message);
+  }finally{
+    minesBusy=false;
+    updateMinesUI();
+  }
+}
+
+async function cashoutMines(){
+  if(minesBusy||!minesState) return;
+  minesBusy=true;
+  updateMinesUI();
+  try{
+    const data=await api('POST','/casino/mines/cashout');
+    currentUser.credits=data.newBalance;
+    updateTopbar();
+    minesState=data.state;
+    minesResolvedBoard=data.state.board;
+    renderMinesBoard(true);
+    const pill=document.getElementById('mines-result-pill');
+    if(pill){
+      pill.textContent=`Cashed out ${data.multiplier.toFixed(4)}x · +⬡ ${data.profit}`;
+      pill.style.background='rgba(240,192,64,0.14)';
+      pill.style.border='1px solid rgba(240,192,64,0.30)';
+      pill.style.color='var(--gold)';
+    }
+    minesState=null;
+    updateMinesUI();
+    loadMinesHistory();
+  }catch(e){
+    showToast(e.message);
+  }finally{
+    minesBusy=false;
+    updateMinesUI();
+  }
+}
+
+async function loadMinesHistory(){
+  try{
+    const bets=await api('GET','/casino/my-bets');
+    const mineBets=bets.filter(b=>b.game==='mines').slice(0,10);
+    const history=document.getElementById('mines-history');
+    if(!history) return;
+    history.innerHTML=mineBets.length
+      ?mineBets.map(b=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid ${b.profit>=0?'var(--green-dim)':'var(--red-dim)'};">
+          <span style="font-size:13px;font-weight:700;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.outcome==='win'?'CASHOUT':'BUST'}</span>
+          <span style="font-size:12px;color:var(--text3);">⬡ ${b.bet_amount} bet</span>
+          <span style="font-size:13px;font-weight:600;color:${b.profit>=0?'var(--green)':'var(--red)'};">${b.profit>=0?'+⬡ '+b.profit:'-⬡ '+b.bet_amount}</span>
+        </div>`).join('')
+      :'<p style="font-size:13px;color:var(--text3);">No Mines runs yet.</p>';
+  }catch(e){}
 }
 
 function onPlinkoBetInput(){
