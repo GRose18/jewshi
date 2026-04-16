@@ -1093,7 +1093,7 @@
 <div id="assistance-live-modal" class="assistance-modal" onclick="closeAssistanceLiveModal(event)">
   <div class="assistance-modal-card">
     <div class="assistance-modal-stage">
-      <iframe id="assistance-live-modal-frame" class="assistance-preview-frame" sandbox="" referrerpolicy="no-referrer"></iframe>
+      <iframe id="assistance-live-modal-frame" class="assistance-preview-frame" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
@@ -1591,25 +1591,64 @@ function buildAssistancePreviewDoc(preview, scale='compact'){
   const bodyWidth=scale==='full'?'100%':'122%';
   return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#0f1117;overflow:auto;font-family:Inter,sans-serif;}body{transform:scale(${bodyScale});transform-origin:top left;width:${bodyWidth};min-height:100vh;}${preview.styles}</style></head><body>${preview.html}</body></html>`;
 }
+function getAssistanceActionableTarget(target){
+  return target?.closest('[id], .nav-tab, input, textarea, select, button, a, [onclick]');
+}
+function buildAssistanceDomPath(el, root){
+  if(!el||!root||el===root) return [];
+  const path=[];
+  let node=el;
+  while(node&&node!==root){
+    const parent=node.parentElement;
+    if(!parent) return null;
+    const idx=[...parent.children].indexOf(node);
+    if(idx<0) return null;
+    path.unshift(idx);
+    node=parent;
+  }
+  return node===root?path:null;
+}
+function resolveAssistanceDomPath(path, root){
+  if(!root||!Array.isArray(path)) return null;
+  let node=root;
+  for(const idx of path){
+    if(!node?.children||!node.children[idx]) return null;
+    node=node.children[idx];
+  }
+  return node||null;
+}
+function normalizeAssistText(text){
+  return String(text||'').replace(/\s+/g,' ').trim();
+}
 function describeAssistPreviewTarget(target){
   if(!target) return null;
-  const el=target.closest('[id], .nav-tab, input, textarea, select, button, a');
+  const el=getAssistanceActionableTarget(target);
   if(!el) return null;
+  const root=el.ownerDocument?.body?.firstElementChild||null;
   let selector='';
   if(el.id) selector=`#${cssEscapeSafe(el.id)}`;
   else if(el.dataset.tab) selector=`.nav-tab[data-tab="${cssEscapeSafe(el.dataset.tab)}"]`;
   else if(el.getAttribute('placeholder')) selector=`${el.tagName.toLowerCase()}[placeholder="${String(el.getAttribute('placeholder')).replace(/"/g,'\\"')}"]`;
   else if(el.getAttribute('onclick')) selector=`${el.tagName.toLowerCase()}[onclick="${String(el.getAttribute('onclick')).replace(/"/g,'\\"')}"]`;
-  else return null;
+  const domPath=buildAssistanceDomPath(el, root);
   const label=(el.innerText||el.value||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.id||el.tagName).trim().slice(0,80);
   const kind=(el.tagName||'').toLowerCase();
-  return {selector,label:label||'selected item',kind};
+  return {
+    selector,
+    label:label||'selected item',
+    kind,
+    domPath,
+    id:el.id||'',
+    tab:el.dataset?.tab||'',
+    placeholder:el.getAttribute('placeholder')||'',
+    text:normalizeAssistText(el.innerText||el.textContent||el.value||'').slice(0,120),
+  };
 }
 function renderAssistancePreviewMarkup(sessionId, preview, seniorName){
   if(!preview?.html||!preview?.styles){
     return `<div id="assist-preview-empty-${sessionId}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Jewshi preview from ${esc(seniorName)}.</div>`;
   }
-  return `<iframe id="assist-preview-frame-${sessionId}" class="assistance-preview assistance-preview-frame" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(preview))}"></iframe>`;
+  return `<iframe id="assist-preview-frame-${sessionId}" class="assistance-preview assistance-preview-frame" style="background:#0f1117;" sandbox="allow-same-origin" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(preview))}"></iframe>`;
 }
 function updateAssistanceSessionTargetDisplay(sessionId){
   const target=assistanceSelectedTargetsBySession[sessionId];
@@ -1671,7 +1710,7 @@ async function sendAssistanceInputForSession(sessionId, inputId){
   if(!input||!input.value.trim()){alert('Enter text first.');return;}
   if(!target){alert('Click a field in the preview first.');return;}
   try{
-    await sendAssistEventForSession(sessionId,'input',{selector:target.selector,label:target.label,value:input.value});
+    await sendAssistEventForSession(sessionId,'input',{...target,value:input.value});
     input.value='';
   }catch(e){alert(e.message);}
 }
@@ -1891,19 +1930,20 @@ function getCurrentVisibleTabName(){
   return activeTab?.textContent?.trim()||'Jewshi';
 }
 async function createAssistanceSnapshotData(){
-  const activePane=document.querySelector('.tab-content.active');
+  const appRoot=document.getElementById('app');
   const styleTag=document.querySelector('style');
-  if(!activePane||!styleTag) return null;
-  const clone=activePane.cloneNode(true);
+  if(!appRoot||!styleTag) return null;
+  const clone=appRoot.cloneNode(true);
   clone.querySelectorAll('script').forEach(el=>el.remove());
+  clone.querySelectorAll('#tab-assistance').forEach(el=>el.remove());
+  const sourceFields=appRoot.querySelectorAll('input, textarea, select');
   clone.querySelectorAll('input, textarea, select').forEach((field,idx)=>{
-    const original=activePane.querySelectorAll('input, textarea, select')[idx];
+    const original=sourceFields[idx];
     if(!original) return;
     if(field.tagName==='TEXTAREA') field.textContent=original.value||'';
     else if(field.tagName==='SELECT') field.value=original.value||'';
     else field.setAttribute('value', original.value||'');
   });
-  clone.querySelectorAll('script').forEach(el=>el.remove());
   return {
     html:clone.outerHTML,
     styles:styleTag.textContent||'',
@@ -1988,12 +2028,42 @@ function speakAssistanceMessage(text){
     window.speechSynthesis.speak(utterance);
   }catch(e){}
 }
-function resolveAssistanceTarget(selector){
-  if(!selector) return null;
-  try{return document.querySelector(selector);}catch(e){return null;}
+function resolveAssistanceTarget(target){
+  if(!target) return null;
+  if(typeof target==='string'){
+    try{return document.querySelector(target);}catch(e){return null;}
+  }
+  const root=document.getElementById('app');
+  if(target.domPath&&root){
+    const byPath=resolveAssistanceDomPath(target.domPath, root);
+    if(byPath) return byPath;
+  }
+  if(target.selector){
+    try{
+      const bySelector=document.querySelector(target.selector);
+      if(bySelector) return bySelector;
+    }catch(e){}
+  }
+  if(target.tab){
+    const byTab=document.querySelector(`.nav-tab[data-tab="${cssEscapeSafe(target.tab)}"]`);
+    if(byTab) return byTab;
+  }
+  if(target.id){
+    const byId=document.getElementById(target.id);
+    if(byId) return byId;
+  }
+  if(target.placeholder&&target.kind){
+    const byPlaceholder=document.querySelector(`${target.kind}[placeholder="${String(target.placeholder).replace(/"/g,'\\"')}"]`);
+    if(byPlaceholder) return byPlaceholder;
+  }
+  if(target.text&&target.kind){
+    const matches=[...document.querySelectorAll(target.kind)].filter(el=>normalizeAssistText(el.innerText||el.textContent||el.value||'')===target.text);
+    if(matches.length) return matches[0];
+  }
+  return null;
 }
-function flashAssistanceHighlight(selector){
-  const el=resolveAssistanceTarget(selector);
+function flashAssistanceHighlight(target){
+  const el=resolveAssistanceTarget(target);
   const box=document.getElementById('assistance-highlight-box');
   if(!el||!box) return null;
   const rect=el.getBoundingClientRect();
@@ -2021,7 +2091,7 @@ function applyAssistanceEvent(event, sessionId){
       frame.srcdoc=buildAssistancePreviewDoc(assistancePreviewFrames[session.id]);
       bindAssistancePreviewFrame(frame, session.id);
     }else if(empty&&(payload.html||payload.styles)){
-      empty.outerHTML=`<iframe id="assist-preview-frame-${session.id}" class="assistance-preview" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(assistancePreviewFrames[session.id]))}"></iframe>`;
+      empty.outerHTML=`<iframe id="assist-preview-frame-${session.id}" class="assistance-preview assistance-preview-frame" style="background:#0f1117;" sandbox="allow-same-origin" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(assistancePreviewFrames[session.id]))}"></iframe>`;
       bindAssistancePreviewFrame(document.getElementById(`assist-preview-frame-${session.id}`), session.id);
     }else if(document.getElementById('tab-assistance')?.classList.contains('active')){
       renderAssistanceTab();
@@ -2049,7 +2119,7 @@ function applyAssistanceEvent(event, sessionId){
     return;
   }
   if(event.event_type==='click'){
-    const el=flashAssistanceHighlight(payload.selector)||resolveAssistanceTarget(payload.selector);
+    const el=flashAssistanceHighlight(payload)||resolveAssistanceTarget(payload);
     if(!el) return;
     setTimeout(()=>{
       try{
@@ -2060,7 +2130,7 @@ function applyAssistanceEvent(event, sessionId){
     return;
   }
   if(event.event_type==='input'){
-    const el=flashAssistanceHighlight(payload.selector)||resolveAssistanceTarget(payload.selector);
+    const el=flashAssistanceHighlight(payload)||resolveAssistanceTarget(payload);
     if(!el) return;
     setTimeout(()=>{
       try{
