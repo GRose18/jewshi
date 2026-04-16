@@ -5074,10 +5074,6 @@ function closePlinko(){
 }
 
 function openMines(){
-  if(!canUseOnlineMatches()){
-    showToast('Mines is admin-only during testing.');
-    return;
-  }
   document.getElementById('casino-lobby').style.display='none';
   document.getElementById('casino-matches').style.display='none';
   document.getElementById('casino-dice').style.display='none';
@@ -5100,7 +5096,7 @@ function closeMines(){
 }
 
 function setMinesCount(value){
-  minesCount=Math.max(1,Math.min(10,Math.floor(Number(value)||1)));
+  minesCount=Math.max(1,Math.min(24,Math.floor(Number(value)||1)));
   const slider=document.getElementById('mines-count-slider');
   const label=document.getElementById('mines-count-label');
   if(slider) slider.value=minesCount;
@@ -5280,6 +5276,13 @@ async function cashoutMines(){
       pill.style.border='1px solid rgba(240,192,64,0.30)';
       pill.style.color='var(--gold)';
     }
+    showResultPopup({
+      won:true,
+      question:`Mines cashout after ${data.state.revealedSafeCount} safe ${data.state.revealedSafeCount===1?'tile':'tiles'} with ${data.state.mineCount} ${data.state.mineCount===1?'mine':'mines'}`,
+      side:'Cash Out',
+      betAmount:data.state.betAmount,
+      payout:data.payout
+    });
     minesState=null;
     updateMinesUI();
     loadMinesHistory();
