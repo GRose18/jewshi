@@ -1122,7 +1122,7 @@ let onlineMatchFocus=null;
 let onlineMatchFilter='all';
 let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
 function canUseAssistanceTab(){
-  return !!(currentUser&&currentUser.id==='GROSE');
+  return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
@@ -1496,6 +1496,17 @@ function renderAssistanceTab(){
         </div>
       </div>`;
     }).join('')}</div>`:`<p style="font-size:13px;color:var(--text3);">Live monitors will appear here once people are being observed.</p>`;
+  }else{
+    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">You can view the Assistance page because GROSE granted your account access. This page is informational on non-GROSE accounts.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Only GROSE can start or stop observer sessions, choose who is being assisted, and send voice guidance.</div></div>`;
+    helperForList.innerHTML=`<p style="font-size:13px;color:var(--text3);">No observer controls are available on this account.</p>`;
+    const session=getSeniorAssistanceSession()||assistancePendingSession;
+    currentSessionEl.innerHTML=session?`
+      <div class="assistance-item">
+        <div style="font-size:15px;font-weight:700;color:var(--text);">Support status</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px;">${esc(session.helper_name||'GROSE')} is currently connected to an observer session for this account.</div>
+      </div>`:`<p style="font-size:13px;color:var(--text3);">No observer session is active right now.</p>`;
+    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Live monitors and speech controls are only available to GROSE.</p>`;
   }
   recentSessionsEl.innerHTML=assistanceState.recentSessions.length?assistanceState.recentSessions.map(session=>`
     <div class="assistance-item">
@@ -2685,13 +2696,16 @@ async function renderAdminTab(){
   document.getElementById('admin-users-list').innerHTML=`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">${emailCount} user${emailCount!==1?'s':''} on email list. Check the box to include them in digest and password emails.</p>
     <table class="portfolio-table">
-      <thead><tr><th>Email List</th><th>Pop-up</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Email List</th><th>Pop-up</th><th>Assist</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
       <tbody>${users.map(u=>`<tr>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.on_email_list?'checked':''} onchange="toggleEmailList('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">`:'—'}
         </td>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.popup_access?'checked':''} onchange="togglePopupAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold);">`:'—'}
+        </td>
+        <td style="text-align:center;">
+          ${isGrose?`<input type="checkbox" ${u.assistance_access?'checked':''} onchange="toggleAssistanceAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:#39c9ff;">`:'—'}
         </td>
         <td style="color:var(--text)">${esc(u.name)||'—'}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
@@ -3265,6 +3279,17 @@ async function togglePopupAccess(userId,checkbox){
     const res=await api('POST','/users/'+userId+'/toggle-popup-access');
     checkbox.checked=!!res.popup_access;
     showToast(res.popup_access?'Pop-up access granted':'Pop-up access removed');
+    renderAdminTab();
+  }catch(e){
+    alert(e.message);
+    checkbox.checked=!checkbox.checked;
+  }
+}
+async function toggleAssistanceAccess(userId,checkbox){
+  try{
+    const res=await api('POST','/users/'+userId+'/toggle-assistance-access');
+    checkbox.checked=!!res.assistance_access;
+    showToast(res.assistance_access?'Assistance page access granted':'Assistance page access removed');
     renderAdminTab();
   }catch(e){
     alert(e.message);

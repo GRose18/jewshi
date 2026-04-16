@@ -275,7 +275,9 @@ async function hasPopupTabAccess(userId){
   return !!user?.popup_access;
 }
 async function hasAssistanceAccess(userId){
-  return userId==='GROSE';
+  if(userId==='GROSE') return true;
+  const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[userId]);
+  return !!user?.assistance_access;
 }
 async function hasAssistanceSessionVisibility(userId){
   if(await hasAssistanceAccess(userId)) return true;
@@ -1243,7 +1245,7 @@ app.post('/api/assistance/sessions/:id/mode', authMiddleware, requireAssistanceA
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
-app.post('/api/assistance/sessions/:id/event', authMiddleware, requireAssistanceAccess, async(req,res)=>{
+app.post('/api/assistance/sessions/:id/event', authMiddleware, requireAssistanceVisibility, async(req,res)=>{
   try{
     const session = await fetchAssistanceSession(req.params.id);
     if(!session) return res.status(404).json({error:'Session not found'});
