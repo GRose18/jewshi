@@ -2274,17 +2274,45 @@ app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
     const { plinkoOdds } = await getCasinoConfig();
 
     const multipliers = riskTables[risk];
-    const baseWeights = [1,8,28,56,70,56,28,8,1];
-    const oddsPower = (plinkoOdds - 100) / 25;
-    const weighted = multipliers.map((multiplier, idx)=>baseWeights[idx] * Math.pow(Math.max(multiplier, 0.05), oddsPower));
-    const totalWeight = weighted.reduce((sum, value)=>sum + value, 0);
-    let pick = Math.random() * totalWeight;
     let slotIndex = 0;
-    for(let i=0;i<weighted.length;i++){
-      pick -= weighted[i];
-      if(pick <= 0){
-        slotIndex = i;
-        break;
+    if(plinkoOdds<=0){
+      let worstValue = Infinity;
+      const worstIndexes = [];
+      multipliers.forEach((multiplier, idx)=>{
+        if(multiplier < worstValue){
+          worstValue = multiplier;
+          worstIndexes.length = 0;
+          worstIndexes.push(idx);
+        }else if(multiplier === worstValue){
+          worstIndexes.push(idx);
+        }
+      });
+      slotIndex = worstIndexes[Math.floor(Math.random()*worstIndexes.length)];
+    }else if(plinkoOdds>=200){
+      let bestValue = -Infinity;
+      const bestIndexes = [];
+      multipliers.forEach((multiplier, idx)=>{
+        if(multiplier > bestValue){
+          bestValue = multiplier;
+          bestIndexes.length = 0;
+          bestIndexes.push(idx);
+        }else if(multiplier === bestValue){
+          bestIndexes.push(idx);
+        }
+      });
+      slotIndex = bestIndexes[Math.floor(Math.random()*bestIndexes.length)];
+    }else{
+      const baseWeights = [1,8,28,56,70,56,28,8,1];
+      const oddsPower = (plinkoOdds - 100) / 50;
+      const weighted = multipliers.map((multiplier, idx)=>baseWeights[idx] * Math.pow(Math.max(multiplier, 0.05), oddsPower));
+      const totalWeight = weighted.reduce((sum, value)=>sum + value, 0);
+      let pick = Math.random() * totalWeight;
+      for(let i=0;i<weighted.length;i++){
+        pick -= weighted[i];
+        if(pick <= 0){
+          slotIndex = i;
+          break;
+        }
       }
     }
     const path = Array.from({length:8}, (_, idx)=>idx < slotIndex ? 1 : 0);
