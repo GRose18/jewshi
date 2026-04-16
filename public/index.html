@@ -75,11 +75,17 @@
   .topbar-brand{font-size:19px;font-weight:700;letter-spacing:-0.02em}
   .topbar-brand span{color:var(--accent)}
   .topbar-right{display:flex;align-items:center;gap:12px}
+  .topbar-action-wrap{position:relative}
   .credits-badge{background:var(--bg4);border:1px solid var(--border-hi);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;color:var(--green);cursor:pointer}
   .credits-badge:hover{border-color:var(--green)}
   .user-info{font-size:12px;color:var(--text3)}
   .btn-logout{background:transparent;border:1px solid var(--border-hi);color:var(--text2);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif}
   .btn-buy{background:var(--accent-bg);border:1px solid var(--accent);color:var(--accent);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+  .notif-bell{position:relative;background:var(--bg4);border:1px solid var(--border-hi);color:var(--text2);width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color 0.15s,color 0.15s}
+  .notif-bell:hover{border-color:var(--accent);color:var(--text)}
+  .notif-dot{position:absolute;top:3px;right:3px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--red);color:#fff;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;line-height:16px}
+  .notif-panel{position:absolute;top:48px;right:0;width:min(420px,calc(100vw - 24px));max-height:70vh;overflow-y:auto;background:var(--bg2);border:1px solid var(--border-hi);border-radius:18px;box-shadow:var(--shadow-lg);padding:16px;display:none;z-index:220}
+  .notif-panel.open{display:block}
   .nav-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 28px;overflow-x:auto}
   .nav-tab{padding:14px 16px;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.15s;white-space:nowrap}
   .nav-tab:hover{color:var(--text2)}
@@ -397,6 +403,22 @@
     <div class="topbar-right">
       <div class="credits-badge" onclick="openBuyCredits()">⬡ <span id="topbar-credits">0</span> credits</div>
       <button class="btn-buy" id="spin-topbar-btn" onclick="openSpinModal()" style="background:var(--accent-bg);border-color:var(--accent);color:var(--accent);">⬡ Daily Spin</button>
+      <div class="topbar-action-wrap">
+        <button class="notif-bell" id="notifications-bell" onclick="toggleNotificationsPanel(event)" aria-label="Open notifications">
+          <span style="font-size:16px;">🔔</span>
+          <span class="notif-dot" id="notifications-badge"></span>
+        </button>
+        <div class="notif-panel" id="notifications-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:var(--text);">Notifications</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:3px;">Bet wins, new messages, and JewGram activity.</div>
+            </div>
+            <button class="btn-admin btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
+          </div>
+          <div id="notifications-list"><div class="loading">Loading notifications…</div></div>
+        </div>
+      </div>
       <div class="user-info" id="topbar-user"></div>
       <button class="btn-logout" onclick="doLogout()">Sign out</button>
     </div>
@@ -409,7 +431,6 @@
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
-    <div class="nav-tab" data-tab="notifications" onclick="switchTab('notifications')">Notifications <span id="notifications-badge" style="display:none;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
     <div class="nav-tab" data-tab="suggestions" onclick="switchTab('suggestions')">Suggestions</div>
     <div class="nav-tab assistance-only" data-tab="assistance" onclick="switchTab('assistance')" style="display:none;">Assistance</div>
     <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
@@ -820,19 +841,6 @@
       </div>
     </div>
 
-    <div id="tab-notifications" class="tab-content">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
-        <div>
-          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Notification Center</h2>
-          <p style="font-size:12px;color:var(--text3);">Bet wins, new messages, and JewGram activity all show up here.</p>
-        </div>
-        <button class="btn-admin btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
-      </div>
-      <div class="panel">
-        <div id="notifications-list"><div class="loading">Loading notifications…</div></div>
-      </div>
-    </div>
-
     <div id="tab-suggestions" class="tab-content">
       <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Suggestions</h2>
       <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Send bug reports and product ideas to admin. Suggestions are not anonymous, and each account can send up to 2 per day.</p>
@@ -1216,6 +1224,7 @@ let onlineMatchFocus=null;
 let onlineMatchFilter='all';
 let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
 let notificationState={items:[],unreadCount:0};
+let notificationsPanelOpen=false;
 function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
@@ -1447,6 +1456,7 @@ function doLogout(){
   unreadPollInterval=null;resolutionPollInterval=null;
   clearInterval(notificationPollInterval);
   notificationPollInterval=null;
+  notificationsPanelOpen=false;
   clearInterval(popupPollInterval);
   popupPollInterval=null;
   hideIncomingPopup();
@@ -1480,6 +1490,7 @@ async function enterApp(){
   if(canUseAssistanceTab()) await loadAssistanceDirectory();
   startAssistanceStream();
   if(canUseAssistanceTab()) renderAssistanceTab();
+  document.addEventListener('click',handleGlobalClick,true);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeBetModal();closeBuyModal();closeProfileModal();closeSpinModal();}});
 }
 function updateTopbar(){
@@ -1501,7 +1512,6 @@ function switchTab(tab){
   if(tab==='leaderboard')renderLeaderboard();
   if(tab==='store')renderStore();
   if(tab==='messages')renderMessages();
-  if(tab==='notifications')renderNotifications();
   if(tab==='suggestions')renderSuggestions();
   if(tab==='assistance')renderAssistanceTab();
   if(tab==='admin')renderAdminTab();
@@ -3034,6 +3044,24 @@ function notificationLinkLabel(link){
   if(link==='feed') return 'Open JewGram';
   return 'Open';
 }
+function setNotificationsPanelOpen(open){
+  notificationsPanelOpen=!!open;
+  const panel=document.getElementById('notifications-panel');
+  if(panel) panel.classList.toggle('open',notificationsPanelOpen);
+}
+function toggleNotificationsPanel(event){
+  if(event) event.stopPropagation();
+  const next=!notificationsPanelOpen;
+  setNotificationsPanelOpen(next);
+  if(next) renderNotifications();
+}
+function handleGlobalClick(event){
+  const panel=document.getElementById('notifications-panel');
+  const bell=document.getElementById('notifications-bell');
+  if(!notificationsPanelOpen) return;
+  if(panel?.contains(event.target) || bell?.contains(event.target)) return;
+  setNotificationsPanelOpen(false);
+}
 async function renderNotifications(){
   const list=document.getElementById('notifications-list');
   if(!list) return;
@@ -3066,7 +3094,7 @@ function updateNotificationBadge(){
   const count=notificationState?.unreadCount||0;
   if(count>0){
     badge.textContent=count>99?'99+':count;
-    badge.style.display='inline';
+    badge.style.display='flex';
   }else{
     badge.style.display='none';
   }
@@ -3077,7 +3105,7 @@ async function pollNotifications(){
     const data=await api('GET','/notifications');
     notificationState=data||{items:[],unreadCount:0};
     updateNotificationBadge();
-    if(document.getElementById('tab-notifications')?.classList.contains('active')) renderNotifications();
+    if(notificationsPanelOpen) renderNotifications();
   }catch(e){}
 }
 async function openNotification(id,link){
@@ -3090,8 +3118,9 @@ async function openNotification(id,link){
     notificationState.unreadCount=Math.max(0,(notificationState.unreadCount||0)-1);
     updateNotificationBadge();
   }
+  setNotificationsPanelOpen(false);
   if(link) switchTab(link);
-  else if(document.getElementById('tab-notifications')?.classList.contains('active')) renderNotifications();
+  else if(notificationsPanelOpen) renderNotifications();
 }
 async function markAllNotificationsRead(){
   try{
@@ -3099,7 +3128,7 @@ async function markAllNotificationsRead(){
     notificationState.items=(notificationState.items||[]).map(item=>({...item,is_read:1}));
     notificationState.unreadCount=0;
     updateNotificationBadge();
-    if(document.getElementById('tab-notifications')?.classList.contains('active')) renderNotifications();
+    if(notificationsPanelOpen) renderNotifications();
   }catch(e){
     showToast(e.message);
   }
