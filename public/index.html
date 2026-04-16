@@ -260,6 +260,11 @@
   .assistance-helper-console{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
   .assistance-observer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
   .assistance-preview{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;border:1px solid var(--border);background:linear-gradient(135deg,#10131d,#191f2b)}
+  .assistance-preview-frame{width:100%;height:100%;border:0;border-radius:12px;background:#0f1117}
+  .assistance-modal{position:fixed;inset:0;z-index:6500;background:rgba(5,7,11,0.84);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:20px}
+  .assistance-modal-card{width:min(96vw,1500px);height:min(92vh,980px);background:var(--bg2);border:1px solid var(--border-hi);border-radius:22px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,0.35)}
+  .assistance-modal-stage{background:#0f1117;border:1px solid var(--border);border-radius:18px;overflow:hidden}
+  @media (max-width: 1100px){.assistance-modal-card{grid-template-columns:1fr;height:auto;max-height:92vh;overflow:auto}}
   :root{--assist-indicator-scale:.0001}
   #assistance-banner{
     transform:scale(var(--assist-indicator-scale));
@@ -803,7 +808,7 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
           <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Remote Assistance</h2>
-          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Observer mode lets you quietly monitor multiple people inside Jewshi and coach them with voice guidance.</p>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Open live Jewshi sessions, see the full page, click through the app, type into fields, and coach multiple people with voice guidance.</p>
         </div>
         <div class="assistance-badge active" id="assistance-connection-badge">Offline</div>
       </div>
@@ -811,7 +816,7 @@
         <div class="assistance-stack">
           <div class="panel">
             <div class="panel-title">Assist People</div>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Check one or more people, then start observer sessions for all of them at once.</p>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Check one or more people, then start live assistance sessions for all of them at once.</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
               <button class="btn-admin btn-sm" onclick="setAllAssistanceTargets(true)">Select All</button>
               <button class="btn-admin btn-sm" onclick="setAllAssistanceTargets(false)">Clear</button>
@@ -820,7 +825,7 @@
             <div id="assistance-contacts-list" class="assistance-list" style="margin-top:14px;"></div>
           </div>
           <div class="panel">
-            <div class="panel-title">Observer Mode</div>
+            <div class="panel-title">How It Works</div>
             <div id="assistance-incoming-list" class="assistance-list"></div>
           </div>
           <div class="panel">
@@ -1085,6 +1090,41 @@
   </div>
 </div>
 
+<div id="assistance-live-modal" class="assistance-modal" onclick="closeAssistanceLiveModal(event)">
+  <div class="assistance-modal-card">
+    <div class="assistance-modal-stage">
+      <iframe id="assistance-live-modal-frame" class="assistance-preview-frame" sandbox="" referrerpolicy="no-referrer"></iframe>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+        <div>
+          <div id="assistance-live-modal-name" style="font-size:18px;font-weight:800;color:var(--text);">Live Session</div>
+          <div id="assistance-live-modal-meta" style="font-size:12px;color:var(--text3);margin-top:4px;">Waiting for preview…</div>
+        </div>
+        <button class="btn-admin btn-sm btn-danger" onclick="closeAssistanceLiveModal()">Close</button>
+      </div>
+      <div class="assistance-item">
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Selected Target</div>
+        <div id="assistance-live-modal-target" style="font-size:13px;color:var(--text2);line-height:1.5;">Click inside the live screen to select or activate an element.</div>
+      </div>
+      <div class="assistance-item">
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Type Into Selected Field</div>
+        <input id="assistance-live-modal-input" type="text" placeholder="Type text for the selected field">
+        <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceInputForModal()">Send Text</button>
+      </div>
+      <div class="assistance-item">
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Voice Guidance</div>
+        <textarea id="assistance-live-modal-voice" placeholder="Explain what they should do next." style="width:100%;min-height:96px;resize:vertical;"></textarea>
+        <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceNarrationForModal()">Speak</button>
+      </div>
+      <div class="assistance-item">
+        <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Tips</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;">Click buttons, tabs, and inputs directly inside the live screen. When you click an input, it becomes the target for the text box above.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = window.location.hostname==='localhost'?'http://localhost:3000/api':'/api';
 const CREDITS_PER_DOLLAR=100;
@@ -1117,6 +1157,8 @@ let assistanceRuntimeBound=false;
 let assistancePreviewFrames={};
 let assistanceSnapshotInterval=null;
 let assistanceSnapshotBusy=false;
+let assistanceSelectedTargetsBySession={};
+let assistanceFullscreenSessionId=null;
 let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
@@ -1300,6 +1342,8 @@ function doLogout(){
   assistancePendingSession=null;
   assistancePickerMode=null;
   assistanceSelectedTarget=null;
+  assistanceSelectedTargetsBySession={};
+  assistanceFullscreenSessionId=null;
   assistancePreviewFrames={};
   if(assistanceSnapshotInterval){clearInterval(assistanceSnapshotInterval);assistanceSnapshotInterval=null;}
   hideAssistanceOverlay();
@@ -1440,7 +1484,8 @@ function renderAssistanceTab(){
   const currentSessionEl=document.getElementById('assistance-current-session');
   const helperConsoleEl=document.getElementById('assistance-helper-console');
   const recentSessionsEl=document.getElementById('assistance-recent-sessions');
-  if(currentUser.id==='GROSE'){
+  const canAssist=!!(currentUser.id==='GROSE'||currentUser.assistance_access);
+  if(canAssist){
     const accessibleUsers=assistanceDirectory;
     contactsList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
@@ -1456,13 +1501,13 @@ function renderAssistanceTab(){
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">No people are available to observe yet.</p>`;
-    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Observer mode starts immediately for approved accounts. There is no control handoff and no disruptive prompt. Assisted users stay in charge of Jewshi while you monitor and coach them by voice.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Assistance starts right away for any account you open here. You can click around Jewshi, type into fields, and use voice guidance from this dashboard while the user keeps a calm support experience.</div></div>`;
     helperForList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Open a live observer session and speak guidance without interrupting them.</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Open a live Jewshi session with full preview, click support, typing, and voice guidance.</div>
           </div>
           <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Assist</button>
         </div>
@@ -1474,9 +1519,9 @@ function renderAssistanceTab(){
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
           <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Live People</div><div style="font-size:24px;font-weight:800;color:var(--text);">${helperSessions.length}</div></div>
           <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Voice Guidance</div><div style="font-size:15px;font-weight:700;color:var(--green);">Enabled</div></div>
-          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Control</div><div style="font-size:15px;font-weight:700;color:var(--text2);">Off</div></div>
+          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Control</div><div style="font-size:15px;font-weight:700;color:var(--green);">On in Jewshi</div></div>
         </div>
-      </div>`:`<p style="font-size:13px;color:var(--text3);">No live observer sessions yet. Check a few people on the left and click Assist Selected.</p>`;
+      </div>`:`<p style="font-size:13px;color:var(--text3);">No live assistance sessions yet. Check a few people on the left and click Assist Selected.</p>`;
     helperConsoleEl.innerHTML=helperSessions.length?`<div class="assistance-observer-grid">${helperSessions.map(session=>{
       const preview=assistancePreviewFrames[session.id]||null;
       return `<div class="assistance-item">
@@ -1485,17 +1530,25 @@ function renderAssistanceTab(){
             <div style="font-size:15px;font-weight:700;color:var(--text);">${esc(session.senior_name)}</div>
             <div id="assist-preview-meta-${session.id}" style="font-size:12px;color:var(--text3);margin-top:4px;">${preview?.tab?`Viewing ${esc(preview.tab)} · `:''}${preview?.capturedAt?`Updated ${timeAgo(preview.capturedAt)}`:'Waiting for first preview...'}</div>
           </div>
-          <button class="btn-admin btn-sm btn-danger" onclick="stopAssistanceSessionById('${session.id}')">Stop</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="btn-admin btn-sm" onclick="openAssistanceLiveModal('${session.id}')">Full Screen</button>
+            <button class="btn-admin btn-sm btn-danger" onclick="stopAssistanceSessionById('${session.id}')">Stop</button>
+          </div>
         </div>
         ${renderAssistancePreviewMarkup(session.id, preview, session.senior_name)}
-        <div style="font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;">Send a calm spoken instruction. The assisted person keeps full control of the page.</div>
+        <div id="assist-target-display-${session.id}" style="font-size:12px;color:var(--text2);line-height:1.55;margin-top:10px;">Click inside the preview to pick a target.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+          <input id="assist-input-${session.id}" type="text" placeholder="Type into the selected field" style="flex:1;min-width:180px;">
+          <button class="btn-admin btn-sm" onclick="sendAssistanceInputForSession('${session.id}','assist-input-${session.id}')">Send Text</button>
+        </div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;">Clicking inside the preview activates Jewshi elements for them. Use the text box for fields, then send a calm spoken instruction if helpful.</div>
         <textarea id="assist-voice-${session.id}" placeholder="Example: The messages tab is open. Look near the left side for your conversations." style="width:100%;min-height:84px;resize:vertical;margin-top:10px;"></textarea>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
-          <div class="assistance-badge active">Observer</div>
+          <div class="assistance-badge active">Interactive</div>
           <button class="btn-admin btn-sm" onclick="sendAssistanceNarrationForSession('${session.id}')">Speak</button>
         </div>
       </div>`;
-    }).join('')}</div>`:`<p style="font-size:13px;color:var(--text3);">Live monitors will appear here once people are being observed.</p>`;
+    }).join('')}</div>`:`<p style="font-size:13px;color:var(--text3);">Live monitors will appear here once people are being assisted.</p>`;
   }else{
     contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">You can view the Assistance page because GROSE granted your account access. This page is informational on non-GROSE accounts.</div></div>`;
     incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Only GROSE can start or stop observer sessions, choose who is being assisted, and send voice guidance.</div></div>`;
@@ -1522,19 +1575,119 @@ function renderAssistanceTab(){
       </div>
     </div>
   `).join(''):`<p style="font-size:13px;color:var(--text3);">No completed sessions yet.</p>`;
+  if(canAssist){
+    getHelperAssistanceSessions().forEach(session=>{
+      updateAssistanceSessionTargetDisplay(session.id);
+      bindAssistancePreviewFrame(document.getElementById(`assist-preview-frame-${session.id}`), session.id);
+    });
+  }
 }
 function getSelectedAssistanceTargets(){
   return [...document.querySelectorAll('.assistance-target-check:checked')].map(el=>el.value).filter(Boolean);
 }
-function buildAssistancePreviewDoc(preview){
+function buildAssistancePreviewDoc(preview, scale='compact'){
   if(!preview||!preview.html||!preview.styles) return '';
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#0f1117;overflow:hidden;font-family:Inter,sans-serif;}body{transform:scale(.82);transform-origin:top left;width:122%;}${preview.styles}</style></head><body>${preview.html}</body></html>`;
+  const bodyScale=scale==='full'?'1':'0.82';
+  const bodyWidth=scale==='full'?'100%':'122%';
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#0f1117;overflow:auto;font-family:Inter,sans-serif;}body{transform:scale(${bodyScale});transform-origin:top left;width:${bodyWidth};min-height:100vh;}${preview.styles}</style></head><body>${preview.html}</body></html>`;
+}
+function describeAssistPreviewTarget(target){
+  if(!target) return null;
+  const el=target.closest('[id], .nav-tab, input, textarea, select, button, a');
+  if(!el) return null;
+  let selector='';
+  if(el.id) selector=`#${cssEscapeSafe(el.id)}`;
+  else if(el.dataset.tab) selector=`.nav-tab[data-tab="${cssEscapeSafe(el.dataset.tab)}"]`;
+  else if(el.getAttribute('placeholder')) selector=`${el.tagName.toLowerCase()}[placeholder="${String(el.getAttribute('placeholder')).replace(/"/g,'\\"')}"]`;
+  else if(el.getAttribute('onclick')) selector=`${el.tagName.toLowerCase()}[onclick="${String(el.getAttribute('onclick')).replace(/"/g,'\\"')}"]`;
+  else return null;
+  const label=(el.innerText||el.value||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.id||el.tagName).trim().slice(0,80);
+  const kind=(el.tagName||'').toLowerCase();
+  return {selector,label:label||'selected item',kind};
 }
 function renderAssistancePreviewMarkup(sessionId, preview, seniorName){
   if(!preview?.html||!preview?.styles){
     return `<div id="assist-preview-empty-${sessionId}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Jewshi preview from ${esc(seniorName)}.</div>`;
   }
-  return `<iframe id="assist-preview-frame-${sessionId}" class="assistance-preview" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(preview))}"></iframe>`;
+  return `<iframe id="assist-preview-frame-${sessionId}" class="assistance-preview assistance-preview-frame" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(preview))}"></iframe>`;
+}
+function updateAssistanceSessionTargetDisplay(sessionId){
+  const target=assistanceSelectedTargetsBySession[sessionId];
+  const cardDisplay=document.getElementById(`assist-target-display-${sessionId}`);
+  if(cardDisplay) cardDisplay.textContent=target?`Selected: ${target.label}`:'Click inside the preview to pick a target.';
+  if(assistanceFullscreenSessionId===sessionId){
+    const modalDisplay=document.getElementById('assistance-live-modal-target');
+    if(modalDisplay) modalDisplay.textContent=target?`Selected: ${target.label}`:'Click inside the live screen to select or activate an element.';
+  }
+}
+function bindAssistancePreviewFrame(frame, sessionId){
+  if(!frame) return;
+  frame.onload=()=>{
+    try{
+      const doc=frame.contentDocument;
+      if(!doc) return;
+      doc.body.style.cursor='crosshair';
+      doc.addEventListener('click', async(event)=>{
+        const targetInfo=describeAssistPreviewTarget(event.target);
+        if(!targetInfo) return;
+        event.preventDefault();
+        event.stopPropagation();
+        assistanceSelectedTargetsBySession[sessionId]=targetInfo;
+        updateAssistanceSessionTargetDisplay(sessionId);
+        try{
+          await sendAssistEventForSession(sessionId,'click',targetInfo);
+        }catch(e){showToast(e.message);}
+      }, true);
+    }catch(e){}
+  };
+}
+function openAssistanceLiveModal(sessionId){
+  const session=assistanceState.currentSessions.find(s=>s.id===sessionId);
+  if(!session) return;
+  assistanceFullscreenSessionId=sessionId;
+  const modal=document.getElementById('assistance-live-modal');
+  const frame=document.getElementById('assistance-live-modal-frame');
+  const name=document.getElementById('assistance-live-modal-name');
+  const meta=document.getElementById('assistance-live-modal-meta');
+  const preview=assistancePreviewFrames[sessionId]||null;
+  if(name) name.textContent=session.senior_name||'Live Session';
+  if(meta) meta.textContent=preview?.capturedAt?`Viewing ${preview.tab||'Jewshi'} · Updated ${timeAgo(preview.capturedAt)}`:'Waiting for preview…';
+  if(frame){
+    frame.srcdoc=buildAssistancePreviewDoc(preview,'full');
+    bindAssistancePreviewFrame(frame, sessionId);
+  }
+  updateAssistanceSessionTargetDisplay(sessionId);
+  if(modal) modal.style.display='flex';
+}
+function closeAssistanceLiveModal(event){
+  if(event&&event.target&&event.target.id!=='assistance-live-modal') return;
+  const modal=document.getElementById('assistance-live-modal');
+  if(modal) modal.style.display='none';
+  assistanceFullscreenSessionId=null;
+}
+async function sendAssistanceInputForSession(sessionId, inputId){
+  const input=document.getElementById(inputId);
+  const target=assistanceSelectedTargetsBySession[sessionId];
+  if(!input||!input.value.trim()){alert('Enter text first.');return;}
+  if(!target){alert('Click a field in the preview first.');return;}
+  try{
+    await sendAssistEventForSession(sessionId,'input',{selector:target.selector,label:target.label,value:input.value});
+    input.value='';
+  }catch(e){alert(e.message);}
+}
+async function sendAssistanceInputForModal(){
+  if(!assistanceFullscreenSessionId) return;
+  return sendAssistanceInputForSession(assistanceFullscreenSessionId,'assistance-live-modal-input');
+}
+async function sendAssistanceNarrationForModal(){
+  if(!assistanceFullscreenSessionId) return;
+  const input=document.getElementById('assistance-live-modal-voice');
+  if(!input||!input.value.trim()) return;
+  try{
+    await sendAssistEventForSession(assistanceFullscreenSessionId,'narration',{text:input.value.trim()});
+    input.value='';
+    showToast('Voice guidance sent.');
+  }catch(e){alert(e.message);}
 }
 function setAllAssistanceTargets(checked){
   document.querySelectorAll('.assistance-target-check').forEach(el=>{el.checked=!!checked;});
@@ -1550,7 +1703,7 @@ async function startAssistanceForSelected(){
     }catch(e){}
   }
   await loadAssistanceState();
-  if(started) showToast(`Started observer mode for ${started} ${started===1?'person':'people'}.`);
+  if(started) showToast(`Started assistance for ${started} ${started===1?'person':'people'}.`);
 }
 async function startAssistanceFromPicker(){
   showToast('Use the checkboxes on the left and click Assist Selected.');
@@ -1578,10 +1731,10 @@ async function removeAssistanceContact(contactId){
   }catch(e){alert(e.message);}
 }
 async function startAssistanceSession(seniorUserId, shouldToast=true){
-  if(currentUser?.id!=='GROSE'){alert('Only GROSE can choose who is being assisted.');return;}
+  if(!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access))){alert('This account does not have Assistance access.');return;}
   try{
-    await api('POST','/assistance/sessions',{seniorUserId,mode:'observe',guidedMode:false,voiceEnabled:true,recordingEnabled:true});
-    if(shouldToast) showToast('Observer session started.');
+    await api('POST','/assistance/sessions',{seniorUserId,mode:'assist',guidedMode:false,voiceEnabled:true,recordingEnabled:true});
+    if(shouldToast) showToast('Assistance session started.');
     await loadAssistanceState();
     switchTab('assistance');
   }catch(e){
@@ -1611,7 +1764,7 @@ async function stopAssistanceSessionById(sessionId){
   try{
     await api('POST',`/assistance/sessions/${sessionId}/stop`,{reason:'stopped from observer dashboard'});
     await loadAssistanceState();
-    showToast('Observer session stopped.');
+    showToast('Assistance session stopped.');
   }catch(e){alert(e.message);}
 }
 async function updateAssistanceMode(changes){
@@ -1794,6 +1947,18 @@ function syncAssistanceOverlay(){
     document.getElementById('assistance-banner-subtext').textContent='Voice guidance may play while you use Jewshi.';
   }
 }
+function getTransactionTypeLabel(tx){
+  if(!tx) return '';
+  if(tx.type==='admin_grant'){
+    const actor=(tx.description||'').split(' added ')[0]?.trim();
+    return actor||'Credit added';
+  }
+  if(tx.type==='admin_deduct'){
+    const actor=(tx.description||'').split(' removed ')[0]?.trim();
+    return actor||'Credit removed';
+  }
+  return tx.type;
+}
 function hideAssistanceOverlay(){
   const overlay=document.getElementById('assistance-overlay');
   if(overlay) overlay.style.display='none';
@@ -1854,18 +2019,59 @@ function applyAssistanceEvent(event, sessionId){
     const meta=document.getElementById(`assist-preview-meta-${session.id}`);
     if(frame){
       frame.srcdoc=buildAssistancePreviewDoc(assistancePreviewFrames[session.id]);
+      bindAssistancePreviewFrame(frame, session.id);
     }else if(empty&&(payload.html||payload.styles)){
       empty.outerHTML=`<iframe id="assist-preview-frame-${session.id}" class="assistance-preview" style="background:#0f1117;" sandbox="" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(assistancePreviewFrames[session.id]))}"></iframe>`;
+      bindAssistancePreviewFrame(document.getElementById(`assist-preview-frame-${session.id}`), session.id);
     }else if(document.getElementById('tab-assistance')?.classList.contains('active')){
       renderAssistanceTab();
     }
     if(meta) meta.textContent=`Viewing ${payload.tab||'Jewshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
+    if(assistanceFullscreenSessionId===session.id){
+      const modalFrame=document.getElementById('assistance-live-modal-frame');
+      const modalMeta=document.getElementById('assistance-live-modal-meta');
+      if(modalFrame){
+        modalFrame.srcdoc=buildAssistancePreviewDoc(assistancePreviewFrames[session.id],'full');
+        bindAssistancePreviewFrame(modalFrame, session.id);
+      }
+      if(modalMeta) modalMeta.textContent=`Viewing ${payload.tab||'Jewshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
+    }
     return;
   }
   if(event.event_type==='narration'&&session.senior_user_id===currentUser.id){
     showAssistanceMessage(payload.text||'');
     if(session.voice_enabled) speakAssistanceMessage(payload.text||'');
     return;
+  }
+  if(session.senior_user_id!==currentUser.id) return;
+  if(event.event_type==='navigate'){
+    if(payload.tab) switchTab(payload.tab);
+    return;
+  }
+  if(event.event_type==='click'){
+    const el=flashAssistanceHighlight(payload.selector)||resolveAssistanceTarget(payload.selector);
+    if(!el) return;
+    setTimeout(()=>{
+      try{
+        if(typeof el.focus==='function') el.focus({preventScroll:false});
+        el.click?.();
+      }catch(e){}
+    }, 160);
+    return;
+  }
+  if(event.event_type==='input'){
+    const el=flashAssistanceHighlight(payload.selector)||resolveAssistanceTarget(payload.selector);
+    if(!el) return;
+    setTimeout(()=>{
+      try{
+        if(typeof el.focus==='function') el.focus({preventScroll:false});
+        if('value' in el){
+          el.value=payload.value||'';
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+      }catch(e){}
+    }, 120);
   }
 }
 async function viewAssistanceRecording(sessionId){
@@ -2745,7 +2951,7 @@ async function renderAdminTab(){
     :`<table class="portfolio-table"><thead><tr><th>User</th><th>Amount</th><th>Type</th><th>Description</th><th>Time</th></tr></thead><tbody>${txns.slice(0,50).map(t=>`<tr>
       <td style="color:var(--text)">${esc(t.user_name||t.user_id)}</td>
       <td style="${t.amount>0?'color:var(--green)':'color:var(--red)'};font-weight:600;">${t.amount>0?'+':''}${t.amount}</td>
-      <td><span class="history-pill" style="background:var(--bg4);color:var(--text3)">${t.type}</span></td>
+      <td><span class="history-pill" style="background:var(--bg4);color:var(--text3)">${esc(getTransactionTypeLabel(t))}</span></td>
       <td style="color:var(--text3)">${esc(t.description)||'—'}</td>
       <td style="color:var(--text3)">${new Date(t.timestamp).toLocaleString()}</td>
     </tr>`).join('')}</tbody></table>`;

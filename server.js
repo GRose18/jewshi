@@ -1138,9 +1138,8 @@ app.delete('/api/assistance/contacts/:id', authMiddleware, requireAssistanceAcce
 });
 app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, async(req,res)=>{
   try{
-    if(req.user.id!=='GROSE') return res.status(403).json({error:'Only GROSE can choose who is being assisted'});
     const seniorUserId = String(req.body.seniorUserId || '').trim();
-    const mode = ['observe','guide'].includes(req.body.mode) ? req.body.mode : 'observe';
+    const mode = ['observe','guide','assist'].includes(req.body.mode) ? req.body.mode : 'assist';
     const guidedMode = toBool(req.body.guidedMode ?? false);
     const voiceEnabled = toBool(req.body.voiceEnabled ?? true);
     const recordingEnabled = toBool(req.body.recordingEnabled ?? true);
@@ -1148,15 +1147,7 @@ app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, as
     if(seniorUserId===req.user.id) return res.status(400).json({error:'Use another account as the helper'});
     const seniorUser = await db.get('SELECT id FROM users WHERE id=?',[seniorUserId]);
     if(!seniorUser) return res.status(404).json({error:'User not found'});
-    const managedByGrose = req.user.id==='GROSE';
-    if(!managedByGrose){
-      const relationship = await db.get(
-        `SELECT id FROM assistance_contacts
-         WHERE user_id=? AND helper_user_id=? AND status='approved'`,
-        [seniorUserId, req.user.id]
-      );
-      if(!relationship) return res.status(403).json({error:'That person has not approved you as a trusted helper'});
-    }
+    const managedByHelper = true;
     const seniorBusy = await db.get(
       `SELECT id FROM assistance_sessions
        WHERE status IN ('pending','active')
@@ -1169,10 +1160,10 @@ app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, as
     await db.run(`INSERT INTO assistance_sessions
       (id,senior_user_id,helper_user_id,status,mode,guided_mode,control_enabled,voice_enabled,recording_enabled,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [id, seniorUserId, req.user.id, managedByGrose?'active':'pending', mode, guidedMode?1:0, 0, voiceEnabled?1:0, recordingEnabled?1:0, Date.now()]);
-    if(managedByGrose){
+      [id, seniorUserId, req.user.id, managedByHelper?'active':'pending', mode, guidedMode?1:0, managedByHelper?1:0, voiceEnabled?1:0, recordingEnabled?1:0, Date.now()]);
+    if(managedByHelper){
       await db.run('UPDATE assistance_sessions SET started_at=? WHERE id=?',[Date.now(), id]);
-      await logAssistanceEvent(id, req.user.id, 'session_started', { mode, guidedMode, voiceEnabled, recordingEnabled, autoApproved:true, controlEnabled:false, observerOnly:true });
+      await logAssistanceEvent(id, req.user.id, 'session_started', { mode, guidedMode, voiceEnabled, recordingEnabled, autoApproved:true, controlEnabled:true, observerOnly:false });
       emitAssistance([seniorUserId, req.user.id], 'assistance-session', { kind:'started', sessionId:id });
     }else{
       await logAssistanceEvent(id, req.user.id, 'session_requested', { mode, guidedMode, voiceEnabled, recordingEnabled });
@@ -1306,8 +1297,11 @@ app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)
   try{
     const {amount}=req.body;
     if(!amount||amount<=0) return res.status(400).json({error:'Invalid amount'});
+    const actor=await db.get('SELECT id,name FROM users WHERE id=?',[req.user.id]);
+    const target=await db.get('SELECT id,name FROM users WHERE id=?',[req.params.id]);
+    if(!target) return res.status(404).json({error:'User not found'});
     await db.run('UPDATE users SET credits=credits+? WHERE id=?',[amount,req.params.id]);
-    await recordTx(req.params.id,amount,'admin_grant',null,`Admin added ${amount}`);
+    await recordTx(req.params.id,amount,'admin_grant',null,`${actor?.name||actor?.id||req.user.id} added ${amount} to ${target.name||target.id}`);
     res.json(await db.get('SELECT id,name,credits FROM users WHERE id=?',[req.params.id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1315,8 +1309,11 @@ app.post('/api/users/:id/remove-credits', authMiddleware, adminOnly, async(req,r
   try{
     const {amount}=req.body;
     if(!amount||amount<=0) return res.status(400).json({error:'Invalid amount'});
+    const actor=await db.get('SELECT id,name FROM users WHERE id=?',[req.user.id]);
+    const target=await db.get('SELECT id,name FROM users WHERE id=?',[req.params.id]);
+    if(!target) return res.status(404).json({error:'User not found'});
     await db.run('UPDATE users SET credits=MAX(0,credits-?) WHERE id=?',[amount,req.params.id]);
-    await recordTx(req.params.id,-amount,'admin_deduct',null,`Admin removed ${amount}`);
+    await recordTx(req.params.id,-amount,'admin_deduct',null,`${actor?.name||actor?.id||req.user.id} removed ${amount} from ${target.name||target.id}`);
     res.json(await db.get('SELECT id,name,credits FROM users WHERE id=?',[req.params.id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
