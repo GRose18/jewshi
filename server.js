@@ -2695,7 +2695,7 @@ app.post('/api/casino/mines/cashout', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/coinflip', authMiddleware, async(req,res)=>{
+app.post('/api/casino/coinflip', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const amount = Math.floor(Number(req.body.betAmount));
     const side = String(req.body.side||'heads').toLowerCase();
@@ -2724,7 +2724,7 @@ app.post('/api/casino/coinflip', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/roulette', authMiddleware, async(req,res)=>{
+app.post('/api/casino/roulette', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const amount = Math.floor(Number(req.body.betAmount));
     const betType = String(req.body.betType||'red').toLowerCase();
