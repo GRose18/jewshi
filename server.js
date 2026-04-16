@@ -634,7 +634,7 @@ async function finishBlackjackGame(userId){
   const game=blackjackGames.get(userId);
   if(!game) throw new Error('No active blackjack game');
   const { blackjackOdds } = await getCasinoConfig();
-  const dealerStandThreshold = clampNumber(Math.round(17 + ((blackjackOdds - 100) / 25)), 16, 18);
+  const dealerStandThreshold = clampNumber(Math.round(17 + ((blackjackOdds - 100) / 50)), 16, 18);
 
   while(handTotal(game.dealerCards)<dealerStandThreshold){
     game.dealerCards.push(game.deck.pop());
@@ -648,6 +648,17 @@ async function finishBlackjackGame(userId){
     const total=handTotal(hand);
     totalBet+=bet;
     if(total>21) return 'bust';
+    if(blackjackOdds<=0) return 'loss';
+    if(blackjackOdds>=200){
+      if(isBlackjack(hand)){
+        const payout=Math.floor(bet*2.5);
+        totalPayout+=payout;
+        return 'blackjack';
+      }
+      const payout=Math.floor(bet*1.5);
+      totalPayout+=payout;
+      return 'win';
+    }
     if(isBlackjack(hand)){
       const payout=Math.floor(bet*2.5);
       totalPayout+=payout;
@@ -702,9 +713,9 @@ async function getCasinoConfig() {
   const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds')");
   const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
   return {
-    diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 50, 150),
-    plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 50, 150),
-    blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 50, 150),
+    diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 0, 200),
+    plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 0, 200),
+    blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 0, 200),
   };
 }
 function authMiddleware(req,res,next) {
@@ -2020,9 +2031,9 @@ app.get('/api/casino/config', authMiddleware, async(req,res)=>{
 app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>{
   try{
     if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can update casino odds'});
-    const diceOdds = clampNumber(Math.round(Number(req.body.diceOdds ?? 100)), 50, 150);
-    const plinkoOdds = clampNumber(Math.round(Number(req.body.plinkoOdds ?? 100)), 50, 150);
-    const blackjackOdds = clampNumber(Math.round(Number(req.body.blackjackOdds ?? 100)), 50, 150);
+    const diceOdds = clampNumber(Math.round(Number(req.body.diceOdds ?? 100)), 0, 200);
+    const plinkoOdds = clampNumber(Math.round(Number(req.body.plinkoOdds ?? 100)), 0, 200);
+    const blackjackOdds = clampNumber(Math.round(Number(req.body.blackjackOdds ?? 100)), 0, 200);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_dice_odds',?)",[String(diceOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_plinko_odds',?)",[String(plinkoOdds)]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_blackjack_odds',?)",[String(blackjackOdds)]);
@@ -2223,11 +2234,15 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
     const { diceOdds } = await getCasinoConfig();
     const roll = parseFloat((Math.random()*100).toFixed(2));
-    const oddsBias = ((diceOdds - 100) / 50) * 5;
+    const oddsBias = ((diceOdds - 100) / 100) * 10;
     const adjustedTarget = direction==='over'
       ? clampNumber(Number(target) - oddsBias, 2, 98)
       : clampNumber(Number(target) + oddsBias, 2, 98);
-    const won = direction==='over' ? roll>adjustedTarget : roll<adjustedTarget;
+    const won = diceOdds<=0
+      ? false
+      : diceOdds>=200
+        ? true
+        : (direction==='over' ? roll>adjustedTarget : roll<adjustedTarget);
     const winChance = direction==='over' ? 100-target : target;
     const multiplier = 99/winChance;
     const payout = won ? Math.floor(amount*multiplier) : 0;
