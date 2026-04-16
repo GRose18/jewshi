@@ -896,7 +896,7 @@
                 <span style="font-size:12px;color:var(--text3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Mines</span>
                 <span id="mines-count-label" style="font-size:18px;font-weight:700;color:var(--text);">3</span>
               </div>
-              <input type="range" id="mines-count-slider" min="1" max="10" step="1" value="3" oninput="setMinesCount(this.value)" style="width:100%;accent-color:var(--red);margin-bottom:12px;">
+              <input type="range" id="mines-count-slider" min="1" max="24" step="1" value="3" oninput="setMinesCount(this.value)" style="width:100%;accent-color:var(--red);margin-bottom:12px;">
               <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
                 <button onclick="setMinesCount(1)" class="quick-btn">1</button>
                 <button onclick="setMinesCount(3)" class="quick-btn">3</button>
@@ -4895,7 +4895,7 @@ function initCasino(){
   const minesCard=document.getElementById('casino-mines-card');
   if(dreidelCard) dreidelCard.style.display=canUseOnlineMatches()?'block':'none';
   if(pokerCard) pokerCard.style.display=canUseOnlineMatches()?'block':'none';
-  if(minesCard) minesCard.style.display=canUseOnlineMatches()?'block':'none';
+  if(minesCard) minesCard.style.display='block';
 }
 
 function openDice(){
