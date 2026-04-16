@@ -1114,7 +1114,7 @@ let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
 function canUseAssistanceTab(){
-  return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
+  return !!(currentUser&&currentUser.id==='GROSE');
 }
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
@@ -1433,7 +1433,7 @@ function renderAssistanceTab(){
   const helperConsoleEl=document.getElementById('assistance-helper-console');
   const recentSessionsEl=document.getElementById('assistance-recent-sessions');
   if(currentUser.id==='GROSE'){
-    const accessibleUsers=assistanceDirectory.filter(user=>user.assistance_access);
+    const accessibleUsers=assistanceDirectory;
     contactsList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
@@ -1442,12 +1442,12 @@ function renderAssistanceTab(){
               <input type="checkbox" class="assistance-target-check" value="${esc(user.id)}" style="width:16px;height:16px;accent-color:#39c9ff;cursor:pointer;">
               <span>${esc(user.name)}</span>
             </label>
-            <div style="font-size:12px;color:var(--text3);margin-top:6px;">${user.grade?`${esc(user.grade)} · `:''}Observer-mode assistance is enabled for this account.</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:6px;">${user.grade?`${esc(user.grade)} · `:''}This account can be observed immediately.</div>
           </div>
           <div class="assistance-badge active">Enabled</div>
         </div>
       </div>
-    `).join(''):`<p style="font-size:13px;color:var(--text3);">Grant assistance access from the admin user table first.</p>`;
+    `).join(''):`<p style="font-size:13px;color:var(--text3);">No people are available to observe yet.</p>`;
     incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Observer mode starts immediately for approved accounts. There is no control handoff and no disruptive prompt. Assisted users stay in charge of Jewshi while you monitor and coach them by voice.</div></div>`;
     helperForList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
@@ -1459,7 +1459,7 @@ function renderAssistanceTab(){
           <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Assist</button>
         </div>
       </div>
-    `).join(''):`<p style="font-size:13px;color:var(--text3);">No users currently have managed assistance access.</p>`;
+    `).join(''):`<p style="font-size:13px;color:var(--text3);">No people are available yet.</p>`;
     const helperSessions=getHelperAssistanceSessions();
     currentSessionEl.innerHTML=helperSessions.length?`
       <div class="assistance-item">
@@ -1488,13 +1488,6 @@ function renderAssistanceTab(){
         </div>
       </div>`;
     }).join('')}</div>`:`<p style="font-size:13px;color:var(--text3);">Live monitors will appear here once people are being observed.</p>`;
-  }else{
-    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">This tab is informational while support is available on your account. You do not need to do anything here.</div></div>`;
-    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Voice guidance may play while you use Jewshi. You stay in control of the page.</div></div>`;
-    helperForList.innerHTML=`<p style="font-size:13px;color:var(--text3);">Only GROSE can start observer sessions.</p>`;
-    const session=getSeniorAssistanceSession()||assistancePendingSession;
-    currentSessionEl.innerHTML=session?`<div class="assistance-item"><div style="font-size:15px;font-weight:700;color:var(--text);">Support is available</div><div style="font-size:12px;color:var(--text3);margin-top:6px;">${esc(session.helper_name||'GROSE')} can quietly observe your Jewshi session and send voice guidance while you stay in control.</div></div>`:`<p style="font-size:13px;color:var(--text3);">No observer session is active right now.</p>`;
-    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">When support is active, spoken guidance will reach you automatically. There are no controls to manage here.</p>`;
   }
   recentSessionsEl.innerHTML=assistanceState.recentSessions.length?assistanceState.recentSessions.map(session=>`
     <div class="assistance-item">
@@ -2653,16 +2646,13 @@ async function renderAdminTab(){
   document.getElementById('admin-users-list').innerHTML=`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">${emailCount} user${emailCount!==1?'s':''} on email list. Check the box to include them in digest and password emails.</p>
     <table class="portfolio-table">
-      <thead><tr><th>Email List</th><th>Pop-up</th><th>Assist</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Email List</th><th>Pop-up</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
       <tbody>${users.map(u=>`<tr>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.on_email_list?'checked':''} onchange="toggleEmailList('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">`:'—'}
         </td>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.popup_access?'checked':''} onchange="togglePopupAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--gold);">`:'—'}
-        </td>
-        <td style="text-align:center;">
-          ${isGrose?`<input type="checkbox" ${u.assistance_access?'checked':''} onchange="toggleAssistanceAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:#39c9ff;">`:'—'}
         </td>
         <td style="color:var(--text)">${esc(u.name)||'—'}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
@@ -3236,17 +3226,6 @@ async function togglePopupAccess(userId,checkbox){
     const res=await api('POST','/users/'+userId+'/toggle-popup-access');
     checkbox.checked=!!res.popup_access;
     showToast(res.popup_access?'Pop-up access granted':'Pop-up access removed');
-    renderAdminTab();
-  }catch(e){
-    alert(e.message);
-    checkbox.checked=!checkbox.checked;
-  }
-}
-async function toggleAssistanceAccess(userId,checkbox){
-  try{
-    const res=await api('POST','/users/'+userId+'/toggle-assistance-access');
-    checkbox.checked=!!res.assistance_access;
-    showToast(res.assistance_access?'Assistance access granted':'Assistance access removed');
     renderAdminTab();
   }catch(e){
     alert(e.message);

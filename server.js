@@ -275,9 +275,7 @@ async function hasPopupTabAccess(userId){
   return !!user?.popup_access;
 }
 async function hasAssistanceAccess(userId){
-  if(userId==='GROSE') return true;
-  const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[userId]);
-  return !!user?.assistance_access;
+  return userId==='GROSE';
 }
 async function hasAssistanceSessionVisibility(userId){
   if(await hasAssistanceAccess(userId)) return true;
@@ -1089,7 +1087,7 @@ app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
   });
 });
 app.get('/api/assistance/users', authMiddleware, requireAssistanceAccess, async(req,res)=>{
-  res.json(await db.all('SELECT id,name,role,grade,assistance_access FROM users WHERE id!=? ORDER BY name ASC',[req.user.id]));
+  res.json(await db.all("SELECT id,name,role,grade FROM users WHERE id!=? AND role!='admin' ORDER BY name ASC",[req.user.id]));
 });
 app.get('/api/assistance/state', authMiddleware, async(req,res)=>{
   res.json(await getAssistanceStateForUser(req.user.id));
@@ -1146,9 +1144,9 @@ app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, as
     const recordingEnabled = toBool(req.body.recordingEnabled ?? true);
     if(!seniorUserId) return res.status(400).json({error:'Choose who you want to help'});
     if(seniorUserId===req.user.id) return res.status(400).json({error:'Use another account as the helper'});
-    const seniorUser = await db.get('SELECT id,assistance_access FROM users WHERE id=?',[seniorUserId]);
+    const seniorUser = await db.get('SELECT id FROM users WHERE id=?',[seniorUserId]);
     if(!seniorUser) return res.status(404).json({error:'User not found'});
-    const managedByGrose = req.user.id==='GROSE' && !!seniorUser.assistance_access;
+    const managedByGrose = req.user.id==='GROSE';
     if(!managedByGrose){
       const relationship = await db.get(
         `SELECT id FROM assistance_contacts
