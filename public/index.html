@@ -464,6 +464,10 @@
           <p style="font-size:12px;color:var(--text3);margin-top:3px;">Play games with your credits</p>
         </div>
       </div>
+      <div id="casino-disclaimer-banner" style="margin-bottom:42px;padding:14px 16px;border-radius:14px;border:1px solid rgba(240,192,64,0.22);background:rgba(240,192,64,0.08);color:var(--gold);font-size:15px;line-height:1.55;transform:scale(0.0000000001);transform-origin:top left;width:calc(100% / 0.0000000001);">
+        Casino disclaimer: odds may be increased or decreased by GROSE and are reflected live below. Edit this banner directly in the HTML if you want different wording or text size.
+      </div>
+      <div id="casino-odds-readout" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;"></div>
 
       <!-- GAME LOBBY -->
       <div id="casino-lobby" style="display:block;">
@@ -1225,6 +1229,7 @@ let onlineMatchFilter='all';
 let dreidelAnimation={matchId:null,spinning:false,face:'נ',label:'Nun'};
 let notificationState={items:[],unreadCount:0};
 let notificationsPanelOpen=false;
+let casinoConfig={diceOdds:100,plinkoOdds:100,blackjackOdds:100};
 function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
@@ -1488,6 +1493,7 @@ async function enterApp(){
   bindAssistanceRuntime();
   await loadAssistanceState(false);
   if(canUseAssistanceTab()) await loadAssistanceDirectory();
+  await loadCasinoConfig();
   startAssistanceStream();
   if(canUseAssistanceTab()) renderAssistanceTab();
   document.addEventListener('click',handleGlobalClick,true);
@@ -1499,6 +1505,28 @@ function updateTopbar(){
   document.getElementById('topbar-credits').textContent=currentUser.credits.toLocaleString();
 }
 async function refreshUser(){currentUser=await api('GET','/me');updateTopbar();}
+async function loadCasinoConfig(){
+  try{
+    casinoConfig=await api('GET','/casino/config');
+    renderCasinoConfigReadout();
+  }catch(e){}
+}
+function renderCasinoConfigReadout(){
+  const el=document.getElementById('casino-odds-readout');
+  if(!el) return;
+  const items=[
+    ['Dice',casinoConfig.diceOdds],
+    ['Plinko',casinoConfig.plinkoOdds],
+    ['Blackjack',casinoConfig.blackjackOdds],
+  ];
+  el.innerHTML=items.map(([label,value])=>{
+    const tone=value>100?'var(--green)':value<100?'var(--red)':'var(--text2)';
+    const bg=value>100?'rgba(0,208,132,0.10)':value<100?'rgba(255,69,96,0.10)':'var(--bg3)';
+    const border=value>100?'rgba(0,208,132,0.24)':value<100?'rgba(255,69,96,0.24)':'var(--border)';
+    const tag=value>100?'Increased':value<100?'Decreased':'Normal';
+    return `<div style="padding:8px 12px;border-radius:999px;background:${bg};border:1px solid ${border};font-size:12px;font-weight:700;color:${tone};">${label} Odds: ${value}% · ${tag}</div>`;
+  }).join('');
+}
 
 function switchTab(tab){
   if(tab==='assistance'&&!canUseAssistanceTab()) return;
@@ -3133,6 +3161,67 @@ async function markAllNotificationsRead(){
     showToast(e.message);
   }
 }
+function syncCasinoOddsSliders(){
+  const dice=document.getElementById('casino-dice-odds');
+  const plinko=document.getElementById('casino-plinko-odds');
+  const blackjack=document.getElementById('casino-blackjack-odds');
+  const diceValue=Number(dice?.value||casinoConfig.diceOdds);
+  const plinkoValue=Number(plinko?.value||casinoConfig.plinkoOdds);
+  const blackjackValue=Number(blackjack?.value||casinoConfig.blackjackOdds);
+  const diceBias=((diceValue-100)/50)*5;
+  const blackjackStand=Math.min(18,Math.max(16,Math.round(17+((blackjackValue-100)/25))));
+  const plinkoPower=(plinkoValue-100)/25;
+  if(document.getElementById('casino-dice-odds-value')) document.getElementById('casino-dice-odds-value').textContent=`${diceValue}%`;
+  if(document.getElementById('casino-plinko-odds-value')) document.getElementById('casino-plinko-odds-value').textContent=`${plinkoValue}%`;
+  if(document.getElementById('casino-blackjack-odds-value')) document.getElementById('casino-blackjack-odds-value').textContent=`${blackjackValue}%`;
+  if(document.getElementById('casino-dice-odds-detail')) document.getElementById('casino-dice-odds-detail').textContent=`Effective target shift: ${diceBias>=0?'+':''}${diceBias.toFixed(1)} points for players. Every 10 slider points changes the effective target by 1.0.`;
+  if(document.getElementById('casino-blackjack-odds-detail')) document.getElementById('casino-blackjack-odds-detail').textContent=`Dealer stands on ${blackjackStand}. 50-75 => 16, 100 => 17, 125-150 => 18.`;
+  if(document.getElementById('casino-plinko-odds-detail')) document.getElementById('casino-plinko-odds-detail').textContent=`Weighting power: ${plinkoPower>=0?'+':''}${plinkoPower.toFixed(2)}. Higher heavily favors better multipliers.`;
+  updatePlinkoOddsNumerics(plinkoValue);
+}
+function getPlinkoOddsSummary(slider, risk){
+  const tables={
+    low:[3.2,1.6,1.15,0.92,0.75,0.92,1.15,1.6,3.2],
+    medium:[6,2.5,1.2,0.8,0.4,0.8,1.2,2.5,6],
+    high:[12,4.5,1.6,0.6,0.2,0.6,1.6,4.5,12],
+  };
+  const base=[1,8,28,56,70,56,28,8,1];
+  const multipliers=tables[risk];
+  const power=(slider-100)/25;
+  const weighted=multipliers.map((multiplier, idx)=>base[idx]*Math.pow(Math.max(multiplier,0.05), power));
+  const total=weighted.reduce((sum, value)=>sum+value, 0);
+  const probs=weighted.map(value=>value/total);
+  const ev=probs.reduce((sum, probability, idx)=>sum + probability*multipliers[idx], 0);
+  const edge=(1-ev)*100;
+  return {ev, edge};
+}
+function updatePlinkoOddsNumerics(slider){
+  ['low','medium','high'].forEach(risk=>{
+    const el=document.getElementById(`casino-plinko-${risk}-summary`);
+    if(!el) return;
+    const {ev, edge}=getPlinkoOddsSummary(slider, risk);
+    el.textContent=`${risk.toUpperCase()}: EV ${ev.toFixed(3)}x · ${edge>=0?'House edge':'Player edge'} ${Math.abs(edge).toFixed(2)}%`;
+  });
+}
+async function saveCasinoOdds(){
+  try{
+    const next=await api('POST','/admin/casino/config',{
+      diceOdds:Number(document.getElementById('casino-dice-odds')?.value||casinoConfig.diceOdds),
+      plinkoOdds:Number(document.getElementById('casino-plinko-odds')?.value||casinoConfig.plinkoOdds),
+      blackjackOdds:Number(document.getElementById('casino-blackjack-odds')?.value||casinoConfig.blackjackOdds),
+    });
+    casinoConfig=next;
+    syncCasinoOddsSliders();
+    renderCasinoConfigReadout();
+    const status=document.getElementById('casino-odds-save-status');
+    if(status) status.textContent='Saved. The disclosed casino odds banner updates live for players.';
+    showToast('Casino odds updated.');
+  }catch(e){
+    const status=document.getElementById('casino-odds-save-status');
+    if(status) status.textContent=`Failed: ${e.message}`;
+    showToast(e.message);
+  }
+}
 async function renderSuggestions(){
   const identity=document.getElementById('suggestions-identity');
   const title=document.getElementById('suggestions-list-title');
@@ -3305,11 +3394,41 @@ async function renderAdminTab(){
 
   const cs=casinoData.stats||{};
   document.getElementById('admin-casino-stats').innerHTML=`
+    ${currentUser.id==='GROSE'?`
+      <div class="panel" style="margin-bottom:12px;background:rgba(124,106,247,0.08);border-color:rgba(124,106,247,0.22);">
+        <div class="panel-title">Disclosed Casino Odds</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">These sliders are disclosed in the casino banner. Higher means friendlier odds for players; lower means tougher odds.</p>
+        <div class="admin-form-row">
+          <div class="form-group">
+            <label>Dice Odds <span id="casino-dice-odds-value">${casinoConfig.diceOdds}%</span></label>
+            <input type="range" id="casino-dice-odds" min="50" max="150" step="1" value="${casinoConfig.diceOdds}" oninput="syncCasinoOddsSliders()">
+            <div id="casino-dice-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
+          </div>
+          <div class="form-group">
+            <label>Plinko Odds <span id="casino-plinko-odds-value">${casinoConfig.plinkoOdds}%</span></label>
+            <input type="range" id="casino-plinko-odds" min="50" max="150" step="1" value="${casinoConfig.plinkoOdds}" oninput="syncCasinoOddsSliders()">
+            <div id="casino-plinko-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
+            <div id="casino-plinko-low-summary" style="font-size:11px;color:var(--text3);margin-top:8px;"></div>
+            <div id="casino-plinko-medium-summary" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
+            <div id="casino-plinko-high-summary" style="font-size:11px;color:var(--text3);margin-top:4px;"></div>
+          </div>
+          <div class="form-group">
+            <label>Blackjack Odds <span id="casino-blackjack-odds-value">${casinoConfig.blackjackOdds}%</span></label>
+            <input type="range" id="casino-blackjack-odds" min="50" max="150" step="1" value="${casinoConfig.blackjackOdds}" oninput="syncCasinoOddsSliders()">
+            <div id="casino-blackjack-odds-detail" style="font-size:11px;color:var(--text3);margin-top:6px;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div id="casino-odds-save-status" style="font-size:12px;color:var(--text3);">Banner text/size stays editable directly in the casino HTML.</div>
+          <button class="btn-admin" onclick="saveCasinoOdds()">Save Odds</button>
+        </div>
+      </div>`:''}
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
       <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${cs.total_bets||0}</div></div>
       <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value" style="color:var(--accent)">⬡ ${(cs.total_wagered||0).toLocaleString()}</div></div>
       <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${-(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(-(cs.house_profit||0)).toLocaleString()}</div></div>
     </div>`;
+  if(currentUser.id==='GROSE') syncCasinoOddsSliders();
   document.getElementById('admin-casino-list').innerHTML=!casinoData.bets?.length?'<p style="color:var(--text3);font-size:13px;margin-top:12px;">No casino bets yet.</p>'
     :`<table class="portfolio-table" style="margin-top:14px;"><thead><tr><th>User</th><th>Game</th><th>Bet</th><th>Outcome</th><th>Profit</th><th>Time</th></tr></thead><tbody>${casinoData.bets.slice(0,50).map(b=>`<tr>
       <td style="color:var(--text)">${esc(b.user_name||b.user_id)}</td>
@@ -4400,6 +4519,7 @@ function getPlinkoBestMultiplier(){
 }
 
 function initCasino(){
+  renderCasinoConfigReadout();
   document.getElementById('casino-lobby').style.display='block';
   document.getElementById('casino-dice').style.display='none';
   document.getElementById('casino-blackjack').style.display='none';

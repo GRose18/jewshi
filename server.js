@@ -243,6 +243,9 @@ async function seedIfEmpty() {
     ['m2','Will the school play open on time?','School','open','2025-05-15',0,0,100,0,Date.now(),'binary']);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password','jewshi2025')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_dice_odds','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_plinko_odds','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_blackjack_odds','100')");
   console.log('Database seeded.');
 }
 
@@ -284,6 +287,9 @@ async function sendViaAppsScript(type, payload) {
 
 function generateId(p='') { return p+Date.now()+Math.random().toString(36).slice(2,6); }
 function generateToken() { return crypto.randomBytes(32).toString('hex'); }
+function clampNumber(value, min, max){
+  return Math.min(max, Math.max(min, value));
+}
 function issuePopupUnlockToken(userId){
   const token = crypto.randomBytes(24).toString('hex');
   popupAdminUnlocks.set(userId, { token, expiresAt: Date.now()+POPUP_UNLOCK_TTL_MS });
@@ -627,8 +633,10 @@ async function settleOnlineMatch(match, winnerId){
 async function finishBlackjackGame(userId){
   const game=blackjackGames.get(userId);
   if(!game) throw new Error('No active blackjack game');
+  const { blackjackOdds } = await getCasinoConfig();
+  const dealerStandThreshold = clampNumber(Math.round(17 + ((blackjackOdds - 100) / 25)), 16, 18);
 
-  while(handTotal(game.dealerCards)<17){
+  while(handTotal(game.dealerCards)<dealerStandThreshold){
     game.dealerCards.push(game.deck.pop());
   }
 
@@ -689,6 +697,15 @@ async function createNotification(userId, type, title, body, link='') {
   if(!userId) return;
   await db.run('INSERT INTO notifications (id,user_id,type,title,body,link,is_read,created_at) VALUES (?,?,?,?,?,?,0,?)',
     [generateId('ntf'),userId,type,String(title||'').slice(0,160),String(body||'').slice(0,500),String(link||'').slice(0,120),Date.now()]);
+}
+async function getCasinoConfig() {
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_dice_odds','casino_plinko_odds','casino_blackjack_odds')");
+  const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
+  return {
+    diceOdds: clampNumber(Number(settings.casino_dice_odds || 100), 50, 150),
+    plinkoOdds: clampNumber(Number(settings.casino_plinko_odds || 100), 50, 150),
+    blackjackOdds: clampNumber(Number(settings.casino_blackjack_odds || 100), 50, 150),
+  };
 }
 function authMiddleware(req,res,next) {
   const token = req.headers.authorization?.split(' ')[1];
@@ -1995,6 +2012,24 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
   }catch(e){console.error('Digest error:',e);res.status(500).json({error:e.message});}
 });
 
+app.get('/api/casino/config', authMiddleware, async(req,res)=>{
+  try{
+    res.json(await getCasinoConfig());
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can update casino odds'});
+    const diceOdds = clampNumber(Math.round(Number(req.body.diceOdds ?? 100)), 50, 150);
+    const plinkoOdds = clampNumber(Math.round(Number(req.body.plinkoOdds ?? 100)), 50, 150);
+    const blackjackOdds = clampNumber(Math.round(Number(req.body.blackjackOdds ?? 100)), 50, 150);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_dice_odds',?)",[String(diceOdds)]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_plinko_odds',?)",[String(plinkoOdds)]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('casino_blackjack_odds',?)",[String(blackjackOdds)]);
+    res.json(await getCasinoConfig());
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 
 // ── CANCEL BET ──
 app.post('/api/bets/:id/cancel', authMiddleware, async(req,res)=>{
@@ -2186,8 +2221,13 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
     if(target===undefined||target<2||target>98) return res.status(400).json({error:'Target must be between 2 and 98'});
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+    const { diceOdds } = await getCasinoConfig();
     const roll = parseFloat((Math.random()*100).toFixed(2));
-    const won = direction==='over' ? roll>target : roll<target;
+    const oddsBias = ((diceOdds - 100) / 50) * 5;
+    const adjustedTarget = direction==='over'
+      ? clampNumber(Number(target) - oddsBias, 2, 98)
+      : clampNumber(Number(target) + oddsBias, 2, 98);
+    const won = direction==='over' ? roll>adjustedTarget : roll<adjustedTarget;
     const winChance = direction==='over' ? 100-target : target;
     const multiplier = 99/winChance;
     const payout = won ? Math.floor(amount*multiplier) : 0;
@@ -2199,7 +2239,7 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
       [betId,req.user.id,'dice',amount,won?'win':'loss',payout,profit,Date.now()]);
     await recordTx(req.user.id, profit, 'casino_dice', betId, `Dice: ${direction} ${target} — ${won?'won':'lost'} ⬡${amount}`);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
-    res.json({roll, won, payout, profit, multiplier:parseFloat(multiplier.toFixed(4)), newBalance:Math.floor(updated.credits)});
+    res.json({roll, won, payout, profit, multiplier:parseFloat(multiplier.toFixed(4)), adjustedTarget:parseFloat(Number(adjustedTarget).toFixed(2)), newBalance:Math.floor(updated.credits)});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -2216,14 +2256,26 @@ app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
     if(!riskTables[risk]) return res.status(400).json({error:'Invalid risk'});
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
+    const { plinkoOdds } = await getCasinoConfig();
 
     const multipliers = riskTables[risk];
-    const path = [];
+    const baseWeights = [1,8,28,56,70,56,28,8,1];
+    const oddsPower = (plinkoOdds - 100) / 25;
+    const weighted = multipliers.map((multiplier, idx)=>baseWeights[idx] * Math.pow(Math.max(multiplier, 0.05), oddsPower));
+    const totalWeight = weighted.reduce((sum, value)=>sum + value, 0);
+    let pick = Math.random() * totalWeight;
     let slotIndex = 0;
-    for(let i=0;i<8;i++){
-      const goRight = Math.random() < 0.5;
-      path.push(goRight ? 1 : 0);
-      if(goRight) slotIndex++;
+    for(let i=0;i<weighted.length;i++){
+      pick -= weighted[i];
+      if(pick <= 0){
+        slotIndex = i;
+        break;
+      }
+    }
+    const path = Array.from({length:8}, (_, idx)=>idx < slotIndex ? 1 : 0);
+    for(let i=path.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [path[i],path[j]]=[path[j],path[i]];
     }
 
     const multiplier = multipliers[slotIndex];
