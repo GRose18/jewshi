@@ -1140,8 +1140,8 @@ app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, as
   try{
     if(req.user.id!=='GROSE') return res.status(403).json({error:'Only GROSE can choose who is being assisted'});
     const seniorUserId = String(req.body.seniorUserId || '').trim();
-    const mode = ['observe','guide','assist'].includes(req.body.mode) ? req.body.mode : 'guide';
-    const guidedMode = toBool(req.body.guidedMode ?? true);
+    const mode = ['observe','guide'].includes(req.body.mode) ? req.body.mode : 'observe';
+    const guidedMode = toBool(req.body.guidedMode ?? false);
     const voiceEnabled = toBool(req.body.voiceEnabled ?? true);
     const recordingEnabled = toBool(req.body.recordingEnabled ?? true);
     if(!seniorUserId) return res.status(400).json({error:'Choose who you want to help'});
@@ -1157,22 +1157,22 @@ app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, as
       );
       if(!relationship) return res.status(403).json({error:'That person has not approved you as a trusted helper'});
     }
-    const busy = await db.get(
+    const seniorBusy = await db.get(
       `SELECT id FROM assistance_sessions
        WHERE status IN ('pending','active')
-         AND (senior_user_id=? OR helper_user_id=? OR senior_user_id=? OR helper_user_id=?)
+         AND (senior_user_id=? OR helper_user_id=?)
        LIMIT 1`,
-      [seniorUserId, seniorUserId, req.user.id, req.user.id]
+      [seniorUserId, seniorUserId]
     );
-    if(busy) return res.status(400).json({error:'One of you is already in an assistance session'});
+    if(seniorBusy) return res.status(400).json({error:'That person is already in an assistance session'});
     const id = generateId('as');
     await db.run(`INSERT INTO assistance_sessions
       (id,senior_user_id,helper_user_id,status,mode,guided_mode,control_enabled,voice_enabled,recording_enabled,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [id, seniorUserId, req.user.id, managedByGrose?'active':'pending', mode, guidedMode?1:0, managedByGrose?1:0, voiceEnabled?1:0, recordingEnabled?1:0, Date.now()]);
+      [id, seniorUserId, req.user.id, managedByGrose?'active':'pending', mode, guidedMode?1:0, 0, voiceEnabled?1:0, recordingEnabled?1:0, Date.now()]);
     if(managedByGrose){
       await db.run('UPDATE assistance_sessions SET started_at=? WHERE id=?',[Date.now(), id]);
-      await logAssistanceEvent(id, req.user.id, 'session_started', { mode, guidedMode, voiceEnabled, recordingEnabled, autoApproved:true, controlEnabled:true });
+      await logAssistanceEvent(id, req.user.id, 'session_started', { mode, guidedMode, voiceEnabled, recordingEnabled, autoApproved:true, controlEnabled:false, observerOnly:true });
       emitAssistance([seniorUserId, req.user.id], 'assistance-session', { kind:'started', sessionId:id });
     }else{
       await logAssistanceEvent(id, req.user.id, 'session_requested', { mode, guidedMode, voiceEnabled, recordingEnabled });
@@ -1255,13 +1255,17 @@ app.post('/api/assistance/sessions/:id/event', authMiddleware, requireAssistance
     const type = String(req.body.type || '').trim();
     const payload = req.body.payload && typeof req.body.payload==='object' ? req.body.payload : {};
     const helperOnlyTypes = new Set(['cursor','highlight','narration','navigate','control_request','click','input','keypress']);
+    const seniorOnlyTypes = new Set(['snapshot']);
     const controlTypes = new Set(['click','input','keypress']);
+    const transientTypes = new Set(['cursor','snapshot']);
     if(!type) return res.status(400).json({error:'Missing event type'});
     if(helperOnlyTypes.has(type) && session.helper_user_id!==req.user.id)
       return res.status(403).json({error:'Only the helper can send that event'});
+    if(seniorOnlyTypes.has(type) && session.senior_user_id!==req.user.id)
+      return res.status(403).json({error:'Only the assisted user can send that event'});
     if(controlTypes.has(type) && !session.control_enabled)
       return res.status(403).json({error:'Control has not been granted'});
-    const event = type==='cursor'
+    const event = transientTypes.has(type)
       ? { id:generateId('ae'), session_id:session.id, actor_user_id:req.user.id, event_type:type, payload, created_at:Date.now() }
       : await logAssistanceEvent(session.id, req.user.id, type, payload);
     emitAssistance([session.senior_user_id, session.helper_user_id], 'assistance-event', {

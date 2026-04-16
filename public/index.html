@@ -258,6 +258,20 @@
   .assistance-badge.active{background:rgba(0,208,132,0.12);color:var(--green);border:1px solid rgba(0,208,132,0.24)}
   .assistance-badge.stopped{background:rgba(255,69,96,0.12);color:var(--red);border:1px solid rgba(255,69,96,0.24)}
   .assistance-helper-console{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .assistance-observer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .assistance-preview{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;border:1px solid var(--border);background:linear-gradient(135deg,#10131d,#191f2b)}
+  :root{--assist-indicator-scale:.0001}
+  #assistance-banner{
+    transform:scale(var(--assist-indicator-scale));
+    transform-origin:top left;
+    max-width:260px !important;
+    padding:8px 10px !important;
+    border-radius:14px !important;
+    box-shadow:0 8px 18px rgba(0,0,0,0.18) !important;
+    background:rgba(12,27,42,0.92) !important;
+  }
+  #assistance-banner-text{font-size:13px !important}
+  #assistance-banner-subtext{font-size:11px !important}
   @media (max-width: 900px){.assistance-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -782,26 +796,24 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
           <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Remote Assistance</h2>
-          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Trusted helpers can guide someone through Jewshi with visible cues, narration, and an instant stop button.</p>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Observer mode lets you quietly monitor multiple people inside Jewshi and coach them with voice guidance.</p>
         </div>
         <div class="assistance-badge active" id="assistance-connection-badge">Offline</div>
       </div>
       <div class="assistance-grid">
         <div class="assistance-stack">
           <div class="panel">
-            <div class="panel-title">Start Helping</div>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Pick someone you have granted assistance access to. Sessions will begin immediately for them.</p>
-            <div class="admin-form-row">
-              <div class="form-group">
-                <label>Choose a person</label>
-                <select id="assistance-helper-select"></select>
-              </div>
+            <div class="panel-title">Assist People</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Check one or more people, then start observer sessions for all of them at once.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+              <button class="btn-admin btn-sm" onclick="setAllAssistanceTargets(true)">Select All</button>
+              <button class="btn-admin btn-sm" onclick="setAllAssistanceTargets(false)">Clear</button>
             </div>
-            <button class="btn-admin" onclick="startAssistanceFromPicker()">Start Session</button>
+            <button class="btn-admin" onclick="startAssistanceForSelected()">Assist Selected</button>
             <div id="assistance-contacts-list" class="assistance-list" style="margin-top:14px;"></div>
           </div>
           <div class="panel">
-            <div class="panel-title">Managed Mode</div>
+            <div class="panel-title">Observer Mode</div>
             <div id="assistance-incoming-list" class="assistance-list"></div>
           </div>
           <div class="panel">
@@ -811,11 +823,11 @@
         </div>
         <div class="assistance-stack">
           <div class="panel">
-            <div class="panel-title">Current Session</div>
+            <div class="panel-title">Active Overview</div>
             <div id="assistance-current-session"></div>
           </div>
           <div class="panel">
-            <div class="panel-title">Helper Console</div>
+            <div class="panel-title">Live Monitors</div>
             <div id="assistance-helper-console"></div>
           </div>
           <div class="panel">
@@ -1095,6 +1107,9 @@ let assistanceLastCursorSentAt=0;
 let assistanceMessageTimeout=null;
 let assistanceHighlightTimeout=null;
 let assistanceRuntimeBound=false;
+let assistancePreviewFrames={};
+let assistanceSnapshotInterval=null;
+let assistanceSnapshotBusy=false;
 let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
@@ -1277,6 +1292,8 @@ function doLogout(){
   assistancePendingSession=null;
   assistancePickerMode=null;
   assistanceSelectedTarget=null;
+  assistancePreviewFrames={};
+  if(assistanceSnapshotInterval){clearInterval(assistanceSnapshotInterval);assistanceSnapshotInterval=null;}
   hideAssistanceOverlay();
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
   clearInterval(popupPollInterval);
@@ -1339,8 +1356,10 @@ function switchTab(tab){
 function bindAssistanceRuntime(){
   if(assistanceRuntimeBound) return;
   assistanceRuntimeBound=true;
-  document.addEventListener('mousemove',maybeShareAssistanceCursor,{passive:true});
-  document.addEventListener('click',handleAssistancePicker,true);
+  document.addEventListener('click',queueAssistanceSnapshot,true);
+  document.addEventListener('input',queueAssistanceSnapshot,true);
+  document.addEventListener('change',queueAssistanceSnapshot,true);
+  assistanceSnapshotInterval=setInterval(maybeShareAssistanceSnapshot,4000);
 }
 function closeAssistanceStream(){
   if(assistanceEventSource){
@@ -1380,6 +1399,12 @@ function cssEscapeSafe(value){
 function getPrimaryAssistanceSession(){
   return assistanceState.currentSessions.find(s=>s.status==='active')||assistanceState.currentSessions[0]||null;
 }
+function getHelperAssistanceSessions(){
+  return assistanceState.currentSessions.filter(s=>s.status==='active'&&s.helper_user_id===currentUser?.id);
+}
+function getSeniorAssistanceSession(){
+  return assistanceState.currentSessions.find(s=>s.status==='active'&&s.senior_user_id===currentUser?.id)||null;
+}
 function isManagedAssistanceSession(session){
   return !!(session&&session.helper_user_id==='GROSE'&&session.senior_user_id!=='GROSE');
 }
@@ -1391,16 +1416,16 @@ async function loadAssistanceDirectory(){
 async function loadAssistanceState(shouldRender=true){
   if(!authToken) return;
   assistanceState=await api('GET','/assistance/state');
-  assistanceActiveSession=getPrimaryAssistanceSession();
+  assistanceActiveSession=getSeniorAssistanceSession()||getPrimaryAssistanceSession();
   assistancePendingSession=assistanceState.currentSessions.find(s=>s.status==='pending'&&s.senior_user_id===currentUser?.id)||null;
+  const liveSessionIds=new Set(assistanceState.currentSessions.map(s=>s.id));
+  Object.keys(assistancePreviewFrames).forEach(sessionId=>{if(!liveSessionIds.has(sessionId)) delete assistancePreviewFrames[sessionId];});
   document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
   if(canUseAssistanceTab()&&(shouldRender||document.getElementById('tab-assistance')?.classList.contains('active'))) renderAssistanceTab();
   syncAssistanceOverlay();
 }
 function renderAssistanceTab(){
   if(!currentUser||!canUseAssistanceTab()) return;
-  const select=document.getElementById('assistance-helper-select');
-  if(!select) return;
   const contactsList=document.getElementById('assistance-contacts-list');
   const incomingList=document.getElementById('assistance-incoming-list');
   const helperForList=document.getElementById('assistance-helper-for-list');
@@ -1409,116 +1434,67 @@ function renderAssistanceTab(){
   const recentSessionsEl=document.getElementById('assistance-recent-sessions');
   if(currentUser.id==='GROSE'){
     const accessibleUsers=assistanceDirectory.filter(user=>user.assistance_access);
-    select.innerHTML=`<option value="">Select a person</option>`+accessibleUsers.map(user=>`<option value="${esc(user.id)}">${esc(user.name)}${user.grade?` (${esc(user.grade)})`:''}</option>`).join('');
     contactsList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
-            <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Remote assistance is enabled for this account.</div>
+            <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:var(--text);cursor:pointer;">
+              <input type="checkbox" class="assistance-target-check" value="${esc(user.id)}" style="width:16px;height:16px;accent-color:#39c9ff;cursor:pointer;">
+              <span>${esc(user.name)}</span>
+            </label>
+            <div style="font-size:12px;color:var(--text3);margin-top:6px;">${user.grade?`${esc(user.grade)} · `:''}Observer-mode assistance is enabled for this account.</div>
           </div>
           <div class="assistance-badge active">Enabled</div>
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">Grant assistance access from the admin user table first.</p>`;
-    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Managed mode removes trust, approval, and stop prompts for assisted users. When you start a session, control is live immediately and the other person only sees simple guidance on screen.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Observer mode starts immediately for approved accounts. There is no control handoff and no disruptive prompt. Assisted users stay in charge of Jewshi while you monitor and coach them by voice.</div></div>`;
     helperForList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Open a live session without asking them to approve anything.</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Open a live observer session and speak guidance without interrupting them.</div>
           </div>
-          <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Start Session</button>
+          <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Assist</button>
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">No users currently have managed assistance access.</p>`;
-  }else if(currentUser.assistance_access){
-    select.innerHTML=`<option value="">GROSE manages active assistance</option>`;
-    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">You can see this tab because Assistance access is enabled for your account, but only GROSE can choose who is actively being assisted.</div></div>`;
-    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">This tab is informational on non-GROSE accounts. Session assignment and remote control stay locked to GROSE.</div></div>`;
-    helperForList.innerHTML=`<p style="font-size:13px;color:var(--text3);">No start controls are available on this account.</p>`;
-  }else{
-    select.innerHTML=`<option value="">Assistance is active</option>`;
-    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">This tab is view-only while someone is helping you. You do not need to do anything here.</div></div>`;
-    incomingList.innerHTML='';
-    helperForList.innerHTML='';
-  }
-  const session=assistanceActiveSession||assistancePendingSession;
-  if(!session){
-    currentSessionEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">No active session. When a session starts, status, controls, and voice guidance options will appear here.</p>`;
-  }else{
-    const amSenior=session.senior_user_id===currentUser.id;
-    const managedSession=isManagedAssistanceSession(session);
-    const otherName=amSenior?session.helper_name:session.senior_name;
-    currentSessionEl.innerHTML=`
+    const helperSessions=getHelperAssistanceSessions();
+    currentSessionEl.innerHTML=helperSessions.length?`
       <div class="assistance-item">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Live People</div><div style="font-size:24px;font-weight:800;color:var(--text);">${helperSessions.length}</div></div>
+          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Voice Guidance</div><div style="font-size:15px;font-weight:700;color:var(--green);">Enabled</div></div>
+          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Control</div><div style="font-size:15px;font-weight:700;color:var(--text2);">Off</div></div>
+        </div>
+      </div>`:`<p style="font-size:13px;color:var(--text3);">No live observer sessions yet. Check a few people on the left and click Assist Selected.</p>`;
+    helperConsoleEl.innerHTML=helperSessions.length?`<div class="assistance-observer-grid">${helperSessions.map(session=>{
+      const preview=assistancePreviewFrames[session.id]||null;
+      return `<div class="assistance-item">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px;">
           <div>
-            <div style="font-size:15px;font-weight:700;color:var(--text);">${amSenior?'Receiving help from':'Helping'} ${esc(otherName)}</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:5px;">Mode: <strong style="color:var(--text);text-transform:capitalize;">${esc(session.mode)}</strong> · Guided ${session.guided_mode?'on':'off'} · Voice ${session.voice_enabled?'on':'off'} · Recording ${session.recording_enabled?'on':'off'}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);">${esc(session.senior_name)}</div>
+            <div id="assist-preview-meta-${session.id}" style="font-size:12px;color:var(--text3);margin-top:4px;">${preview?.tab?`Viewing ${esc(preview.tab)} · `:''}${preview?.capturedAt?`Updated ${timeAgo(preview.capturedAt)}`:'Waiting for first preview...'}</div>
           </div>
-          <div class="assistance-badge ${session.status==='active'?'active':'pending'}">${esc(session.status)}</div>
+          <button class="btn-admin btn-sm btn-danger" onclick="stopAssistanceSessionById('${session.id}')">Stop</button>
         </div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-          ${session.status==='pending'&&amSenior&&!managedSession?`<button class="btn-admin btn-sm" onclick="respondToAssistanceRequest(true)">Accept</button><button class="btn-admin btn-sm btn-danger" onclick="respondToAssistanceRequest(false)">Decline</button>`:''}
-          ${session.status==='active'&&!amSenior?`<button class="btn-admin btn-sm btn-danger" onclick="stopActiveAssistance('stopped from assistance tab')">Stop Session</button>`:''}
-          ${session.status==='active'&&amSenior&&!managedSession?`<button class="btn-admin btn-sm" onclick="toggleAssistanceControlGrant()">${session.control_enabled?'Revoke Control':'Allow Control'}</button>`:''}
+        ${preview?.image?`<img id="assist-preview-img-${session.id}" class="assistance-preview" src="${preview.image}" alt="Live Jewshi preview for ${esc(session.senior_name)}">`:`<div id="assist-preview-empty-${session.id}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Jewshi preview from ${esc(session.senior_name)}.</div>`}
+        <div style="font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;">Send a calm spoken instruction. The assisted person keeps full control of the page.</div>
+        <textarea id="assist-voice-${session.id}" placeholder="Example: The messages tab is open. Look near the left side for your conversations." style="width:100%;min-height:84px;resize:vertical;margin-top:10px;"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          <div class="assistance-badge active">Observer</div>
+          <button class="btn-admin btn-sm" onclick="sendAssistanceNarrationForSession('${session.id}')">Speak</button>
         </div>
-      </div>
-    `;
-  }
-  const helperSession=assistanceActiveSession&&assistanceActiveSession.status==='active'&&assistanceActiveSession.helper_user_id===currentUser.id?assistanceActiveSession:null;
-  const managedHelperSession=isManagedAssistanceSession(helperSession);
-  if(!helperSession||currentUser.id!=='GROSE'){
-    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Start a session as a trusted helper to unlock guided highlights, narration, and assisted interaction tools.</p>`;
+      </div>`;
+    }).join('')}</div>`:`<p style="font-size:13px;color:var(--text3);">Live monitors will appear here once people are being observed.</p>`;
   }else{
-    helperConsoleEl.innerHTML=`
-      <div class="assistance-helper-console">
-        <div class="assistance-item">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Session Mode</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'observe'})">Observe</button>
-            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'guide'})">Guide</button>
-            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({mode:'assist'})">Assist</button>
-          </div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-            ${managedHelperSession?'':`<button class="btn-admin btn-sm" onclick="sendAssistControlRequest()">Request Control</button>`}
-            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({guidedMode:${helperSession.guided_mode?0:1}})">${helperSession.guided_mode?'Turn Guided Mode Off':'Turn Guided Mode On'}</button>
-            <button class="btn-admin btn-sm" onclick="updateAssistanceMode({voiceEnabled:${helperSession.voice_enabled?0:1}})">${helperSession.voice_enabled?'Mute Voice':'Enable Voice'}</button>
-          </div>
-        </div>
-        <div class="assistance-item">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Guide To Tab</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('markets')">Markets</button>
-            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('feed')">JewGram</button>
-            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('portfolio')">My Bets</button>
-            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('messages')">Messages</button>
-            <button class="btn-admin btn-sm" onclick="sendAssistNavigate('assistance')">Assistance</button>
-          </div>
-        </div>
-        <div class="assistance-item">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Pick Something On Screen</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-admin btn-sm" onclick="armAssistancePicker('highlight')">Highlight Next Click</button>
-            <button class="btn-admin btn-sm" onclick="armAssistancePicker('click')">Click Next Pick</button>
-          </div>
-          <div id="assistance-target-display" style="font-size:12px;color:var(--text3);margin-top:10px;">No target selected.</div>
-        </div>
-        <div class="assistance-item">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Narration</div>
-          <textarea id="assistance-narration-text" placeholder="Explain what is happening in simple words." style="width:100%;min-height:90px;resize:vertical;"></textarea>
-          <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceNarration()">Speak Message</button>
-        </div>
-        <div class="assistance-item">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Type Into Selected Field</div>
-          <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px;">Click "Highlight Next Click" on the field you want, then type the text below and press "Send Text".</div>
-          <input id="assistance-input-text" type="text" placeholder="Enter text for the highlighted field">
-          <button class="btn-admin btn-sm" style="margin-top:10px;" onclick="sendAssistanceInput()">Send Text</button>
-        </div>
-      </div>
-    `;
+    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">This tab is informational while support is available on your account. You do not need to do anything here.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Voice guidance may play while you use Jewshi. You stay in control of the page.</div></div>`;
+    helperForList.innerHTML=`<p style="font-size:13px;color:var(--text3);">Only GROSE can start observer sessions.</p>`;
+    const session=getSeniorAssistanceSession()||assistancePendingSession;
+    currentSessionEl.innerHTML=session?`<div class="assistance-item"><div style="font-size:15px;font-weight:700;color:var(--text);">Support is available</div><div style="font-size:12px;color:var(--text3);margin-top:6px;">${esc(session.helper_name||'GROSE')} can quietly observe your Jewshi session and send voice guidance while you stay in control.</div></div>`:`<p style="font-size:13px;color:var(--text3);">No observer session is active right now.</p>`;
+    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">When support is active, spoken guidance will reach you automatically. There are no controls to manage here.</p>`;
   }
   recentSessionsEl.innerHTML=assistanceState.recentSessions.length?assistanceState.recentSessions.map(session=>`
     <div class="assistance-item">
@@ -1535,10 +1511,27 @@ function renderAssistanceTab(){
     </div>
   `).join(''):`<p style="font-size:13px;color:var(--text3);">No completed sessions yet.</p>`;
 }
+function getSelectedAssistanceTargets(){
+  return [...document.querySelectorAll('.assistance-target-check:checked')].map(el=>el.value).filter(Boolean);
+}
+function setAllAssistanceTargets(checked){
+  document.querySelectorAll('.assistance-target-check').forEach(el=>{el.checked=!!checked;});
+}
+async function startAssistanceForSelected(){
+  const targets=getSelectedAssistanceTargets();
+  if(!targets.length){alert('Check at least one person first.');return;}
+  let started=0;
+  for(const userId of targets){
+    try{
+      await startAssistanceSession(userId,false);
+      started++;
+    }catch(e){}
+  }
+  await loadAssistanceState();
+  if(started) showToast(`Started observer mode for ${started} ${started===1?'person':'people'}.`);
+}
 async function startAssistanceFromPicker(){
-  const select=document.getElementById('assistance-helper-select');
-  if(!select||!select.value){alert('Choose a person first.');return;}
-  await startAssistanceSession(select.value);
+  showToast('Use the checkboxes on the left and click Assist Selected.');
 }
 async function requestTrustedHelper(){
   const select=document.getElementById('assistance-helper-select');
@@ -1562,14 +1555,17 @@ async function removeAssistanceContact(contactId){
     await loadAssistanceState();
   }catch(e){alert(e.message);}
 }
-async function startAssistanceSession(seniorUserId){
+async function startAssistanceSession(seniorUserId, shouldToast=true){
   if(currentUser?.id!=='GROSE'){alert('Only GROSE can choose who is being assisted.');return;}
   try{
-    await api('POST','/assistance/sessions',{seniorUserId,mode:'guide',guidedMode:true,voiceEnabled:true,recordingEnabled:true});
-    showToast(currentUser?.id==='GROSE'?'Session started.':'Session request sent.');
+    await api('POST','/assistance/sessions',{seniorUserId,mode:'observe',guidedMode:false,voiceEnabled:true,recordingEnabled:true});
+    if(shouldToast) showToast('Observer session started.');
     await loadAssistanceState();
     switchTab('assistance');
-  }catch(e){alert(e.message);}
+  }catch(e){
+    if(shouldToast) alert(e.message);
+    throw e;
+  }
 }
 async function respondToAssistanceRequest(approve){
   const session=assistancePendingSession;
@@ -1588,6 +1584,14 @@ async function stopActiveAssistance(reason='stopped'){
     showToast('Assistance stopped.');
   }catch(e){alert(e.message);}
 }
+async function stopAssistanceSessionById(sessionId){
+  if(!sessionId) return;
+  try{
+    await api('POST',`/assistance/sessions/${sessionId}/stop`,{reason:'stopped from observer dashboard'});
+    await loadAssistanceState();
+    showToast('Observer session stopped.');
+  }catch(e){alert(e.message);}
+}
 async function updateAssistanceMode(changes){
   if(!assistanceActiveSession) return;
   try{
@@ -1602,6 +1606,10 @@ async function toggleAssistanceControlGrant(){
 async function sendAssistEvent(type,payload){
   if(!assistanceActiveSession||assistanceActiveSession.status!=='active') return;
   return api('POST',`/assistance/sessions/${assistanceActiveSession.id}/event`,{type,payload});
+}
+async function sendAssistEventForSession(sessionId,type,payload){
+  if(!sessionId) return;
+  return api('POST',`/assistance/sessions/${sessionId}/event`,{type,payload});
 }
 async function sendAssistNavigate(tab){
   try{
@@ -1680,6 +1688,15 @@ async function sendAssistanceNarration(){
     input.value='';
   }catch(e){alert(e.message);}
 }
+async function sendAssistanceNarrationForSession(sessionId){
+  const input=document.getElementById(`assist-voice-${sessionId}`);
+  if(!input||!input.value.trim()) return;
+  try{
+    await sendAssistEventForSession(sessionId,'narration',{text:input.value.trim()});
+    input.value='';
+    showToast('Voice guidance sent.');
+  }catch(e){alert(e.message);}
+}
 async function sendAssistanceInput(){
   const input=document.getElementById('assistance-input-text');
   if(!input||!input.value.trim()){alert('Enter text first.');return;}
@@ -1688,6 +1705,76 @@ async function sendAssistanceInput(){
     await sendAssistEvent('input',{selector:assistanceSelectedTarget.selector,label:assistanceSelectedTarget.label,value:input.value});
     input.value='';
   }catch(e){alert(e.message);}
+}
+function queueAssistanceSnapshot(){
+  const seniorSession=getSeniorAssistanceSession();
+  if(!seniorSession) return;
+  setTimeout(()=>{maybeShareAssistanceSnapshot();},120);
+}
+function getCurrentVisibleTabName(){
+  const activeTab=document.querySelector('.nav-tab.active');
+  return activeTab?.textContent?.trim()||'Jewshi';
+}
+async function createAssistanceSnapshotData(){
+  const activePane=document.querySelector('.tab-content.active');
+  const styleTag=document.querySelector('style');
+  if(!activePane||!styleTag) return null;
+  const clone=activePane.cloneNode(true);
+  clone.querySelectorAll('script').forEach(el=>el.remove());
+  clone.querySelectorAll('input, textarea, select').forEach((field,idx)=>{
+    const original=activePane.querySelectorAll('input, textarea, select')[idx];
+    if(!original) return;
+    if(field.tagName==='TEXTAREA') field.textContent=original.value||'';
+    else if(field.tagName==='SELECT') field.value=original.value||'';
+    else field.setAttribute('value', original.value||'');
+  });
+  const rect=activePane.getBoundingClientRect();
+  const width=Math.max(520, Math.min(900, Math.round(rect.width||900)));
+  const height=Math.max(320, Math.min(620, Math.round(window.innerHeight*0.62)));
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <foreignObject width="100%" height="100%">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden;background:#0f1117;">
+        <style>${styleTag.textContent}</style>
+        ${clone.outerHTML}
+      </div>
+    </foreignObject>
+  </svg>`;
+  const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  try{
+    const img=await new Promise((resolve,reject)=>{
+      const image=new Image();
+      image.onload=()=>resolve(image);
+      image.onerror=reject;
+      image.src=url;
+    });
+    const canvas=document.createElement('canvas');
+    canvas.width=width;
+    canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,width,height);
+    return {
+      image:canvas.toDataURL('image/jpeg',0.68),
+      tab:getCurrentVisibleTabName(),
+      capturedAt:Date.now(),
+    };
+  }catch(e){
+    return null;
+  }finally{
+    URL.revokeObjectURL(url);
+  }
+}
+async function maybeShareAssistanceSnapshot(){
+  const seniorSession=getSeniorAssistanceSession();
+  if(!seniorSession||assistanceSnapshotBusy) return;
+  assistanceSnapshotBusy=true;
+  try{
+    const preview=await createAssistanceSnapshotData();
+    if(preview) await sendAssistEventForSession(seniorSession.id,'snapshot',preview);
+  }catch(e){}
+  finally{
+    assistanceSnapshotBusy=false;
+  }
 }
 function syncAssistanceOverlay(){
   const overlay=document.getElementById('assistance-overlay');
@@ -1704,22 +1791,13 @@ function syncAssistanceOverlay(){
     return;
   }
   overlay.style.display='block';
-  shell.style.opacity=active?'1':'0';
+  shell.style.opacity='0';
   banner.style.display=active?'block':'none';
-  requestCard.style.display=pending&&!managedSession?'block':'none';
+  requestCard.style.display='none';
   controlCard.style.display='none';
-  if(pending){
-    document.getElementById('assistance-request-text').textContent=`${pending.helper_name} wants to help you inside Jewshi.`;
-  }
   if(active){
-    document.getElementById('assistance-banner-text').textContent=managedSession?`${active.helper_name} is guiding the page for you`:`${active.helper_name} is currently assisting you`;
-    document.getElementById('assistance-banner-subtext').textContent=managedSession
-      ?`Please listen for voice guidance while the page moves for you.`
-      :`Mode: ${active.mode} · Guided ${active.guided_mode?'on':'off'} · Recording ${active.recording_enabled?'on':'off'}`;
-    document.getElementById('assistance-control-status').textContent=active.control_enabled
-      ?'Helper control is currently allowed for clicks and typing inside Jewshi.'
-      :'Helper control is off. Highlights and narration still work.';
-    document.getElementById('assistance-control-toggle-btn').textContent=active.control_enabled?'Revoke Control':'Allow Control';
+    document.getElementById('assistance-banner-text').textContent='Guided support active';
+    document.getElementById('assistance-banner-subtext').textContent='Voice guidance may play while you use Jewshi.';
   }
 }
 function hideAssistanceOverlay(){
@@ -1772,53 +1850,28 @@ function flashAssistanceHighlight(selector){
 }
 function applyAssistanceEvent(event, sessionId){
   if(!event||!currentUser) return;
-  const session=assistanceActiveSession&&assistanceActiveSession.id===sessionId?assistanceActiveSession:null;
-  if(sessionId&&sessionId!==assistanceActiveSession?.id&&sessionId!==assistancePendingSession?.id) return;
+  const session=assistanceState.currentSessions.find(s=>s.id===sessionId)||null;
+  if(!session) return;
   const payload=event.payload||{};
-  if(event.event_type==='cursor'&&assistanceActiveSession?.senior_user_id===currentUser.id){
-    const cursor=document.getElementById('assistance-helper-cursor');
-    if(cursor){
-      cursor.style.display='block';
-      cursor.style.left=`${(payload.x||0)*window.innerWidth}px`;
-      cursor.style.top=`${(payload.y||0)*window.innerHeight}px`;
+  if(event.event_type==='snapshot'&&session.helper_user_id===currentUser.id){
+    assistancePreviewFrames[session.id]={image:payload.image||'',tab:payload.tab||'Jewshi',capturedAt:payload.capturedAt||Date.now()};
+    const img=document.getElementById(`assist-preview-img-${session.id}`);
+    const empty=document.getElementById(`assist-preview-empty-${session.id}`);
+    const meta=document.getElementById(`assist-preview-meta-${session.id}`);
+    if(img){
+      img.src=payload.image||img.src;
+    }else if(empty&&payload.image){
+      empty.outerHTML=`<img id="assist-preview-img-${session.id}" class="assistance-preview" src="${payload.image}" alt="Live Jewshi preview">`;
+    }else if(document.getElementById('tab-assistance')?.classList.contains('active')){
+      renderAssistanceTab();
     }
+    if(meta) meta.textContent=`Viewing ${payload.tab||'Jewshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
     return;
   }
-  if(event.event_type==='highlight'){
-    flashAssistanceHighlight(payload.selector);
-    showAssistanceMessage(`Highlighted: ${payload.label||'selected item'}`);
-    return;
-  }
-  if(event.event_type==='narration'){
+  if(event.event_type==='narration'&&session.senior_user_id===currentUser.id){
     showAssistanceMessage(payload.text||'');
-    if(assistanceActiveSession?.voice_enabled) speakAssistanceMessage(payload.text||'');
+    if(session.voice_enabled) speakAssistanceMessage(payload.text||'');
     return;
-  }
-  if(event.event_type==='navigate'&&payload.tab){
-    switchTab(payload.tab);
-    showAssistanceMessage(`Opening ${payload.tab}.`);
-    return;
-  }
-  if(event.event_type==='control_request'&&assistanceActiveSession?.senior_user_id===currentUser.id){
-    showAssistanceMessage(payload.text||'Your helper requested control.');
-    return;
-  }
-  if(event.event_type==='click'&&assistanceActiveSession?.senior_user_id===currentUser.id){
-    const el=flashAssistanceHighlight(payload.selector);
-    if(!el) return;
-    const perform=()=>{ if(typeof el.click==='function') el.click(); };
-    setTimeout(perform, assistanceActiveSession?.guided_mode?700:150);
-    return;
-  }
-  if(event.event_type==='input'&&assistanceActiveSession?.senior_user_id===currentUser.id){
-    const el=flashAssistanceHighlight(payload.selector);
-    if(!el||!('value' in el)||el.type==='password') return;
-    setTimeout(()=>{
-      el.focus();
-      el.value=payload.value||'';
-      el.dispatchEvent(new Event('input',{bubbles:true}));
-      el.dispatchEvent(new Event('change',{bubbles:true}));
-    }, assistanceActiveSession?.guided_mode?700:100);
   }
 }
 async function viewAssistanceRecording(sessionId){
