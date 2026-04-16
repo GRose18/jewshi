@@ -1089,7 +1089,11 @@ app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
   });
 });
 app.get('/api/assistance/users', authMiddleware, requireAssistanceAccess, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,role,grade FROM users WHERE id!=? ORDER BY role DESC, name ASC",[req.user.id]));
+  const users=await db.all("SELECT id,name,role,grade FROM users WHERE id!=? ORDER BY role DESC, name ASC",[req.user.id]);
+  res.json(users.map(user=>({
+    ...user,
+    online: !!assistanceStreams.get(user.id)?.size,
+  })));
 });
 app.get('/api/assistance/state', authMiddleware, async(req,res)=>{
   res.json(await getAssistanceStateForUser(req.user.id));

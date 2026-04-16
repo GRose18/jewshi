@@ -1497,7 +1497,7 @@ function renderAssistanceTab(){
             </label>
             <div style="font-size:12px;color:var(--text3);margin-top:6px;">${user.grade?`${esc(user.grade)} · `:''}This account can be observed immediately.</div>
           </div>
-          <div class="assistance-badge active">Enabled</div>
+          <div class="assistance-badge ${user.online?'active':'stopped'}">${user.online?'Online':'Offline'}</div>
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">No people are available to observe yet.</p>`;
@@ -1507,9 +1507,12 @@ function renderAssistanceTab(){
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Open a live Jewshi session with full preview, click support, typing, and voice guidance.</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">${user.online?'Currently in Jewshi and ready to assist right away.':'Not currently online in Jewshi.'}</div>
           </div>
-          <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Assist</button>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+            <div class="assistance-badge ${user.online?'active':'stopped'}">${user.online?'Online':'Offline'}</div>
+            <button class="btn-admin btn-sm" onclick="startAssistanceSession('${user.id}')">Assist</button>
+          </div>
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">No people are available yet.</p>`;
