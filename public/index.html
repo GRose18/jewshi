@@ -1519,6 +1519,13 @@ function renderAssistanceTab(){
     const helperSessions=getHelperAssistanceSessions();
     currentSessionEl.innerHTML=helperSessions.length?`
       <div class="assistance-item">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);">Live assistance controls</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">Stop every active assistance session from one place.</div>
+          </div>
+          <button class="btn-admin btn-sm btn-danger" onclick="stopAllHelperAssistanceSessions()">Close All Assistances</button>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
           <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Live People</div><div style="font-size:24px;font-weight:800;color:var(--text);">${helperSessions.length}</div></div>
           <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Voice Guidance</div><div style="font-size:15px;font-weight:700;color:var(--green);">Enabled</div></div>
@@ -1808,6 +1815,21 @@ async function stopAssistanceSessionById(sessionId){
     await loadAssistanceState();
     showToast('Assistance session stopped.');
   }catch(e){alert(e.message);}
+}
+async function stopAllHelperAssistanceSessions(){
+  const helperSessions=getHelperAssistanceSessions();
+  if(!helperSessions.length) return;
+  const results=await Promise.allSettled(helperSessions.map(session=>
+    api('POST',`/assistance/sessions/${session.id}/stop`,{reason:'stopped from observer dashboard'})
+  ));
+  const stopped=results.filter(result=>result.status==='fulfilled').length;
+  await loadAssistanceState();
+  if(stopped){
+    showToast(`Stopped ${stopped} assistance ${stopped===1?'session':'sessions'}.`);
+    return;
+  }
+  const firstError=results.find(result=>result.status==='rejected');
+  if(firstError?.reason?.message) alert(firstError.reason.message);
 }
 async function updateAssistanceMode(changes){
   if(!assistanceActiveSession) return;
@@ -2931,6 +2953,10 @@ async function renderAdminTab(){
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
     <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${stats.totalBets}</div></div>
     <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${stats.pendingVol}</div></div>`;
+  const mailWarning=(!stats.mailConfigured&&currentUser.id==='GROSE')
+    ?`<div style="margin:14px 0 0;padding:12px 14px;border:1px solid rgba(255,87,87,0.22);border-radius:12px;background:rgba(120,16,16,0.18);color:#ffd2d2;font-size:12px;line-height:1.6;">Email delivery is not configured on the running server. Set <code>APPS_SCRIPT_URL</code> in the server environment and restart before using forgot password or digest emails.</div>`
+    :'';
+  document.getElementById('admin-stats').insertAdjacentHTML('beforeend', mailWarning);
 
   const grosePanel=document.getElementById('grose-only-panel');
   if(currentUser.id==='GROSE'){

@@ -251,12 +251,18 @@ async function appendToSheet(name, email, grade) {
 async function sendViaAppsScript(type, payload) {
   try {
     if (!process.env.APPS_SCRIPT_URL) { console.log('[Email] APPS_SCRIPT_URL not set, skipping'); return 0; }
-    const fetch = (...args) => import('node-fetch').then(({default:f})=>f(...args));
-    const res = await fetch(process.env.APPS_SCRIPT_URL, {
+    const fetchImpl = globalThis.fetch
+      ? globalThis.fetch.bind(globalThis)
+      : (...args) => import('node-fetch').then(({default:f})=>f(...args));
+    const res = await fetchImpl(process.env.APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, ...payload }),
     });
+    if (!res.ok) {
+      const text = await res.text().catch(()=>'');
+      throw new Error(`Apps Script request failed (${res.status})${text ? `: ${text.slice(0,200)}` : ''}`);
+    }
     const data = await res.json();
     return data.sent || 0;
   } catch(e) { console.error('[Email] Error:', e.message); return 0; }
@@ -279,7 +285,41 @@ async function hasAssistanceAccess(userId){
   const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[userId]);
   return !!user?.assistance_access;
 }
+function isAssistanceUserOnline(userId){
+  return !!assistanceStreams.get(userId)?.size;
+}
+function isAssistanceSessionLive(session, now=Date.now()){
+  if(!session) return false;
+  const seniorOnline = isAssistanceUserOnline(session.senior_user_id);
+  const helperOnline = isAssistanceUserOnline(session.helper_user_id);
+  if(session.status==='active') return seniorOnline && helperOnline;
+  if(session.status==='pending'){
+    const recentPending = (now - Number(session.created_at||0)) < 10*60*1000;
+    return recentPending && (seniorOnline || helperOnline);
+  }
+  return false;
+}
+async function cleanupStaleAssistanceSessions(whereClause='1=1', args=[]){
+  const sessions = await db.all(
+    `SELECT id, senior_user_id, helper_user_id, status, created_at
+     FROM assistance_sessions
+     WHERE status IN ('pending','active')
+       AND (${whereClause})`,
+    args
+  );
+  const now = Date.now();
+  const staleSessions = sessions.filter(session=>!isAssistanceSessionLive(session, now));
+  for(const session of staleSessions){
+    await db.run(
+      'UPDATE assistance_sessions SET status=?, ended_at=?, stop_reason=? WHERE id=? AND status IN (\'pending\',\'active\')',
+      ['stopped', now, 'connection expired', session.id]
+    );
+  }
+  const staleIds = new Set(staleSessions.map(session=>session.id));
+  return sessions.filter(session=>!staleIds.has(session.id));
+}
 async function hasAssistanceSessionVisibility(userId){
+  await cleanupStaleAssistanceSessions('senior_user_id=?', [userId]);
   if(await hasAssistanceAccess(userId)) return true;
   const session = await db.get(
     `SELECT id FROM assistance_sessions
@@ -734,6 +774,7 @@ async function emitAssistanceSessionRefresh(sessionId, type='assistance-session'
   emitAssistance([session.senior_user_id, session.helper_user_id], type, { sessionId, ...extra });
 }
 async function getAssistanceStateForUser(userId){
+  await cleanupStaleAssistanceSessions('(senior_user_id=? OR helper_user_id=?)', [userId, userId]);
   const [contacts, incomingRequests, helperFor, currentSessions, recentSessions] = await Promise.all([
     db.all(`SELECT c.*,u.name as helper_name,u.role as helper_role,u.grade as helper_grade
       FROM assistance_contacts c
@@ -1042,9 +1083,17 @@ app.post('/api/auth/forgot-password', async(req,res)=>{
     const user=await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email?.trim()]);
     if(user){
       const token=generateToken();
+      const resetUrl=`${CLIENT_URL}/reset-password.html?token=${token}`;
       await db.run('INSERT INTO password_reset_tokens (token,user_id,expires_at,used,created_at) VALUES (?,?,?,0,?)',
         [token,user.id,Date.now()+3600000,Date.now()]);
-      console.log(`[Dev] Reset: ${CLIENT_URL}/reset-password.html?token=${token}`);
+      const sent=await sendViaAppsScript('reset_password',{
+        email:user.email,
+        name:user.name||user.id,
+        resetUrl,
+        siteUrl:CLIENT_URL,
+      });
+      console.log(`[Dev] Reset: ${resetUrl}`);
+      if(!sent) console.log('[Email] Reset email was not confirmed as sent by Apps Script.');
     }
     res.json({message:'If that email has an account, a reset link has been sent.'});
   }catch(e){res.status(500).json({error:e.message});}
@@ -1152,14 +1201,15 @@ app.post('/api/assistance/sessions', authMiddleware, requireAssistanceAccess, as
     const seniorUser = await db.get('SELECT id FROM users WHERE id=?',[seniorUserId]);
     if(!seniorUser) return res.status(404).json({error:'User not found'});
     const managedByHelper = true;
-    const seniorBusy = await db.get(
-      `SELECT id FROM assistance_sessions
-       WHERE status IN ('pending','active')
-         AND (senior_user_id=? OR helper_user_id=?)
-       LIMIT 1`,
+    const conflictingSessions = await cleanupStaleAssistanceSessions(
+      'senior_user_id=? OR helper_user_id=?',
       [seniorUserId, seniorUserId]
     );
-    if(seniorBusy) return res.status(400).json({error:'That person is already in an assistance session'});
+    let liveConflict = null;
+    conflictingSessions.forEach(session=>{
+      if(!liveConflict) liveConflict = session;
+    });
+    if(liveConflict) return res.status(400).json({error:'That person is already in an assistance session'});
     const id = generateId('as');
     await db.run(`INSERT INTO assistance_sessions
       (id,senior_user_id,helper_user_id,status,mode,guided_mode,control_enabled,voice_enabled,recording_enabled,created_at)
@@ -1794,7 +1844,14 @@ app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
   const openMarkets=(await db.get("SELECT COUNT(*) as c FROM markets WHERE status='open'")).c;
   const totalBets=(await db.get('SELECT COUNT(*) as c FROM bets')).c;
   const circ=(await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s||0;
-  res.json({students,openMarkets,totalBets,pendingVol:0,totalCreditsInCirculation:circ});
+  res.json({
+    students,
+    openMarkets,
+    totalBets,
+    pendingVol:0,
+    totalCreditsInCirculation:circ,
+    mailConfigured:!!process.env.APPS_SCRIPT_URL,
+  });
 });
 
 app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
