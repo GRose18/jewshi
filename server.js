@@ -2036,7 +2036,7 @@ app.get('/api/spin/status', authMiddleware, async(req,res)=>{
 });
 
 // ── CASINO ──
-app.post('/api/casino/blackjack/deal', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/blackjack/deal', authMiddleware, async(req,res)=>{
   try{
     const amount=Math.floor(Number(req.body.betAmount));
     if(!amount || amount<1) return res.status(400).json({error:'Minimum bet is ⬡1'});
@@ -2073,7 +2073,7 @@ app.post('/api/casino/blackjack/deal', authMiddleware, adminOnly, async(req,res)
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/blackjack/hit', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/blackjack/hit', authMiddleware, async(req,res)=>{
   try{
     const game=blackjackGames.get(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
@@ -2092,7 +2092,7 @@ app.post('/api/casino/blackjack/hit', authMiddleware, adminOnly, async(req,res)=
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/blackjack/stand', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/blackjack/stand', authMiddleware, async(req,res)=>{
   try{
     const game=blackjackGames.get(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
@@ -2116,7 +2116,7 @@ app.post('/api/casino/blackjack/stand', authMiddleware, adminOnly, async(req,res
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/blackjack/double', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/blackjack/double', authMiddleware, async(req,res)=>{
   try{
     const game=blackjackGames.get(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
@@ -2148,7 +2148,7 @@ app.post('/api/casino/blackjack/double', authMiddleware, adminOnly, async(req,re
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/blackjack/split', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/blackjack/split', authMiddleware, async(req,res)=>{
   try{
     const game=blackjackGames.get(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
@@ -2177,7 +2177,7 @@ app.post('/api/casino/blackjack/split', authMiddleware, adminOnly, async(req,res
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/dice', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
   try{
     const {betAmount, target, direction} = req.body;
     const amount = Math.floor(Number(betAmount));
@@ -2203,7 +2203,7 @@ app.post('/api/casino/dice', authMiddleware, adminOnly, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/plinko', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
   try{
     const {betAmount, risk='low'} = req.body;
     const amount = Math.floor(Number(betAmount));
@@ -2253,7 +2253,7 @@ app.post('/api/casino/plinko', authMiddleware, adminOnly, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.get('/api/casino/my-bets', authMiddleware, adminOnly, async(req,res)=>{
+app.get('/api/casino/my-bets', authMiddleware, async(req,res)=>{
   try{
     const bets = await db.all('SELECT * FROM casino_bets WHERE user_id=? ORDER BY timestamp DESC LIMIT 20',[req.user.id]);
     res.json(bets);
