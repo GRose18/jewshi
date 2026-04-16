@@ -332,6 +332,20 @@
   </div>
 </div>
 
+<!-- RESET PASSWORD -->
+<div id="reset-screen" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div class="auth-card">
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Set New Password</h2>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:18px;">Choose a new password for your account.</p>
+    <div id="reset-error" class="error-msg" style="display:none;"></div>
+    <div id="reset-success" class="notification success" style="display:none;"></div>
+    <input type="hidden" id="reset-token">
+    <div class="form-group"><label>New Password</label><input type="password" id="reset-password-input" placeholder="At least 6 characters" onkeydown="if(event.key==='Enter')doResetPassword()"></div>
+    <button class="btn-primary" id="reset-btn" onclick="doResetPassword()">Update Password</button>
+    <div class="auth-toggle" style="margin-top:12px;"><a onclick="hideResetPassword()">← Back to sign in</a></div>
+  </div>
+</div>
+
 <!-- REGISTER -->
 <div id="register-screen" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div class="auth-card" style="max-height:90vh;overflow-y:auto;">
@@ -1131,6 +1145,7 @@ const CREDITS_PER_DOLLAR=100;
 let authToken=localStorage.getItem('ew_token');
 let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
+let unreadPollInterval=null,resolutionPollInterval=null;
 let liveInterval=null,countdownInterval=null,liveMarketsData=[];
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
@@ -1302,6 +1317,15 @@ function showRegister(){document.getElementById('register-screen').style.display
 function showAuthScreen(){document.getElementById('live-screen').style.display='none';document.getElementById('auth-screen').style.display='flex';}
 function hideRegister(){document.getElementById('register-screen').style.display='none';}
 function showForgotPassword(){document.getElementById('forgot-screen').style.display='flex';}
+function showResetPassword(token){
+  document.getElementById('live-screen').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
+  document.getElementById('reset-token').value=token||'';
+  document.getElementById('reset-password-input').value='';
+  document.getElementById('reset-error').style.display='none';
+  document.getElementById('reset-success').style.display='none';
+  document.getElementById('reset-screen').style.display='flex';
+}
 function showVerifyScreen(pendingId){
   document.getElementById('verify-pending-id').value=pendingId;
   document.getElementById('verify-screen').style.display='flex';
@@ -1309,6 +1333,36 @@ function showVerifyScreen(pendingId){
   document.getElementById('verify-code-input').value='';
 }
 function hideForgotPassword(){document.getElementById('forgot-screen').style.display='none';}
+function hideResetPassword(){
+  document.getElementById('reset-screen').style.display='none';
+  document.getElementById('reset-token').value='';
+  history.replaceState({},'',window.location.pathname);
+}
+async function doResetPassword(){
+  const token=document.getElementById('reset-token').value.trim();
+  const password=document.getElementById('reset-password-input').value;
+  const errEl=document.getElementById('reset-error');
+  const sucEl=document.getElementById('reset-success');
+  const btn=document.getElementById('reset-btn');
+  errEl.style.display='none';
+  sucEl.style.display='none';
+  if(!token){errEl.textContent='Reset link is missing or invalid.';errEl.style.display='block';return;}
+  if(password.length<6){errEl.textContent='Password must be at least 6 characters.';errEl.style.display='block';return;}
+  btn.disabled=true;btn.textContent='Updating…';
+  try{
+    const data=await api('POST','/auth/reset-password',{token,password});
+    sucEl.textContent=data.message||'Password updated!';
+    sucEl.style.display='block';
+    document.getElementById('reset-password-input').value='';
+    history.replaceState({},'',window.location.pathname);
+  }catch(e){
+    errEl.textContent=e.message;
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Update Password';
+  }
+}
 async function doVerifyCode(){
   const pendingId=document.getElementById('verify-pending-id').value;
   const code=document.getElementById('verify-code-input').value.trim();
@@ -1348,6 +1402,8 @@ function doLogout(){
   if(assistanceSnapshotInterval){clearInterval(assistanceSnapshotInterval);assistanceSnapshotInterval=null;}
   hideAssistanceOverlay();
   clearInterval(msgPollInterval);clearInterval(convPollInterval);
+  clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
+  unreadPollInterval=null;resolutionPollInterval=null;
   clearInterval(popupPollInterval);
   popupPollInterval=null;
   hideIncomingPopup();
@@ -1367,8 +1423,9 @@ async function enterApp(){
   document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
   document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
   updateTopbar();renderMarkets();
-  setInterval(pollUnreadCount,5000);pollUnreadCount();
-  setInterval(pollResolutions,8000);pollResolutions();
+  clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
+  unreadPollInterval=setInterval(pollUnreadCount,5000);pollUnreadCount();
+  resolutionPollInterval=setInterval(pollResolutions,8000);pollResolutions();
   clearInterval(popupPollInterval);
   popupPollInterval=setInterval(pollIncomingPopup,3000);
   pollIncomingPopup();
@@ -2913,6 +2970,7 @@ async function showNewDM(){
   openThread(match.id,match.name);
 }
 async function pollUnreadCount(){
+  if(!authToken||!currentUser) return;
   try{
     const {count}=await api('GET','/messages/unread-count');
     const badge=document.getElementById('msg-badge');
@@ -2920,6 +2978,7 @@ async function pollUnreadCount(){
   }catch(e){}
 }
 async function pollResolutions(){
+  if(!authToken||!currentUser) return;
   try{
     const bets=await api('GET','/bets/mine');
     const key='seen_resolved_bets';
@@ -4729,6 +4788,14 @@ function showNotif(containerId,msg,type='success'){
 
 (async()=>{
   const params=new URLSearchParams(window.location.search);
+  if(params.get('reset')){
+    authToken=null;
+    currentUser=null;
+    localStorage.removeItem('ew_token');
+    sessionStorage.removeItem('access_granted');
+    showResetPassword(params.get('reset'));
+    return;
+  }
   if(params.get('session_id')&&authToken){
     try{
       const res=await api('GET','/credits/verify/'+params.get('session_id'));
