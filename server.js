@@ -35,17 +35,29 @@ let db;
 const blackjackGames = new Map();
 const minesGames = new Map();
 
-async function initDB() {
-  db = createClient({
-    url: process.env.TURSO_DATABASE_URL || 'file:local.db',
-    authToken: process.env.TURSO_AUTH_TOKEN,
-  });
-  db.run = async (sql, args=[]) => { await db.execute({ sql, args }); };
-  db.get = async (sql, args=[]) => { const r = await db.execute({ sql, args }); return r.rows[0] || null; };
-  db.all = async (sql, args=[]) => { const r = await db.execute({ sql, args }); return r.rows; };
-  db.exec = async (sql) => { for (const s of sql.split(';').map(s=>s.trim()).filter(Boolean)) await db.execute(s); };
+function attachDbHelpers(client){
+  client.run = async (sql, args=[]) => { await client.execute({ sql, args }); };
+  client.get = async (sql, args=[]) => { const r = await client.execute({ sql, args }); return r.rows[0] || null; };
+  client.all = async (sql, args=[]) => { const r = await client.execute({ sql, args }); return r.rows; };
+  client.exec = async (sql) => { for (const s of sql.split(';').map(s=>s.trim()).filter(Boolean)) await client.execute(s); };
+  return client;
+}
 
-  await db.exec(`
+function isBlockedDbError(error){
+  const text=String(error?.message||error?.cause?.message||'');
+  return error?.code==='BLOCKED' || text.includes('SQL read operations are forbidden') || text.includes('Operation was blocked');
+}
+
+async function initDB() {
+  const primaryUrl = process.env.TURSO_DATABASE_URL || 'file:local.db';
+  const localUrl = 'file:local.db';
+  let activeUrl = primaryUrl;
+  db = attachDbHelpers(createClient({
+    url: activeUrl,
+    authToken: activeUrl===localUrl ? undefined : process.env.TURSO_AUTH_TOKEN,
+  }));
+
+  const bootstrap = async ()=>db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT NOT NULL,
       role TEXT DEFAULT 'student', credits INTEGER DEFAULT 200, grade TEXT DEFAULT '',
@@ -209,16 +221,34 @@ async function initDB() {
     )
 
   `);
-  await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
-  await db.run("ALTER TABLE users ADD COLUMN popup_access INTEGER DEFAULT 0").catch(()=>{});
-  await db.run("ALTER TABLE users ADD COLUMN assistance_access INTEGER DEFAULT 0").catch(()=>{});
-  await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
-  await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
-  await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
-  await db.run("ALTER TABLE popups ADD COLUMN closeout_enabled INTEGER DEFAULT 0").catch(()=>{});
-  fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
-  await ensureProtectedSettings();
-  await seedIfEmpty();
+
+  const finishBootstrap = async ()=>{
+    await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
+    await db.run("ALTER TABLE users ADD COLUMN popup_access INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("ALTER TABLE users ADD COLUMN assistance_access INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
+    await db.run("ALTER TABLE popups ADD COLUMN closeout_enabled INTEGER DEFAULT 0").catch(()=>{});
+    fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
+    await ensureProtectedSettings();
+    await seedIfEmpty();
+  };
+
+  try{
+    await bootstrap();
+    await finishBootstrap();
+  }catch(error){
+    if(activeUrl!==localUrl && isBlockedDbError(error)){
+      console.warn(`Primary database blocked on ${activeUrl}. Falling back to ${localUrl}.`);
+      activeUrl=localUrl;
+      db = attachDbHelpers(createClient({ url: localUrl }));
+      await bootstrap();
+      await finishBootstrap();
+      return;
+    }
+    throw error;
+  }
 }
 
 async function ensureProtectedSettings() {
@@ -2470,42 +2500,41 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
   try{
     const {betAmount, target, direction} = req.body;
     const amount = Math.floor(Number(betAmount));
+    const visibleTarget = Number(target);
     if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
     if(!['over','under'].includes(direction)) return res.status(400).json({error:'Invalid direction'});
-    if(target===undefined||target<2||target>98) return res.status(400).json({error:'Target must be between 2 and 98'});
+    if(target===undefined||visibleTarget<2||visibleTarget>98) return res.status(400).json({error:'Target must be between 2 and 98'});
     const user = await db.get('SELECT * FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
     const { effective } = await getCasinoConfig(req.user.id);
     const diceOdds = effective.diceOdds;
     const oddsBias = ((diceOdds - 100) / 100) * 10;
     const adjustedTarget = direction==='over'
-      ? clampNumber(Number(target) - oddsBias, 2, 98)
-      : clampNumber(Number(target) + oddsBias, 2, 98);
+      ? clampNumber(visibleTarget - oddsBias, 2, 98)
+      : clampNumber(visibleTarget + oddsBias, 2, 98);
     const randomBetween=(min,max)=>parseFloat((min + Math.random()*(max-min)).toFixed(2));
     const forceDisplayedLossRoll=()=>{
-      if(direction==='over') return randomBetween(0, Math.max(0, Number(target)));
-      return randomBetween(Math.min(100, Number(target)), 100);
+      if(direction==='over') return randomBetween(0, Math.max(0, visibleTarget));
+      return randomBetween(Math.min(100, visibleTarget), 100);
     };
     const forceDisplayedWinRoll=()=>{
-      if(direction==='over') return randomBetween(Math.min(100, Number(target)+0.01), 100);
-      return randomBetween(0, Math.max(0, Number(target)-0.01));
+      if(direction==='over') return randomBetween(Math.min(100, visibleTarget+0.01), 100);
+      return randomBetween(0, Math.max(0, visibleTarget-0.01));
     };
     let roll;
-    let won;
     if(diceOdds<=0){
       roll=forceDisplayedLossRoll();
-      won=false;
     }else if(diceOdds>=200){
       roll=forceDisplayedWinRoll();
-      won=true;
     }else{
       const effectiveWinChance = direction==='over'
         ? (100 - adjustedTarget) / 100
         : adjustedTarget / 100;
-      won = Math.random() < effectiveWinChance;
+      const won = Math.random() < effectiveWinChance;
       roll = won ? forceDisplayedWinRoll() : forceDisplayedLossRoll();
     }
-    const winChance = direction==='over' ? 100-target : target;
+    const won = direction==='over' ? roll>visibleTarget : roll<visibleTarget;
+    const winChance = direction==='over' ? 100-visibleTarget : visibleTarget;
     const multiplier = 99/winChance;
     const payout = won ? Math.floor(amount*multiplier) : 0;
     const profit = payout - amount;
@@ -2514,7 +2543,7 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
     const betId = generateId('cbd');
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'dice',amount,won?'win':'loss',payout,profit,Date.now()]);
-    await recordTx(req.user.id, profit, 'casino_dice', betId, `Dice: ${direction} ${target} — ${won?'won':'lost'} ⬡${amount}`);
+    await recordTx(req.user.id, profit, 'casino_dice', betId, `Dice: ${direction} ${visibleTarget} — ${won?'won':'lost'} ⬡${amount}`);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({roll, won, payout, profit, multiplier:parseFloat(multiplier.toFixed(4)), adjustedTarget:parseFloat(Number(adjustedTarget).toFixed(2)), newBalance:Math.floor(updated.credits)});
   }catch(e){res.status(500).json({error:e.message});}
@@ -2616,7 +2645,13 @@ app.post('/api/casino/mines/start', authMiddleware, async(req,res)=>{
     const amount = Math.floor(Number(req.body.betAmount));
     const mineCount = clampNumber(Math.floor(Number(req.body.mineCount || 3)), 1, 24);
     if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
-    if(minesGames.has(req.user.id)) return res.status(400).json({error:'Finish or cash out your current Mines game first'});
+    const existingGame = minesGames.get(req.user.id);
+    if(existingGame){
+      if(existingGame.status==='active'){
+        return res.status(400).json({error:'Finish or cash out your current Mines game first'});
+      }
+      minesGames.delete(req.user.id);
+    }
     const user = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
     await db.run('UPDATE users SET credits=credits-? WHERE id=?',[amount,req.user.id]);
