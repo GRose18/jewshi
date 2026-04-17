@@ -23,6 +23,11 @@ const assistanceStreams = new Map();
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
+app.use((req,res,next)=>{
+  res.setHeader('X-Frame-Options','SAMEORIGIN');
+  res.setHeader('Content-Security-Policy',"frame-ancestors 'self'");
+  next();
+});
 app.use(express.json({ limit: '30mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
