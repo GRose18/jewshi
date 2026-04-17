@@ -2494,8 +2494,11 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
       roll=forceDisplayedWinRoll();
       won=true;
     }else{
-      roll=parseFloat((Math.random()*100).toFixed(2));
-      won=direction==='over' ? roll>adjustedTarget : roll<adjustedTarget;
+      const effectiveWinChance = direction==='over'
+        ? (100 - adjustedTarget) / 100
+        : adjustedTarget / 100;
+      won = Math.random() < effectiveWinChance;
+      roll = won ? forceDisplayedWinRoll() : forceDisplayedLossRoll();
     }
     const winChance = direction==='over' ? 100-target : target;
     const multiplier = 99/winChance;
