@@ -958,14 +958,15 @@
             </div>
             <div style="position:relative;max-width:360px;margin:0 auto 20px;">
               <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:28px solid var(--gold);filter:drop-shadow(0 8px 12px rgba(0,0,0,0.25));z-index:4;"></div>
-              <div id="roulette-wheel" style="width:100%;aspect-ratio:1/1;border-radius:50%;border:12px solid rgba(255,255,255,0.08);background:#16161f;display:flex;align-items:center;justify-content:center;box-shadow:0 30px 50px rgba(0,0,0,0.45), inset 0 0 0 10px rgba(0,0,0,0.35);transition:transform 4.6s cubic-bezier(0.16,1,0.3,1);position:relative;overflow:hidden;">
-                <div id="roulette-wheel-labels" style="position:absolute;inset:0;"></div>
+              <div id="roulette-wheel" style="width:100%;aspect-ratio:1/1;border-radius:50%;border:12px solid rgba(255,255,255,0.08);background:#16161f;display:flex;align-items:center;justify-content:center;box-shadow:0 30px 50px rgba(0,0,0,0.45), inset 0 0 0 10px rgba(0,0,0,0.35);transition:transform 4.8s cubic-bezier(0.16,1,0.3,1);position:relative;overflow:hidden;">
+                <div id="roulette-wheel-svg" style="position:absolute;inset:0;"></div>
                 <div style="position:absolute;inset:14%;border-radius:50%;background:radial-gradient(circle,#2c2c33,#101015);box-shadow:inset 0 0 0 12px rgba(255,255,255,0.03);"></div>
                 <div style="position:absolute;width:34%;height:34%;border-radius:50%;background:radial-gradient(circle,#262135,#0d0b14);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);z-index:2;">
                   <div style="position:absolute;width:54%;height:54%;background:rgba(255,255,255,0.04);clip-path:polygon(50% 0%,60% 32%,100% 50%,60% 68%,50% 100%,40% 68%,0% 50%,40% 32%);filter:blur(0.2px);"></div>
                   <div id="roulette-winning-pocket" style="width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;background:var(--bg3);color:var(--text);border:1px solid var(--border);z-index:2;">—</div>
                 </div>
               </div>
+              <div id="roulette-ball" style="position:absolute;left:50%;top:30px;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffffff,#d8dbe8 52%,#8d93a8 100%);box-shadow:0 0 0 3px rgba(255,255,255,0.08),0 8px 16px rgba(0,0,0,0.34);z-index:5;"></div>
             </div>
 
             <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start;">
@@ -974,7 +975,7 @@
                   <div style="font-size:11px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;">Table</div>
                   <div id="roulette-selected-label" style="font-size:12px;color:var(--gold);font-weight:700;">Selected: Red</div>
                 </div>
-                <div id="roulette-board"></div>
+                <div id="roulette-board" style="width:fit-content;max-width:100%;margin:0 auto;"></div>
               </div>
 
               <div style="display:flex;flex-direction:column;gap:16px;">
@@ -996,7 +997,6 @@
                       <option value="dozen2">2nd 12</option>
                       <option value="dozen3">3rd 12</option>
                       <option value="number">Straight Number</option>
-                      <option value="numbers">Multiple Numbers</option>
                     </select>
                   </div>
                   <div class="form-group" id="roulette-number-wrap" style="display:none;"><label>Number</label><input type="number" id="roulette-number-input" min="0" max="36" value="0" oninput="updateRoulettePotential()"></div>
@@ -4775,7 +4775,6 @@ const ROULETTE_ORDER=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,1
 const ROULETTE_RED_NUMBERS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 let rouletteSpinning=false;
 let rouletteRotation=0;
-let rouletteSelectedNumbers=[];
 let coinFlipSide='heads';
 let coinFlipBusy=false;
 
@@ -5063,24 +5062,7 @@ function getPlinkoBestMultiplier(){
   return Math.max(...getPlinkoMultipliers());
 }
 
-function buildRouletteWheelBackground(){
-  const segment=360/ROULETTE_ORDER.length;
-  const stops=ROULETTE_ORDER.map((number,index)=>{
-    const start=(index*segment).toFixed(4);
-    const end=((index+1)*segment).toFixed(4);
-    const color=number===0?'#1f8f5a':ROULETTE_RED_NUMBERS.has(number)?'#c2354e':'#16161f';
-    return `${color} ${start}deg ${end}deg`;
-  }).join(',');
-  return `conic-gradient(from -90deg,${stops})`;
-}
-
 function rouletteLabelForSelection(betType, value){
-  if(betType==='numbers'){
-    const picks=rouletteSelectedNumbers.length
-      ? rouletteSelectedNumbers.slice().sort((a,b)=>a-b).join(', ')
-      : 'none';
-    return `Selected: ${rouletteSelectedNumbers.length} number${rouletteSelectedNumbers.length===1?'':'s'}${rouletteSelectedNumbers.length?` (${picks})`:''}`;
-  }
   if(betType==='number') return `Selected: Number ${value}`;
   const labels={
     red:'Selected: Red',
@@ -5099,38 +5081,62 @@ function rouletteLabelForSelection(betType, value){
 function setRouletteSelection(betType, value=null){
   const typeEl=document.getElementById('roulette-bet-type');
   const numberEl=document.getElementById('roulette-number-input');
-  if(betType==='number' && value!==null){
-    const num=Math.max(0,Math.min(36,Math.floor(Number(value)||0)));
-    const existingIndex=rouletteSelectedNumbers.indexOf(num);
-    if(existingIndex>=0 && rouletteSelectedNumbers.length>1){
-      rouletteSelectedNumbers.splice(existingIndex,1);
-      if(typeEl) typeEl.value='numbers';
-    }else{
-      if(existingIndex===-1) rouletteSelectedNumbers.push(num);
-      rouletteSelectedNumbers=rouletteSelectedNumbers.slice().sort((a,b)=>a-b);
-      if(typeEl) typeEl.value=rouletteSelectedNumbers.length>1?'numbers':'number';
-    }
-    if(numberEl) numberEl.value=String(num);
-    onRouletteBetTypeChange();
-    return;
-  }
-  if(betType!=='number') rouletteSelectedNumbers=[];
   if(typeEl) typeEl.value=betType;
   if(numberEl && value!==null) numberEl.value=Math.max(0,Math.min(36,Math.floor(Number(value)||0)));
   onRouletteBetTypeChange();
 }
 
-function renderRouletteWheelLabels(){
-  const el=document.getElementById('roulette-wheel-labels');
+function polarPoint(cx, cy, radius, angleDeg){
+  const rad=(angleDeg*Math.PI)/180;
+  return {x:cx + Math.cos(rad)*radius, y:cy + Math.sin(rad)*radius};
+}
+
+function describeArcSlice(cx, cy, innerR, outerR, startDeg, endDeg){
+  const largeArc=endDeg-startDeg<=180?0:1;
+  const outerStart=polarPoint(cx,cy,outerR,startDeg);
+  const outerEnd=polarPoint(cx,cy,outerR,endDeg);
+  const innerEnd=polarPoint(cx,cy,innerR,endDeg);
+  const innerStart=polarPoint(cx,cy,innerR,startDeg);
+  return [
+    `M ${outerStart.x.toFixed(3)} ${outerStart.y.toFixed(3)}`,
+    `A ${outerR} ${outerR} 0 ${largeArc} 1 ${outerEnd.x.toFixed(3)} ${outerEnd.y.toFixed(3)}`,
+    `L ${innerEnd.x.toFixed(3)} ${innerEnd.y.toFixed(3)}`,
+    `A ${innerR} ${innerR} 0 ${largeArc} 0 ${innerStart.x.toFixed(3)} ${innerStart.y.toFixed(3)}`,
+    'Z'
+  ].join(' ');
+}
+
+function renderRouletteWheelSvg(){
+  const el=document.getElementById('roulette-wheel-svg');
   if(!el) return;
+  const size=360;
+  const cx=180;
+  const cy=180;
+  const outerR=168;
+  const innerR=112;
   const segment=360/ROULETTE_ORDER.length;
-  el.innerHTML=ROULETTE_ORDER.map((number,index)=>{
-    const angle=(index*segment)+(segment/2);
-    const color=number===0?'#8df0bf':ROULETTE_RED_NUMBERS.has(number)?'#fff4f4':'#f2f2f8';
-    return `<div style="position:absolute;left:50%;top:50%;width:100%;height:100%;transform:translate(-50%,-50%) rotate(${angle}deg);pointer-events:none;z-index:1;">
-      <div style="position:absolute;left:50%;top:7%;transform:translateX(-50%) rotate(180deg);font-size:11px;font-weight:800;color:${color};letter-spacing:-0.02em;">${number}</div>
-    </div>`;
+  const slices=ROULETTE_ORDER.map((number,index)=>{
+    const center=-90+(index*segment);
+    const start=center-(segment/2);
+    const end=center+(segment/2);
+    const fill=number===0?'#1fa44f':ROULETTE_RED_NUMBERS.has(number)?'#e5242c':'#2f3036';
+    const path=describeArcSlice(cx,cy,innerR,outerR,start,end);
+    const labelPoint=polarPoint(cx,cy,142,(start+end)/2);
+    const textFill=number===0?'#ecfff1':'#ffffff';
+    return `
+      <path d="${path}" fill="${fill}" stroke="rgba(255,255,255,0.16)" stroke-width="1.1"></path>
+      <text x="${labelPoint.x.toFixed(2)}" y="${labelPoint.y.toFixed(2)}" fill="${textFill}" font-size="12" font-weight="800" text-anchor="middle" dominant-baseline="middle" transform="rotate(${center+90} ${labelPoint.x.toFixed(2)} ${labelPoint.y.toFixed(2)})">${number}</text>
+    `;
   }).join('');
+  el.innerHTML=`
+    <svg viewBox="0 0 ${size} ${size}" width="100%" height="100%" aria-hidden="true">
+      <circle cx="${cx}" cy="${cy}" r="176" fill="rgba(0,0,0,0.32)"></circle>
+      <circle cx="${cx}" cy="${cy}" r="174" fill="#18181d"></circle>
+      <circle cx="${cx}" cy="${cy}" r="170" fill="#0f1014"></circle>
+      ${slices}
+      <circle cx="${cx}" cy="${cy}" r="${innerR-8}" fill="#111216" stroke="rgba(255,255,255,0.08)" stroke-width="10"></circle>
+    </svg>
+  `;
 }
 
 function renderRouletteBoard(){
@@ -5143,29 +5149,27 @@ function renderRouletteBoard(){
   const rowC=[1,4,7,10,13,16,19,22,25,28,31,34];
   const makeCell=(label,betType,value,extraStyle='')=>{
     const isNumber=betType==='number';
-    const active=isNumber
-      ? ((selectedType==='number'&&selectedNumber===value) || (selectedType==='numbers'&&rouletteSelectedNumbers.includes(value)))
-      : selectedType===betType;
+    const active=isNumber?selectedType==='number'&&selectedNumber===value:selectedType===betType;
     const number=Number(label);
     const bg=isNumber?(number===0?'#24a31a':ROULETTE_RED_NUMBERS.has(number)?'#e11d2e':'#3a3a40'):(betType==='red'?'#e11d2e':betType==='black'?'#3a3a40':'#111216');
     const color=isNumber&&number===0?'#f5fff1':'#fff';
-    return `<button onclick="setRouletteSelection('${betType}'${value!==null?`,${value}`:''})" style="min-height:50px;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:6px;border:${active?'2px solid var(--gold)':'1px solid rgba(255,255,255,0.16)'};background:${bg};color:${color};font-size:${isNumber?'15px':'13px'};font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;line-height:1;box-shadow:${active?'0 0 0 1px rgba(240,192,64,0.15), 0 0 18px rgba(240,192,64,0.14)':'inset 0 1px 0 rgba(255,255,255,0.04)'};${extraStyle}">${label}</button>`;
+    return `<button onclick="setRouletteSelection('${betType}'${value!==null?`,${value}`:''})" style="width:52px;min-width:52px;height:${isNumber?'54px':'42px'};display:flex;align-items:center;justify-content:center;text-align:center;border-radius:6px;border:${active?'2px solid var(--gold)':'1px solid rgba(255,255,255,0.16)'};background:${bg};color:${color};font-size:${isNumber?'15px':'13px'};font-weight:800;cursor:pointer;font-family:'Inter',sans-serif;line-height:1;box-shadow:${active?'0 0 0 1px rgba(240,192,64,0.15), 0 0 18px rgba(240,192,64,0.14)':'inset 0 1px 0 rgba(255,255,255,0.04)'};${extraStyle}">${label}</button>`;
   };
   board.innerHTML=`
-    <div style="display:grid;grid-template-columns:52px repeat(12,minmax(44px,1fr));gap:6px;align-items:stretch;">
-      <div style="grid-row:1 / span 3;">${makeCell('0','number',0,'height:100%;min-height:156px;')}</div>
+    <div style="display:grid;grid-template-columns:52px repeat(12,52px);gap:6px;align-items:stretch;justify-content:center;">
+      <div style="grid-row:1 / span 3;">${makeCell('0','number',0,'width:52px;height:174px;')}</div>
       ${rowA.map(n=>makeCell(String(n),'number',n)).join('')}
       ${rowB.map(n=>makeCell(String(n),'number',n)).join('')}
       ${rowC.map(n=>makeCell(String(n),'number',n)).join('')}
-      <div style="grid-column:2 / span 4;">${makeCell('1 to 12','dozen1',null,'min-height:42px;background:#0c0c11;')}</div>
-      <div style="grid-column:6 / span 4;">${makeCell('13 to 24','dozen2',null,'min-height:42px;background:#0c0c11;')}</div>
-      <div style="grid-column:10 / span 4;">${makeCell('25 to 36','dozen3',null,'min-height:42px;background:#0c0c11;')}</div>
-      <div style="grid-column:2 / span 2;">${makeCell('1 to 18','low',null,'min-height:42px;background:#0c0c11;')}</div>
-      <div style="grid-column:4 / span 2;">${makeCell('EVEN','even',null,'min-height:42px;background:#0c0c11;')}</div>
-      <div style="grid-column:6 / span 2;">${makeCell('RED','red',null,'min-height:42px;')}</div>
-      <div style="grid-column:8 / span 2;">${makeCell('BLACK','black',null,'min-height:42px;')}</div>
-      <div style="grid-column:10 / span 2;">${makeCell('ODD','odd',null,'min-height:42px;background:#0c0c11;')}</div>
-      <div style="grid-column:12 / span 2;">${makeCell('19 to 36','high',null,'min-height:42px;background:#0c0c11;')}</div>
+      <div style="grid-column:2 / span 4;">${makeCell('1 to 12','dozen1',null,'width:226px;background:#0c0c11;')}</div>
+      <div style="grid-column:6 / span 4;">${makeCell('13 to 24','dozen2',null,'width:226px;background:#0c0c11;')}</div>
+      <div style="grid-column:10 / span 4;">${makeCell('25 to 36','dozen3',null,'width:226px;background:#0c0c11;')}</div>
+      <div style="grid-column:2 / span 2;">${makeCell('1 to 18','low',null,'width:110px;background:#0c0c11;')}</div>
+      <div style="grid-column:4 / span 2;">${makeCell('EVEN','even',null,'width:110px;background:#0c0c11;')}</div>
+      <div style="grid-column:6 / span 2;">${makeCell('RED','red',null,'width:110px;')}</div>
+      <div style="grid-column:8 / span 2;">${makeCell('BLACK','black',null,'width:110px;')}</div>
+      <div style="grid-column:10 / span 2;">${makeCell('ODD','odd',null,'width:110px;background:#0c0c11;')}</div>
+      <div style="grid-column:12 / span 2;">${makeCell('19 to 36','high',null,'width:110px;background:#0c0c11;')}</div>
     </div>`;
 }
 
@@ -5392,10 +5396,7 @@ function openRoulette(){
   hideCasinoGameViews();
   document.getElementById('casino-roulette').style.display='block';
   rouletteSpinning=false;
-  rouletteSelectedNumbers=[];
-  const wheel=document.getElementById('roulette-wheel');
-  if(wheel) wheel.style.background=buildRouletteWheelBackground();
-  renderRouletteWheelLabels();
+  renderRouletteWheelSvg();
   document.getElementById('roulette-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   document.getElementById('roulette-result-pill').textContent='Place your bet';
   document.getElementById('roulette-result-pill').style.background='var(--bg3)';
@@ -5425,7 +5426,6 @@ function setRouletteBet(amount){
 
 function getRouletteMultiplier(betType){
   if(betType==='number') return 36;
-  if(betType==='numbers') return rouletteSelectedNumbers.length ? 36/rouletteSelectedNumbers.length : 0;
   if(['dozen1','dozen2','dozen3'].includes(betType)) return 3;
   return 2;
 }
@@ -5433,11 +5433,7 @@ function getRouletteMultiplier(betType){
 function onRouletteBetTypeChange(){
   const betType=document.getElementById('roulette-bet-type')?.value||'red';
   const wrap=document.getElementById('roulette-number-wrap');
-  if(wrap) wrap.style.display=(betType==='number'||betType==='numbers')?'block':'none';
-  if(betType==='number'){
-    const selected=Math.floor(Number(document.getElementById('roulette-number-input')?.value||0));
-    rouletteSelectedNumbers=[selected];
-  }
+  if(wrap) wrap.style.display=betType==='number'?'block':'none';
   const selected=document.getElementById('roulette-selected-label');
   if(selected) selected.textContent=rouletteLabelForSelection(betType, document.getElementById('roulette-number-input')?.value||0);
   renderRouletteBoard();
@@ -5465,25 +5461,24 @@ async function spinRoulette(){
   const rawNumber=Math.floor(Number(document.getElementById('roulette-number-input')?.value||0));
   if(!betAmount||betAmount<1){showToast('Enter a bet amount.');return;}
   if(betAmount>(currentUser?.credits||0)){showToast('Insufficient credits.');return;}
-  if((betType==='number'||betType==='numbers') && (rawNumber<0||rawNumber>36)){showToast('Pick a number from 0 to 36.');return;}
-  if(betType==='numbers' && !rouletteSelectedNumbers.length){showToast('Pick at least one number.');return;}
+  if(betType==='number' && (rawNumber<0||rawNumber>36)){showToast('Pick a number from 0 to 36.');return;}
   rouletteSpinning=true;
   const btn=document.getElementById('roulette-spin-btn');
   const pill=document.getElementById('roulette-result-pill');
+  const ball=document.getElementById('roulette-ball');
   btn.disabled=true;
   btn.textContent='Spinning…';
   pill.textContent='Wheel spinning';
   pill.style.background='rgba(240,192,64,0.12)';
   pill.style.border='1px solid rgba(240,192,64,0.28)';
   pill.style.color='var(--gold)';
+  if(ball) ball.style.transform='translateX(-50%) scale(1.1)';
   try{
-    const payloadValue=betType==='numbers' ? rouletteSelectedNumbers : (betType==='number' ? rawNumber : undefined);
-    const data=await api('POST','/casino/roulette',{betAmount,betType,value:payloadValue});
+    const data=await api('POST','/casino/roulette',{betAmount,betType,value:betType==='number'?rawNumber:undefined});
     const wheel=document.getElementById('roulette-wheel');
-  const pocketIndex=Math.max(0,ROULETTE_ORDER.indexOf(data.number));
+    const pocketIndex=Math.max(0,ROULETTE_ORDER.indexOf(data.number));
     const segment=360/ROULETTE_ORDER.length;
-    const centerAngle=(pocketIndex*segment)+(segment/2);
-    rouletteRotation += 2160 - centerAngle;
+    rouletteRotation += 2160 - (pocketIndex*segment);
     wheel.style.transform=`rotate(${rouletteRotation}deg)`;
     setTimeout(()=>{
       const tone=getRoulettePocketTone(data.color);
@@ -5498,6 +5493,7 @@ async function spinRoulette(){
       pill.style.background=data.won?'rgba(0,208,132,0.14)':'rgba(255,69,96,0.12)';
       pill.style.border=data.won?'1px solid rgba(0,208,132,0.30)':'1px solid rgba(255,69,96,0.28)';
       pill.style.color=data.won?'var(--green)':'var(--red)';
+      if(ball) ball.style.transform='translateX(-50%) scale(1)';
       currentUser.credits=data.newBalance;
       document.getElementById('roulette-balance').textContent='⬡ '+data.newBalance.toLocaleString();
       updateTopbar();
@@ -5506,11 +5502,7 @@ async function spinRoulette(){
         showResultPopup({
           won:true,
           question:`Roulette landed on ${data.label} ${data.color}`,
-          side:betType==='numbers'
-            ? `${rouletteSelectedNumbers.length} numbers`
-            : betType==='number'
-              ? `Number ${rawNumber}`
-              : betType.toUpperCase(),
+          side:betType==='number'?`Number ${rawNumber}`:betType.toUpperCase(),
           betAmount,
           payout:data.payout
         });
@@ -5524,6 +5516,7 @@ async function spinRoulette(){
     rouletteSpinning=false;
     btn.disabled=false;
     btn.textContent='Spin Wheel';
+    if(ball) ball.style.transform='translateX(-50%) scale(1)';
     showToast(e.message);
   }
 }

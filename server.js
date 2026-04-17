@@ -787,20 +787,12 @@ const ROULETTE_RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32
 const ROULETTE_NUMBERS = Array.from({length:37}, (_, i)=>i);
 function getRoulettePayoutMultiplier(betType){
   if(betType==='number') return 36;
-  if(betType==='numbers') return 0;
   if(['red','black','even','odd','low','high'].includes(betType)) return 2;
   if(['dozen1','dozen2','dozen3'].includes(betType)) return 3;
   return 0;
 }
 function getRouletteWinningNumbers(betType, value){
   if(betType==='number') return new Set([clampNumber(Math.floor(Number(value||0)), 0, 36)]);
-  if(betType==='numbers'){
-    const raw=Array.isArray(value)?value:[value];
-    const numbers=raw
-      .map(item=>clampNumber(Math.floor(Number(item)), 0, 36))
-      .filter((item, idx, arr)=>Number.isFinite(item) && arr.indexOf(item)===idx);
-    return new Set(numbers);
-  }
   if(betType==='red') return new Set([...ROULETTE_RED_NUMBERS]);
   if(betType==='black') return new Set(ROULETTE_NUMBERS.filter(n=>n!==0 && !ROULETTE_RED_NUMBERS.has(n)));
   if(betType==='even') return new Set(ROULETTE_NUMBERS.filter(n=>n!==0 && n%2===0));
@@ -2737,17 +2729,15 @@ app.post('/api/casino/roulette', authMiddleware, adminOnly, async(req,res)=>{
     const amount = Math.floor(Number(req.body.betAmount));
     const betType = String(req.body.betType||'red').toLowerCase();
     const value = req.body.value;
-    const validTypes = new Set(['red','black','even','odd','low','high','dozen1','dozen2','dozen3','number','numbers']);
+    const validTypes = new Set(['red','black','even','odd','low','high','dozen1','dozen2','dozen3','number']);
     if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
     if(!validTypes.has(betType)) return res.status(400).json({error:'Invalid roulette bet'});
     if(betType==='number' && (value===undefined || Number(value)<0 || Number(value)>36)) return res.status(400).json({error:'Choose a number from 0 to 36'});
-    if(betType==='numbers' && (!Array.isArray(value) || !value.length)) return res.status(400).json({error:'Choose at least one number'});
     const winningSet = getRouletteWinningNumbers(betType, value);
     if(!winningSet.size) return res.status(400).json({error:'Choose at least one valid number'});
-    if(betType==='numbers' && winningSet.size>36) return res.status(400).json({error:'Too many numbers selected'});
     const user = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
-    const multiplier = betType==='numbers' ? 36 / winningSet.size : getRoulettePayoutMultiplier(betType);
+    const multiplier = getRoulettePayoutMultiplier(betType);
     const { effective } = await getCasinoConfig(req.user.id);
     const number = pickRouletteNumber(winningSet, effective.rouletteOdds);
     const won = winningSet.has(number);
@@ -2759,11 +2749,7 @@ app.post('/api/casino/roulette', authMiddleware, adminOnly, async(req,res)=>{
     const betId=generateId('cbr');
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'roulette',amount,won?'win':'loss',payout,profit,Date.now()]);
-    const selectionLabel=betType==='number'
-      ? `number ${value}`
-      : betType==='numbers'
-        ? `${winningSet.size} numbers (${[...winningSet].sort((a,b)=>a-b).join(', ')})`
-        : betType;
+    const selectionLabel=betType==='number' ? `number ${value}` : betType;
     await recordTx(req.user.id, profit, 'casino_roulette', betId, `Roulette: ${selectionLabel} — ${won?'won':'lost'} ⬡${amount}`);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({
@@ -2774,7 +2760,6 @@ app.post('/api/casino/roulette', authMiddleware, adminOnly, async(req,res)=>{
       payout,
       profit,
       multiplier,
-      selectionSize: winningSet.size,
       newBalance: Math.floor(updated.credits),
     });
   }catch(e){res.status(500).json({error:e.message});}
