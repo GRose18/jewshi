@@ -48,6 +48,30 @@ function isBlockedDbError(error){
   const text=String(error?.message||error?.cause?.message||'');
   return error?.code==='BLOCKED' || text.includes('SQL read operations are forbidden') || text.includes('Operation was blocked');
 }
+function toSafeNumber(value, fallback=0){
+  if(value===null || value===undefined || value==='') return fallback;
+  if(typeof value==='number') return Number.isFinite(value) ? value : fallback;
+  if(typeof value==='bigint'){
+    const max=BigInt(Number.MAX_SAFE_INTEGER);
+    const min=BigInt(Number.MIN_SAFE_INTEGER);
+    if(value>max) return Number.MAX_SAFE_INTEGER;
+    if(value<min) return Number.MIN_SAFE_INTEGER;
+    return Number(value);
+  }
+  const num=Number(value);
+  if(!Number.isFinite(num)) return fallback;
+  if(num>Number.MAX_SAFE_INTEGER) return Number.MAX_SAFE_INTEGER;
+  if(num<Number.MIN_SAFE_INTEGER) return Number.MIN_SAFE_INTEGER;
+  return num;
+}
+function withSafeCredits(row){
+  if(!row) return row;
+  if(Object.prototype.hasOwnProperty.call(row,'credits_text')){
+    const { credits_text, ...rest } = row;
+    return { ...rest, credits: toSafeNumber(credits_text, 0) };
+  }
+  return { ...row, credits: toSafeNumber(row.credits, 0) };
+}
 
 async function initDB() {
   const primaryUrl = process.env.TURSO_DATABASE_URL || 'file:local.db';
@@ -1259,7 +1283,7 @@ app.post('/api/popups/:id/dismiss', authMiddleware, async(req,res)=>{
 // ── LIVE FEED ──
 app.get('/api/live', async(req,res)=>{
   try{
-    const totalCredits=(await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s||0;
+    const totalCredits=toSafeNumber((await db.get("SELECT CAST(SUM(credits) AS TEXT) as s FROM users WHERE role='student'")).s,0);
     const activePlayers=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c||0;
     const markets=await db.all("SELECT id,question,category,close_date,pool,yes_shares,no_shares,over_shares,under_shares,market_type,line,status FROM markets WHERE status='open' ORDER BY created_at DESC");
     const totalBets=(await db.get("SELECT COUNT(*) as c FROM bets WHERE status='active'")).c||0;
@@ -1382,10 +1406,11 @@ app.post('/api/auth/reset-password', async(req,res)=>{
 
 // ── USER ──
 app.get('/api/me', authMiddleware, async(req,res)=>{
-  const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list,bio,popup_access,assistance_access FROM users WHERE id=?',[req.user.id]);
+  const user=await db.get('SELECT id,name,email,role,CAST(credits AS TEXT) as credits_text,grade,on_email_list,bio,popup_access,assistance_access FROM users WHERE id=?',[req.user.id]);
   if(!user) return res.status(404).json({error:'User not found'});
-  user.lucky_streak = await getActiveLuckyStreak(req.user.id);
-  res.json(user);
+  const safeUser=withSafeCredits(user);
+  safeUser.lucky_streak = await getActiveLuckyStreak(req.user.id);
+  res.json(safeUser);
 });
 app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
   res.setHeader('Content-Type', 'text/event-stream');
@@ -1610,11 +1635,14 @@ app.get('/api/assistance/sessions/:id/recording', authMiddleware, requireAssista
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  const users = await db.all("SELECT id,name,email,role,credits,grade,on_email_list,popup_access,assistance_access FROM users WHERE id!=?",[req.user.id]);
-  const withLuck = await Promise.all(users.map(async user=>({
-    ...user,
-    lucky_streak: await getActiveLuckyStreak(user.id),
-  })));
+  const users = await db.all("SELECT id,name,email,role,CAST(credits AS TEXT) as credits_text,grade,on_email_list,popup_access,assistance_access FROM users WHERE id!=?",[req.user.id]);
+  const withLuck = await Promise.all(users.map(async rawUser=>{
+    const user=withSafeCredits(rawUser);
+    return {
+      ...user,
+      lucky_streak: await getActiveLuckyStreak(user.id),
+    };
+  }));
   res.json(withLuck);
 });
 app.get('/api/popup/users', authMiddleware, async(req,res)=>{
@@ -1970,7 +1998,12 @@ app.post('/api/matches/:id/action', authMiddleware, async(req,res)=>{
 
 // ── LEADERBOARD ──
 app.get('/api/leaderboard', authMiddleware, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,grade,credits,on_email_list FROM users WHERE role='student' ORDER BY credits DESC"));
+  try{
+    const rows=await db.all("SELECT id,name,grade,CAST(credits AS TEXT) as credits_text,on_email_list FROM users WHERE role='student' ORDER BY credits DESC");
+    res.json(rows.map(withSafeCredits));
+  }catch(e){
+    res.status(500).json({error:e.message});
+  }
 });
 
 // ── STORE ──
@@ -2254,7 +2287,7 @@ app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
   const students=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c;
   const openMarkets=(await db.get("SELECT COUNT(*) as c FROM markets WHERE status='open'")).c;
   const totalBets=(await db.get('SELECT COUNT(*) as c FROM bets')).c;
-  const circ=(await db.get("SELECT SUM(credits) as s FROM users WHERE role='student'")).s||0;
+  const circ=toSafeNumber((await db.get("SELECT CAST(SUM(credits) AS TEXT) as s FROM users WHERE role='student'")).s,0);
   res.json({
     students,
     openMarkets,
@@ -2270,7 +2303,7 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
     const emailUsers=await db.all("SELECT email,name FROM users WHERE on_email_list=1 AND role='student'");
     if(!emailUsers.length) return res.status(400).json({error:'No users on email list yet'});
     const [leaderboard,markets,bigWins,creditsRow,accessRow]=await Promise.all([
-      db.all("SELECT id,name,credits FROM users WHERE role='student' ORDER BY credits DESC LIMIT 5"),
+      db.all("SELECT id,name,CAST(credits AS TEXT) as credits_text FROM users WHERE role='student' ORDER BY credits DESC LIMIT 5"),
       db.all("SELECT * FROM markets WHERE status='open' ORDER BY created_at DESC"),
       db.all(`SELECT b.payout,u.name,m.question FROM bets b JOIN users u ON b.user_id=u.id JOIN markets m ON b.market_id=m.id WHERE b.status='won' AND b.payout>100 ORDER BY b.payout DESC LIMIT 3`),
       db.get("SELECT SUM(amount) as s FROM transactions WHERE type='weekly_distribution'"),
@@ -2279,7 +2312,7 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
     const newUsersCount=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c;
     const payload={
       emails:emailUsers.map(u=>({email:u.email,name:u.name})),
-      leaderboard,
+      leaderboard:leaderboard.map(withSafeCredits),
       markets:markets.map(m=>({
         question:m.question,
         pct:m.market_type==='overunder'?`OVER ${getOverPercent(m)}%`:`YES ${getYesPercent(m)}%`,
