@@ -1795,6 +1795,7 @@ async function enterApp(){
   document.getElementById('live-screen').style.display='none';
   document.getElementById('app').style.display='block';
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only:not(.grose-only)').forEach(el=>el.style.display='block');
+  else document.querySelectorAll('.admin-only:not(.grose-only)').forEach(el=>el.style.display='none');
   if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
   document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
@@ -5371,7 +5372,7 @@ function closePlinko(){
   document.getElementById('casino-lobby').style.display='block';
 }
 
-function openMines(){
+async function openMines(){
   document.getElementById('casino-lobby').style.display='none';
   hideCasinoGameViews();
   document.getElementById('casino-mines').style.display='block';
@@ -5383,6 +5384,23 @@ function openMines(){
   renderMinesBoard();
   updateMinesUI();
   loadMinesHistory();
+  try{
+    const data=await api('GET','/casino/mines/current');
+    if(data?.active && data.state){
+      minesState=data.state;
+      currentUser.credits=data.newBalance;
+      updateTopbar();
+      renderMinesBoard();
+      updateMinesUI();
+      const pill=document.getElementById('mines-result-pill');
+      if(pill){
+        pill.textContent=`Resumed live run · ${data.state.revealedSafeCount} safe`;
+        pill.style.background='rgba(124,106,247,0.18)';
+        pill.style.border='1px solid rgba(124,106,247,0.35)';
+        pill.style.color='var(--accent)';
+      }
+    }
+  }catch(e){}
 }
 
 function closeMines(){

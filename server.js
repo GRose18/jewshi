@@ -34,6 +34,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let db;
 const blackjackGames = new Map();
 const minesGames = new Map();
+const MINES_STALE_MS = 1000 * 60 * 20;
 
 function attachDbHelpers(client){
   client.run = async (sql, args=[]) => { await client.execute({ sql, args }); };
@@ -470,6 +471,15 @@ function canSplitHand(hand){
   if(hand.length!==2) return false;
   return cardPoints(hand[0])===cardPoints(hand[1]);
 }
+function getActiveBlackjackGame(userId){
+  const game=blackjackGames.get(userId);
+  if(!game) return null;
+  if(game.done){
+    blackjackGames.delete(userId);
+    return null;
+  }
+  return game;
+}
 function getVisibleBlackjackState(game){
   return {
     dealerCards: game.done ? game.dealerCards : [game.dealerCards[0], {v:'?',s:'?'}],
@@ -481,6 +491,16 @@ function getVisibleBlackjackState(game){
   };
 }
 function getCurrentHand(game){ return game.playerHands[game.activeHand]; }
+function getActiveMinesGame(userId){
+  const game=minesGames.get(userId);
+  if(!game) return null;
+  const lastTouched=Number(game.lastActionAt || game.startedAt || 0);
+  if(game.status!=='active' || (lastTouched && Date.now()-lastTouched > MINES_STALE_MS)){
+    minesGames.delete(userId);
+    return null;
+  }
+  return game;
+}
 function parseMatchState(raw){
   try{ return JSON.parse(raw||'{}'); }catch{ return {}; }
 }
@@ -2359,6 +2379,8 @@ app.post('/api/casino/blackjack/deal', authMiddleware, async(req,res)=>{
   try{
     const amount=Math.floor(Number(req.body.betAmount));
     if(!amount || amount<1) return res.status(400).json({error:'Minimum bet is ⬡1'});
+    const existingGame=getActiveBlackjackGame(req.user.id);
+    if(existingGame) return res.status(400).json({error:'Finish your current blackjack hand first'});
     const user=await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits)<amount) return res.status(400).json({error:'Insufficient credits'});
 
@@ -2394,7 +2416,7 @@ app.post('/api/casino/blackjack/deal', authMiddleware, async(req,res)=>{
 
 app.post('/api/casino/blackjack/hit', authMiddleware, async(req,res)=>{
   try{
-    const game=blackjackGames.get(req.user.id);
+    const game=getActiveBlackjackGame(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
 
     const hand=getCurrentHand(game);
@@ -2413,7 +2435,7 @@ app.post('/api/casino/blackjack/hit', authMiddleware, async(req,res)=>{
 
 app.post('/api/casino/blackjack/stand', authMiddleware, async(req,res)=>{
   try{
-    const game=blackjackGames.get(req.user.id);
+    const game=getActiveBlackjackGame(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
 
     while(game.activeHand<game.playerHands.length && game.results[game.activeHand]) game.activeHand++;
@@ -2437,7 +2459,7 @@ app.post('/api/casino/blackjack/stand', authMiddleware, async(req,res)=>{
 
 app.post('/api/casino/blackjack/double', authMiddleware, async(req,res)=>{
   try{
-    const game=blackjackGames.get(req.user.id);
+    const game=getActiveBlackjackGame(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
     const hand=getCurrentHand(game);
     const extraBet=game.bets[game.activeHand];
@@ -2469,7 +2491,7 @@ app.post('/api/casino/blackjack/double', authMiddleware, async(req,res)=>{
 
 app.post('/api/casino/blackjack/split', authMiddleware, async(req,res)=>{
   try{
-    const game=blackjackGames.get(req.user.id);
+    const game=getActiveBlackjackGame(req.user.id);
     if(!game) return res.status(400).json({error:'No active blackjack game'});
     const hand=getCurrentHand(game);
     if(!canSplitHand(hand)) return res.status(400).json({error:'Hand cannot be split'});
@@ -2645,12 +2667,9 @@ app.post('/api/casino/mines/start', authMiddleware, async(req,res)=>{
     const amount = Math.floor(Number(req.body.betAmount));
     const mineCount = clampNumber(Math.floor(Number(req.body.mineCount || 3)), 1, 24);
     if(!amount || amount < 1) return res.status(400).json({error:'Minimum bet is ⬡1'});
-    const existingGame = minesGames.get(req.user.id);
+    const existingGame = getActiveMinesGame(req.user.id);
     if(existingGame){
-      if(existingGame.status==='active'){
-        return res.status(400).json({error:'Finish or cash out your current Mines game first'});
-      }
-      minesGames.delete(req.user.id);
+      return res.status(400).json({error:'Finish or cash out your current Mines game first'});
     }
     const user = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     if(Math.floor(user.credits) < amount) return res.status(400).json({error:'Insufficient credits'});
@@ -2662,6 +2681,7 @@ app.post('/api/casino/mines/start', authMiddleware, async(req,res)=>{
       revealedSafe: new Set(),
       status: 'active',
       startedAt: Date.now(),
+      lastActionAt: Date.now(),
     };
     minesGames.set(req.user.id, game);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
@@ -2669,10 +2689,25 @@ app.post('/api/casino/mines/start', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
+app.get('/api/casino/mines/current', authMiddleware, async(req,res)=>{
+  try{
+    const game = getActiveMinesGame(req.user.id);
+    if(!game){
+      return res.json({active:false});
+    }
+    const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
+    res.json({
+      active:true,
+      state:serializeMinesState(game),
+      newBalance:Math.floor(updated.credits),
+    });
+  }catch(e){res.status(500).json({error:e.message});}
+});
+
 app.post('/api/casino/mines/reveal', authMiddleware, async(req,res)=>{
   try{
-    const game = minesGames.get(req.user.id);
-    if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
+    const game = getActiveMinesGame(req.user.id);
+    if(!game) return res.status(400).json({error:'No active Mines game'});
     const maxSafeReveals = 25 - game.mineCount;
     if(game.revealedSafe.size >= maxSafeReveals) return res.status(400).json({error:'No safe tiles remain. Cash out your run.'});
     const index = Math.floor(Number(req.body.index));
@@ -2701,6 +2736,7 @@ app.post('/api/casino/mines/reveal', authMiddleware, async(req,res)=>{
       });
     }
     game.revealedSafe.add(index);
+    game.lastActionAt = Date.now();
     const state = serializeMinesState(game);
     res.json({
       hitMine:false,
@@ -2714,8 +2750,8 @@ app.post('/api/casino/mines/reveal', authMiddleware, async(req,res)=>{
 
 app.post('/api/casino/mines/cashout', authMiddleware, async(req,res)=>{
   try{
-    const game = minesGames.get(req.user.id);
-    if(!game || game.status!=='active') return res.status(400).json({error:'No active Mines game'});
+    const game = getActiveMinesGame(req.user.id);
+    if(!game) return res.status(400).json({error:'No active Mines game'});
     if(game.revealedSafe.size<1) return res.status(400).json({error:'Reveal at least one safe tile before cashing out'});
     const multiplier = getMinesMultiplier(game.revealedSafe.size, game.mineCount);
     const payout = Math.floor(game.betAmount * multiplier);
