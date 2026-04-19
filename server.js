@@ -20,6 +20,16 @@ const POPUP_UNLOCK_TTL_MS = 1000 * 60 * 45;
 const popupAdminUnlocks = new Map();
 const UPLOAD_ROOT = path.join(__dirname, 'public', 'uploads', 'popups');
 const assistanceStreams = new Map();
+const LIVE_CACHE_TTL_MS = 15000;
+let liveCache = { data: null, expiresAt: 0 };
+const LEADERBOARD_CACHE_TTL_MS = 15000;
+let leaderboardCache = { data: null, expiresAt: 0 };
+const STORE_CACHE_TTL_MS = 60000;
+let storeCache = { data: null, expiresAt: 0 };
+const MESSAGES_USERS_CACHE_TTL_MS = 60000;
+let messageUsersCache = { data: null, expiresAt: 0 };
+const CASINO_BETS_CACHE_TTL_MS = 8000;
+const casinoBetsCache = new Map();
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -71,6 +81,18 @@ function withSafeCredits(row){
     return { ...rest, credits: toSafeNumber(credits_text, 0) };
   }
   return { ...row, credits: toSafeNumber(row.credits, 0) };
+}
+function getFreshCache(entry){
+  return entry?.data && entry.expiresAt > Date.now() ? entry.data : null;
+}
+function setCacheValue(target, data, ttlMs){
+  target.data = data;
+  target.expiresAt = Date.now() + ttlMs;
+  return data;
+}
+function invalidateCasinoBetsCache(userId){
+  if(!userId) return;
+  casinoBetsCache.delete(userId);
 }
 
 async function initDB() {
@@ -255,6 +277,33 @@ async function initDB() {
     await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN closeout_enabled INTEGER DEFAULT 0").catch(()=>{});
+    await db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_markets_status_created_at ON markets(status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_bets_user_status_timestamp ON bets(user_id, status, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_bets_status_timestamp ON bets(status, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_transactions_user_timestamp ON transactions(user_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_redemptions_user_timestamp ON redemptions(user_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_messages_recipient_read_timestamp ON messages(recipient_id, is_read, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_messages_sender_recipient_timestamp ON messages(sender_id, recipient_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_messages_recipient_sender_timestamp ON messages(recipient_id, sender_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_created_at ON notifications(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_read_created_at ON notifications(user_id, is_read, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_posts_timestamp ON posts(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_posts_user_timestamp ON posts(user_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_post_likes_post_id ON post_likes(post_id);
+      CREATE INDEX IF NOT EXISTS idx_post_likes_user_post ON post_likes(user_id, post_id);
+      CREATE INDEX IF NOT EXISTS idx_casino_bets_user_timestamp ON casino_bets(user_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_casino_bets_game_timestamp ON casino_bets(game, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_popups_recipient_status_created_at ON popups(recipient_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_popups_status_created_at ON popups(status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_spin_log_user_timestamp ON spin_log(user_id, timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_assistance_contacts_user_status ON assistance_contacts(user_id, status);
+      CREATE INDEX IF NOT EXISTS idx_assistance_contacts_helper_status ON assistance_contacts(helper_user_id, status);
+      CREATE INDEX IF NOT EXISTS idx_assistance_sessions_senior_status_created_at ON assistance_sessions(senior_user_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_assistance_sessions_helper_status_created_at ON assistance_sessions(helper_user_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_assistance_events_session_created_at ON assistance_events(session_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_lucky_streaks_user_expires_at ON lucky_streaks(user_id, expires_at DESC);
+    `);
     fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
     await ensureProtectedSettings();
     await seedIfEmpty();
@@ -767,6 +816,7 @@ async function finishBlackjackGame(userId){
   await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
     [betId,userId,'blackjack',totalBet,outcome,totalPayout,profit,Date.now()]);
   await recordTx(userId, profit, 'casino_blackjack', betId, `Blackjack: ${outcome} on ⬡${totalBet}`);
+  invalidateCasinoBetsCache(userId);
 
   game.done=true;
   game.results=results;
@@ -1283,11 +1333,18 @@ app.post('/api/popups/:id/dismiss', authMiddleware, async(req,res)=>{
 // ── LIVE FEED ──
 app.get('/api/live', async(req,res)=>{
   try{
+    if(liveCache.data && liveCache.expiresAt > Date.now()){
+      return res.json(liveCache.data);
+    }
     const totalCredits=toSafeNumber((await db.get("SELECT CAST(SUM(credits) AS TEXT) as s FROM users WHERE role='student'")).s,0);
     const activePlayers=(await db.get("SELECT COUNT(*) as c FROM users WHERE role='student'")).c||0;
     const markets=await db.all("SELECT id,question,category,close_date,pool,yes_shares,no_shares,over_shares,under_shares,market_type,line,status FROM markets WHERE status='open' ORDER BY created_at DESC");
     const totalBets=(await db.get("SELECT COUNT(*) as c FROM bets WHERE status='active'")).c||0;
-    res.json({totalCredits,activePlayers,markets,totalBets});
+    liveCache = {
+      data: { totalCredits,activePlayers,markets,totalBets },
+      expiresAt: Date.now() + LIVE_CACHE_TTL_MS,
+    };
+    res.json(liveCache.data);
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -1999,26 +2056,35 @@ app.post('/api/matches/:id/action', authMiddleware, async(req,res)=>{
 // ── LEADERBOARD ──
 app.get('/api/leaderboard', authMiddleware, async(req,res)=>{
   try{
+    const cached = getFreshCache(leaderboardCache);
+    if(cached) return res.json(cached);
     const rows=await db.all("SELECT id,name,grade,CAST(credits AS TEXT) as credits_text,on_email_list FROM users WHERE role='student' ORDER BY credits DESC");
-    res.json(rows.map(withSafeCredits));
+    res.json(setCacheValue(leaderboardCache, rows.map(withSafeCredits), LEADERBOARD_CACHE_TTL_MS));
   }catch(e){
     res.status(500).json({error:e.message});
   }
 });
 
 // ── STORE ──
-app.get('/api/store', authMiddleware, async(req,res)=>{ res.json(await db.all('SELECT * FROM store_items')); });
+app.get('/api/store', authMiddleware, async(req,res)=>{
+  const cached = getFreshCache(storeCache);
+  if(cached) return res.json(cached);
+  res.json(setCacheValue(storeCache, await db.all('SELECT * FROM store_items'), STORE_CACHE_TTL_MS));
+});
 app.post('/api/store', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const {name,icon,cost,description}=req.body;
     if(!name||!cost) return res.status(400).json({error:'Missing fields'});
     const id=generateId('s');
     await db.run('INSERT INTO store_items (id,name,icon,cost,description) VALUES (?,?,?,?,?)',[id,name,icon||'🎁',cost,description||'']);
+    storeCache = { data: null, expiresAt: 0 };
     res.json(await db.get('SELECT * FROM store_items WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.delete('/api/store/:id', authMiddleware, adminOnly, async(req,res)=>{
-  await db.run('DELETE FROM store_items WHERE id=?',[req.params.id]); res.json({success:true});
+  await db.run('DELETE FROM store_items WHERE id=?',[req.params.id]);
+  storeCache = { data: null, expiresAt: 0 };
+  res.json({success:true});
 });
 app.post('/api/store/:id/redeem', authMiddleware, async(req,res)=>{
   try{
@@ -2053,18 +2119,64 @@ app.post('/api/messages', authMiddleware, async(req,res)=>{
 });
 app.get('/api/messages/conversations', authMiddleware, async(req,res)=>{
   try{
-    const rows=await db.all(`SELECT DISTINCT CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END as other_id FROM messages WHERE sender_id=? OR recipient_id=?`,
-      [req.user.id,req.user.id,req.user.id]);
-    const conversations=[];
-    for(const row of rows){
-      const other=await db.get('SELECT id,name,grade,role FROM users WHERE id=?',[row.other_id]);
-      if(!other) continue;
-      const last=await db.get(`SELECT * FROM messages WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?) ORDER BY timestamp DESC LIMIT 1`,
-        [req.user.id,row.other_id,row.other_id,req.user.id]);
-      const unread=await db.get(`SELECT COUNT(*) as c FROM messages WHERE sender_id=? AND recipient_id=? AND is_read=0`,[row.other_id,req.user.id]);
-      conversations.push({other,lastMessage:last,unreadCount:unread.c});
-    }
-    conversations.sort((a,b)=>(b.lastMessage?.timestamp||0)-(a.lastMessage?.timestamp||0));
+    const rows=await db.all(`
+      WITH scoped_messages AS (
+        SELECT
+          CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END AS other_id,
+          id,
+          sender_id,
+          recipient_id,
+          text,
+          is_read,
+          timestamp,
+          ROW_NUMBER() OVER (
+            PARTITION BY CASE WHEN sender_id=? THEN recipient_id ELSE sender_id END
+            ORDER BY timestamp DESC, id DESC
+          ) AS rn
+        FROM messages
+        WHERE sender_id=? OR recipient_id=?
+      ),
+      unread_counts AS (
+        SELECT sender_id AS other_id, COUNT(*) AS unread_count
+        FROM messages
+        WHERE recipient_id=? AND is_read=0
+        GROUP BY sender_id
+      )
+      SELECT
+        u.id AS other_id,
+        u.name AS other_name,
+        u.grade AS other_grade,
+        u.role AS other_role,
+        s.id AS message_id,
+        s.sender_id,
+        s.recipient_id,
+        s.text,
+        s.is_read,
+        s.timestamp,
+        COALESCE(unread_counts.unread_count, 0) AS unread_count
+      FROM scoped_messages s
+      JOIN users u ON u.id=s.other_id
+      LEFT JOIN unread_counts ON unread_counts.other_id=s.other_id
+      WHERE s.rn=1
+      ORDER BY s.timestamp DESC, s.id DESC
+    `,[req.user.id,req.user.id,req.user.id,req.user.id,req.user.id]);
+    const conversations=rows.map(row=>({
+      other:{
+        id:row.other_id,
+        name:row.other_name,
+        grade:row.other_grade,
+        role:row.other_role,
+      },
+      lastMessage:{
+        id:row.message_id,
+        sender_id:row.sender_id,
+        recipient_id:row.recipient_id,
+        text:row.text,
+        is_read:row.is_read,
+        timestamp:row.timestamp,
+      },
+      unreadCount:row.unread_count||0,
+    }));
     res.json(conversations);
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -2082,7 +2194,12 @@ app.get('/api/messages/unread-count', authMiddleware, async(req,res)=>{
   res.json({count:row.c});
 });
 app.get('/api/messages/users', authMiddleware, async(req,res)=>{
-  res.json(await db.all("SELECT id,name,grade,role FROM users WHERE id!=? ORDER BY name ASC",[req.user.id]));
+  let users = getFreshCache(messageUsersCache);
+  if(!users){
+    users = await db.all("SELECT id,name,grade,role FROM users ORDER BY name ASC");
+    setCacheValue(messageUsersCache, users, MESSAGES_USERS_CACHE_TTL_MS);
+  }
+  res.json(users.filter(user=>user.id!==req.user.id));
 });
 
 // ── SUGGESTIONS ──
@@ -2139,6 +2256,12 @@ app.get('/api/notifications', authMiddleware, async(req,res)=>{
     res.json({items, unreadCount:unread?.c||0});
   }catch(e){res.status(500).json({error:e.message});}
 });
+app.get('/api/notifications/unread-count', authMiddleware, async(req,res)=>{
+  try{
+    const unread = await db.get('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0',[req.user.id]);
+    res.json({unreadCount:unread?.c||0});
+  }catch(e){res.status(500).json({error:e.message});}
+});
 app.post('/api/notifications/read-all', authMiddleware, async(req,res)=>{
   try{
     await db.run('UPDATE notifications SET is_read=1 WHERE user_id=?',[req.user.id]);
@@ -2155,15 +2278,16 @@ app.post('/api/notifications/:id/read', authMiddleware, async(req,res)=>{
 // ── POSTS / FEED ──
 app.get('/api/feed', authMiddleware, async(req,res)=>{
   try{
-    const [posts, allLikes] = await Promise.all([
-      db.all(`SELECT p.*,u.name as author_name,u.role as author_role FROM posts p JOIN users u ON p.user_id=u.id ORDER BY p.timestamp DESC LIMIT 50`),
-      db.all(`SELECT post_id, COUNT(*) as c FROM post_likes GROUP BY post_id`),
+    const posts = await db.all(`SELECT p.*,u.name as author_name,u.role as author_role FROM posts p JOIN users u ON p.user_id=u.id ORDER BY p.timestamp DESC LIMIT 50`);
+    if(!posts.length) return res.json([]);
+    const postIds = posts.map(post=>post.id);
+    const placeholders = postIds.map(()=>'?').join(',');
+    const [allLikes, likedRows] = await Promise.all([
+      db.all(`SELECT post_id, COUNT(*) as c FROM post_likes WHERE post_id IN (${placeholders}) GROUP BY post_id`, postIds),
+      db.all(`SELECT post_id FROM post_likes WHERE user_id=? AND post_id IN (${placeholders})`, [req.user.id, ...postIds]),
     ]);
 
-    const userLikes=new Set(
-      (await db.all(`SELECT post_id FROM post_likes WHERE user_id=?`,[req.user.id])).map(r=>r.post_id)
-    );
-
+    const userLikes=new Set(likedRows.map(r=>r.post_id));
     const likeCounts=Object.fromEntries(allLikes.map(r=>[r.post_id,r.c]));
 
     const feed=posts.map(p=>({
@@ -2599,6 +2723,7 @@ app.post('/api/casino/dice', authMiddleware, async(req,res)=>{
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'dice',amount,won?'win':'loss',payout,profit,Date.now()]);
     await recordTx(req.user.id, profit, 'casino_dice', betId, `Dice: ${direction} ${visibleTarget} — ${won?'won':'lost'} ⬡${amount}`);
+    invalidateCasinoBetsCache(req.user.id);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({roll, won, payout, profit, multiplier:parseFloat(multiplier.toFixed(4)), adjustedTarget:parseFloat(Number(adjustedTarget).toFixed(2)), newBalance:Math.floor(updated.credits)});
   }catch(e){res.status(500).json({error:e.message});}
@@ -2680,6 +2805,7 @@ app.post('/api/casino/plinko', authMiddleware, async(req,res)=>{
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'plinko',amount,won?'win':'loss',payout,profit,Date.now()]);
     await recordTx(req.user.id, profit, 'casino_plinko', betId, `Plinko ${risk}: slot ${slotIndex+1} at ${multiplier}x on ⬡${amount}`);
+    invalidateCasinoBetsCache(req.user.id);
 
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({
@@ -2759,6 +2885,7 @@ app.post('/api/casino/mines/reveal', authMiddleware, async(req,res)=>{
       await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
         [betId,req.user.id,'mines',game.betAmount,'loss',0,-game.betAmount,Date.now()]);
       await recordTx(req.user.id, -game.betAmount, 'casino_mines', betId, `Mines: hit a mine with ${game.mineCount} mine${game.mineCount===1?'':'s'}`);
+      invalidateCasinoBetsCache(req.user.id);
       game.status='lost';
       return res.json({
         hitMine:true,
@@ -2794,6 +2921,7 @@ app.post('/api/casino/mines/cashout', authMiddleware, async(req,res)=>{
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'mines',game.betAmount,'win',payout,profit,Date.now()]);
     await recordTx(req.user.id, profit, 'casino_mines', betId, `Mines: cashed out after ${game.revealedSafe.size} safe pick${game.revealedSafe.size===1?'':'s'} with ${game.mineCount} mine${game.mineCount===1?'':'s'}`);
+    invalidateCasinoBetsCache(req.user.id);
     game.status='cashed';
     minesGames.delete(req.user.id);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
@@ -2831,6 +2959,7 @@ app.post('/api/casino/coinflip', authMiddleware, adminOnly, async(req,res)=>{
     await db.run('INSERT INTO casino_bets (id,user_id,game,bet_amount,outcome,payout,profit,timestamp) VALUES (?,?,?,?,?,?,?,?)',
       [betId,req.user.id,'coinflip',amount,won?'win':'loss',payout,profit,Date.now()]);
     await recordTx(req.user.id, profit, 'casino_coinflip', betId, `Coin Flip: ${side} — ${won?'won':'lost'} ⬡${amount}`);
+    invalidateCasinoBetsCache(req.user.id);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({landed, won, payout, profit, newBalance:Math.floor(updated.credits)});
   }catch(e){res.status(500).json({error:e.message});}
@@ -2863,6 +2992,7 @@ app.post('/api/casino/roulette', authMiddleware, adminOnly, async(req,res)=>{
       [betId,req.user.id,'roulette',amount,won?'win':'loss',payout,profit,Date.now()]);
     const selectionLabel=betType==='number' ? `number ${value}` : betType;
     await recordTx(req.user.id, profit, 'casino_roulette', betId, `Roulette: ${selectionLabel} — ${won?'won':'lost'} ⬡${amount}`);
+    invalidateCasinoBetsCache(req.user.id);
     const updated = await db.get('SELECT credits FROM users WHERE id=?',[req.user.id]);
     res.json({
       number,
@@ -2879,7 +3009,10 @@ app.post('/api/casino/roulette', authMiddleware, adminOnly, async(req,res)=>{
 
 app.get('/api/casino/my-bets', authMiddleware, async(req,res)=>{
   try{
+    const cached = casinoBetsCache.get(req.user.id);
+    if(cached && cached.expiresAt > Date.now()) return res.json(cached.data);
     const bets = await db.all('SELECT * FROM casino_bets WHERE user_id=? ORDER BY timestamp DESC LIMIT 20',[req.user.id]);
+    casinoBetsCache.set(req.user.id, { data: bets, expiresAt: Date.now() + CASINO_BETS_CACHE_TTL_MS });
     res.json(bets);
   }catch(e){res.status(500).json({error:e.message});}
 });

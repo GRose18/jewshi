@@ -1603,7 +1603,7 @@ async function showLiveScreen(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('live-screen').style.display='block';
   await fetchLiveData();
-  liveInterval=setInterval(fetchLiveData,5000);
+  liveInterval=setInterval(fetchLiveData,20000);
   countdownInterval=setInterval(updateCountdowns,1000);
 }
 async function fetchLiveData(){
@@ -1802,13 +1802,13 @@ async function enterApp(){
   document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
   updateTopbar();renderMarkets();
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
-  unreadPollInterval=setInterval(pollUnreadCount,5000);pollUnreadCount();
-  resolutionPollInterval=setInterval(pollResolutions,8000);pollResolutions();
+  unreadPollInterval=setInterval(pollUnreadCount,20000);pollUnreadCount();
+  resolutionPollInterval=setInterval(pollResolutions,20000);pollResolutions();
   clearInterval(notificationPollInterval);
-  notificationPollInterval=setInterval(pollNotifications,7000);
+  notificationPollInterval=setInterval(pollNotifications,20000);
   pollNotifications();
   clearInterval(popupPollInterval);
-  popupPollInterval=setInterval(pollIncomingPopup,3000);
+  popupPollInterval=setInterval(pollIncomingPopup,10000);
   pollIncomingPopup();
   bindAssistanceRuntime();
   await loadAssistanceState(false);
@@ -3343,7 +3343,7 @@ async function renderMessages(){
   document.getElementById('thread-messages').innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;margin-top:40px;">Pick a conversation or start a new one.</p>';
   document.getElementById('thread-input').style.display='none';
   try{await loadConversations();}catch(e){document.getElementById('conversation-list').innerHTML='<p style="color:var(--red);font-size:12px;padding:16px;">Failed to load: '+e.message+'</p>';}
-  convPollInterval=setInterval(loadConversations,4000);
+  convPollInterval=setInterval(loadConversations,10000);
 }
 async function loadConversations(){
   const convs=await api('GET','/messages/conversations');
@@ -3370,7 +3370,7 @@ async function openThread(userId,userName){
   document.getElementById('msg-input').focus();
   clearInterval(msgPollInterval);
   await loadThread();
-  msgPollInterval=setInterval(loadThread,4000);
+  msgPollInterval=setInterval(loadThread,10000);
   await loadConversations();
 }
 async function loadThread(){
@@ -3468,10 +3468,10 @@ function updateNotificationBadge(){
 async function pollNotifications(){
   if(!authToken||!currentUser) return;
   try{
-    const data=await api('GET','/notifications');
-    notificationState=data||{items:[],unreadCount:0};
+    const data=await api('GET','/notifications/unread-count');
+    notificationState.unreadCount=data?.unreadCount||0;
     updateNotificationBadge();
-    if(notificationsPanelOpen) renderNotifications();
+    if(notificationsPanelOpen) await renderNotifications();
   }catch(e){}
 }
 async function openNotification(id,link){
