@@ -30,6 +30,19 @@ const MESSAGES_USERS_CACHE_TTL_MS = 60000;
 let messageUsersCache = { data: null, expiresAt: 0 };
 const CASINO_BETS_CACHE_TTL_MS = 8000;
 const casinoBetsCache = new Map();
+const BETS_MINE_CACHE_TTL_MS = 10000;
+const betsMineCache = new Map();
+let betsSnapshotVersion = 0;
+const NOTIFICATIONS_CACHE_TTL_MS = 15000;
+const notificationsListCache = new Map();
+const notificationsUnreadCache = new Map();
+const notificationVersions = new Map();
+const POPUP_PENDING_CACHE_TTL_MS = 5000;
+const popupPendingCache = new Map();
+const popupVersions = new Map();
+const ADMIN_LIST_CACHE_TTL_MS = 10000;
+const adminTransactionsCache = new Map();
+const adminCasinoCache = new Map();
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -93,6 +106,35 @@ function setCacheValue(target, data, ttlMs){
 function invalidateCasinoBetsCache(userId){
   if(!userId) return;
   casinoBetsCache.delete(userId);
+  adminCasinoCache.clear();
+}
+function bumpBetsSnapshotVersion(){
+  betsSnapshotVersion++;
+}
+function invalidateBetsMineCache(userId){
+  if(!userId) return;
+  betsMineCache.delete(userId);
+}
+function getNotificationVersion(userId){
+  return notificationVersions.get(userId) || 0;
+}
+function bumpNotificationVersion(userId){
+  if(!userId) return;
+  const next = getNotificationVersion(userId) + 1;
+  notificationVersions.set(userId, next);
+  notificationsListCache.delete(userId);
+  notificationsUnreadCache.delete(userId);
+}
+function getPopupVersion(userId){
+  return popupVersions.get(userId) || 0;
+}
+function bumpPopupVersion(userId){
+  if(!userId) return;
+  popupVersions.set(userId, getPopupVersion(userId) + 1);
+  popupPendingCache.delete(userId);
+}
+function getAdminCacheKey(search, limit, offset){
+  return JSON.stringify([search || '', limit || 0, offset || 0]);
 }
 
 async function initDB() {
@@ -834,11 +876,13 @@ async function finishBlackjackGame(userId){
 async function recordTx(userId, amount, type, refId=null, desc='') {
   await db.run('INSERT INTO transactions (id,user_id,amount,type,reference_id,description,timestamp) VALUES (?,?,?,?,?,?,?)',
     [generateId('tx'),userId,amount,type,refId,desc,Date.now()]);
+  adminTransactionsCache.clear();
 }
 async function createNotification(userId, type, title, body, link='') {
   if(!userId) return;
   await db.run('INSERT INTO notifications (id,user_id,type,title,body,link,is_read,created_at) VALUES (?,?,?,?,?,?,0,?)',
     [generateId('ntf'),userId,type,String(title||'').slice(0,160),String(body||'').slice(0,500),String(link||'').slice(0,120),Date.now()]);
+  bumpNotificationVersion(userId);
 }
 async function getCasinoStatsBaseline() {
   const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('casino_stats_baseline_wagered','casino_stats_baseline_profit')");
@@ -1266,10 +1310,12 @@ app.post('/api/admin/popups', authMiddleware, requirePopupAdminUnlocked, async(r
     const created = [];
     for(const recipient of recipients){
       await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE recipient_id=? AND status IN ('pending','active')",[Date.now(),recipient.id]);
+      bumpPopupVersion(recipient.id);
       const id = generateId('popup');
       await db.run(`INSERT INTO popups (id,sender_id,recipient_id,title,message,alert_text,media_type,media_url,audio_url,rave_enabled,alert_enabled,closeout_enabled,status,created_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id,req.user.id,recipient.id,title?.trim()||'',message?.trim()||'',alertText?.trim()||'',mediaType,mediaUrl,audioUrl,raveEnabled?1:0,alertEnabled?1:0,closeoutEnabled?1:0,'pending',Date.now()]);
+      bumpPopupVersion(recipient.id);
       created.push(await db.get('SELECT * FROM popups WHERE id=?',[id]));
     }
     res.json({count:created.length,popups:created});
@@ -1288,8 +1334,10 @@ app.get('/api/admin/popups/active', authMiddleware, requirePopupAdminUnlocked, a
 
 app.post('/api/admin/popups/stop-all', authMiddleware, requirePopupAdminUnlocked, async(req,res)=>{
   try{
-    const row = await db.get("SELECT COUNT(*) as c FROM popups WHERE status IN ('pending','active')");
+    const popups = await db.all("SELECT recipient_id FROM popups WHERE status IN ('pending','active')");
+    const row = { c: popups.length };
     await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE status IN ('pending','active')",[Date.now()]);
+    popups.forEach(popup=>bumpPopupVersion(popup.recipient_id));
     res.json({success:true,stopped:row?.c||0});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1300,22 +1348,35 @@ app.post('/api/admin/popups/:id/stop', authMiddleware, requirePopupAdminUnlocked
     if(!popup) return res.status(404).json({error:'Pop-up not found'});
     if(!['pending','active'].includes(popup.status)) return res.json({success:true});
     await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE id=?",[Date.now(),req.params.id]);
+    bumpPopupVersion(popup.recipient_id);
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.get('/api/popups/pending', authMiddleware, async(req,res)=>{
   try{
+    const version = getPopupVersion(req.user.id);
+    const cached = popupPendingCache.get(req.user.id);
+    if(cached && cached.expiresAt > Date.now() && cached.version === version){
+      return res.json(cached.data);
+    }
     const popup = await db.get(`SELECT * FROM popups
       WHERE recipient_id=? AND status IN ('pending','active')
       ORDER BY created_at DESC LIMIT 1`,[req.user.id]);
-    if(!popup) return res.json({popup:null});
+    if(!popup){
+      const data = {popup:null};
+      popupPendingCache.set(req.user.id, { data, expiresAt: Date.now() + POPUP_PENDING_CACHE_TTL_MS, version });
+      return res.json(data);
+    }
     if(popup.status==='pending'){
       await db.run("UPDATE popups SET status='active', shown_at=? WHERE id=?",[Date.now(),popup.id]);
       popup.status='active';
       popup.shown_at=Date.now();
+      bumpPopupVersion(req.user.id);
     }
-    res.json({popup});
+    const data = {popup};
+    popupPendingCache.set(req.user.id, { data, expiresAt: Date.now() + POPUP_PENDING_CACHE_TTL_MS, version: getPopupVersion(req.user.id) });
+    res.json(data);
   }catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -1326,6 +1387,7 @@ app.post('/api/popups/:id/dismiss', authMiddleware, async(req,res)=>{
     if(popup.recipient_id!==req.user.id) return res.status(403).json({error:'Not your pop-up'});
     if(!popup.closeout_enabled) return res.status(400).json({error:'This pop-up cannot be closed by the recipient'});
     await db.run("UPDATE popups SET status='stopped', stopped_at=? WHERE id=?",[Date.now(),req.params.id]);
+    bumpPopupVersion(req.user.id);
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1859,6 +1921,7 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
       await createNotification(b.user_id,'bet_win','Bet Won',`${m.question} resolved ${outcome}. You won ⬡${pay}.`,'portfolio');
     }
     await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
+    bumpBetsSnapshotVersion();
     res.json({success:true,outcome,pool:m.pool,wins:wins.map(b=>({id:b.id,user_id:b.user_id,amount:b.amount,payout:Math.round((b.amount/total)*m.pool)}))});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1880,11 +1943,13 @@ app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(
       await createNotification(b.user_id,'bet_win','Bet Won',`${m.question} resolved ${outcome}. You won ⬡${pay}.`,'portfolio');
     }
     await db.run("UPDATE bets SET status='lost' WHERE market_id=? AND side!=? AND status='active'",[m.id,outcome]);
+    bumpBetsSnapshotVersion();
     res.json({success:true,outcome,actual,line:m.line});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
   await db.run("UPDATE markets SET status='closed' WHERE id=?",[req.params.id]);
+  bumpBetsSnapshotVersion();
   res.json({success:true});
 });
 
@@ -1928,11 +1993,19 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
     await db.run("INSERT INTO bets (id,user_id,market_id,side,amount,shares,status,timestamp) VALUES (?,?,?,?,?,?,'active',?)",
       [betId,user.id,marketId,side,amount,amount,Date.now()]);
     await recordTx(user.id,-amount,'bet_placed',betId,`Bet ${side} on: ${m.question}`);
+    invalidateBetsMineCache(user.id);
+    bumpBetsSnapshotVersion();
     res.json({betId,shares:amount,newBalance:user.credits-amount});
   }catch(e){res.status(400).json({error:e.message});}
 });
 app.get('/api/bets/mine', authMiddleware, async(req,res)=>{
-  res.json(await db.all(`SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,m.b_param,m.market_type,m.line,m.over_shares,m.under_shares FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]));
+  const cached = betsMineCache.get(req.user.id);
+  if(cached && cached.expiresAt > Date.now() && cached.version === betsSnapshotVersion){
+    return res.json(cached.data);
+  }
+  const data = await db.all(`SELECT b.*,m.question,m.category,m.status as market_status,m.yes_shares,m.no_shares,m.b_param,m.market_type,m.line,m.over_shares,m.under_shares FROM bets b JOIN markets m ON b.market_id=m.id WHERE b.user_id=? ORDER BY b.timestamp DESC`,[req.user.id]);
+  betsMineCache.set(req.user.id, { data, expiresAt: Date.now() + BETS_MINE_CACHE_TTL_MS, version: betsSnapshotVersion });
+  res.json(data);
 });
 
 // ── ONLINE MATCHES ──
@@ -2251,26 +2324,42 @@ app.post('/api/suggestions', authMiddleware, async(req,res)=>{
 // ── NOTIFICATIONS ──
 app.get('/api/notifications', authMiddleware, async(req,res)=>{
   try{
+    const version = getNotificationVersion(req.user.id);
+    const cached = notificationsListCache.get(req.user.id);
+    if(cached && cached.expiresAt > Date.now() && cached.version === version){
+      return res.json(cached.data);
+    }
     const items = await db.all('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100',[req.user.id]);
     const unread = await db.get('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0',[req.user.id]);
-    res.json({items, unreadCount:unread?.c||0});
+    const data = {items, unreadCount:unread?.c||0};
+    notificationsListCache.set(req.user.id, { data, expiresAt: Date.now() + NOTIFICATIONS_CACHE_TTL_MS, version });
+    res.json(data);
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/notifications/unread-count', authMiddleware, async(req,res)=>{
   try{
+    const version = getNotificationVersion(req.user.id);
+    const cached = notificationsUnreadCache.get(req.user.id);
+    if(cached && cached.expiresAt > Date.now() && cached.version === version){
+      return res.json(cached.data);
+    }
     const unread = await db.get('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0',[req.user.id]);
-    res.json({unreadCount:unread?.c||0});
+    const data = {unreadCount:unread?.c||0};
+    notificationsUnreadCache.set(req.user.id, { data, expiresAt: Date.now() + NOTIFICATIONS_CACHE_TTL_MS, version });
+    res.json(data);
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/notifications/read-all', authMiddleware, async(req,res)=>{
   try{
     await db.run('UPDATE notifications SET is_read=1 WHERE user_id=?',[req.user.id]);
+    bumpNotificationVersion(req.user.id);
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/notifications/:id/read', authMiddleware, async(req,res)=>{
   try{
     await db.run('UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?',[req.params.id, req.user.id]);
+    bumpNotificationVersion(req.user.id);
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -2375,6 +2464,9 @@ app.get('/api/admin/transactions', authMiddleware, adminOnly, async(req,res)=>{
     const search = String(req.query.search || '').trim();
     const limit = parsePage(req.query.limit, 100, 20, 500);
     const offset = parsePage(req.query.offset, 0, 0, 100000);
+    const cacheKey = getAdminCacheKey(search, limit, offset);
+    const cached = adminTransactionsCache.get(cacheKey);
+    if(cached && cached.expiresAt > Date.now()) return res.json(cached.data);
     if(search){
       const like = `%${search}%`;
       const items = await db.all(
@@ -2393,7 +2485,9 @@ app.get('/api/admin/transactions', authMiddleware, adminOnly, async(req,res)=>{
          WHERE LOWER(t.user_id) LIKE LOWER(?) OR LOWER(COALESCE(u.name,'')) LIKE LOWER(?) OR LOWER(COALESCE(t.description,'')) LIKE LOWER(?) OR LOWER(COALESCE(t.type,'')) LIKE LOWER(?)`,
         [like,like,like,like]
       );
-      return res.json({items,total:totalRow?.c||0,hasMore:offset + items.length < (totalRow?.c||0)});
+      const data = {items,total:totalRow?.c||0,hasMore:offset + items.length < (totalRow?.c||0)};
+      adminTransactionsCache.set(cacheKey, { data, expiresAt: Date.now() + ADMIN_LIST_CACHE_TTL_MS });
+      return res.json(data);
     }
     const items = await db.all(
       `SELECT t.*,u.name as user_name
@@ -2404,7 +2498,9 @@ app.get('/api/admin/transactions', authMiddleware, adminOnly, async(req,res)=>{
       [limit,offset]
     );
     const totalRow = await db.get(`SELECT COUNT(*) as c FROM transactions`);
-    res.json({items,total:totalRow?.c||0,hasMore:offset + items.length < (totalRow?.c||0)});
+    const data = {items,total:totalRow?.c||0,hasMore:offset + items.length < (totalRow?.c||0)};
+    adminTransactionsCache.set(cacheKey, { data, expiresAt: Date.now() + ADMIN_LIST_CACHE_TTL_MS });
+    res.json(data);
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
@@ -2514,6 +2610,8 @@ app.post('/api/bets/:id/cancel', authMiddleware, async(req,res)=>{
       else await db.run('UPDATE markets SET no_shares=no_shares-?,pool=pool-? WHERE id=?',[bet.amount,refund,m.id]);
     }
     await recordTx(req.user.id,refund,'bet_cancelled',bet.id,`Cancelled bet on: ${m.question} (5% fee kept)`);
+    invalidateBetsMineCache(req.user.id);
+    bumpBetsSnapshotVersion();
     res.json({success:true,refund,fee});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -3022,6 +3120,9 @@ app.get('/api/admin/casino', authMiddleware, adminOnly, async(req,res)=>{
     const search = String(req.query.search || '').trim();
     const limit = parsePage(req.query.limit, 100, 20, 500);
     const offset = parsePage(req.query.offset, 0, 0, 100000);
+    const cacheKey = getAdminCacheKey(search, limit, offset);
+    const cached = adminCasinoCache.get(cacheKey);
+    if(cached && cached.expiresAt > Date.now()) return res.json(cached.data);
     let bets;
     let totalRow;
     if(search){
@@ -3060,7 +3161,9 @@ app.get('/api/admin/casino', authMiddleware, adminOnly, async(req,res)=>{
       total_wagered: Math.max(0, Number(stats?.total_wagered || 0) - baseline.wagered),
       house_profit: Number(stats?.house_profit || 0) - baseline.profit,
     };
-    res.json({bets, stats:adjustedStats, total:totalRow?.c||0, hasMore:offset + bets.length < (totalRow?.c||0)});
+    const data = {bets, stats:adjustedStats, total:totalRow?.c||0, hasMore:offset + bets.length < (totalRow?.c||0)};
+    adminCasinoCache.set(cacheKey, { data, expiresAt: Date.now() + ADMIN_LIST_CACHE_TTL_MS });
+    res.json(data);
   }catch(e){res.status(500).json({error:e.message});}
 });
 
