@@ -527,6 +527,7 @@
           <p style="font-size:12px;color:var(--text3);margin-top:3px;">Play games with your credits</p>
         </div>
       </div>
+      <div id="live-event-night-preview" class="grose-only" style="display:none;margin-bottom:18px;"></div>
       
       
       <!-- GAME LOBBY -->
@@ -1329,6 +1330,10 @@
         <hr class="divider">
         <div id="admin-store-list"></div>
       </div>
+      <div class="panel grose-only" id="admin-live-event-mockup-panel" style="display:none;">
+        <div class="panel-title">Live Event Nights Mockup</div>
+        <div id="admin-live-event-mockup"></div>
+      </div>
       <div class="panel"><div class="panel-title">Student Accounts</div><div id="admin-users-list"></div></div>
       <div class="panel">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
@@ -1543,6 +1548,7 @@ let notificationsPanelOpen=false;
 let casinoConfig={diceOdds:100,plinkoOdds:100,blackjackOdds:100,minesOdds:100,rouletteOdds:100,coinflipOdds:100};
 let adminTxnState={items:[],search:'',offset:0,limit:100,total:0,hasMore:false};
 let adminCasinoState={bets:[],search:'',offset:0,limit:100,total:0,hasMore:false};
+const liveEventNightMockup={title:'Double Trouble',subtitle:'Partial boosts are live across the casino tonight.',host:'GROSE',windowLabel:'8:00 PM - 8:45 PM',countdown:'18:42',modifiers:[{label:'Dice',detail:'+12% win bias',tone:'var(--gold)'},{label:'Plinko',detail:'Center lanes boosted',tone:'#53d6ff'},{label:'Blackjack',detail:'2x standard wins',tone:'var(--green)'},{label:'Mines',detail:'Friendlier first 2 picks',tone:'#ff8a4c'}],leaderboard:[{name:'Ezra S',score:'+⬡ 12,440'},{name:'Burke W',score:'+⬡ 9,880'},{name:'Gabe',score:'+⬡ 8,210'}]};
 let minesBusy=false;
 let minesState=null;
 let minesCount=3;
@@ -1800,6 +1806,7 @@ async function enterApp(){
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
   document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
   document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
+  renderLiveEventNightPreview();
   updateTopbar();renderMarkets();
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
   unreadPollInterval=setInterval(pollUnreadCount,20000);pollUnreadCount();
@@ -1882,7 +1889,7 @@ function switchTab(tab){
   if(tab==='assistance')renderAssistanceTab();
   if(tab==='admin')renderAdminTab();
   if(tab==='popup')renderPopupTab();
-  if(tab==='casino')initCasino();
+  if(tab==='casino'){renderLiveEventNightPreview();initCasino();}
 }
 
 // ── ASSISTANCE ──
@@ -3755,6 +3762,15 @@ async function renderAdminTab(){
     <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-size:20px;">${item.icon}</span><span style="flex:1;font-size:13px;color:var(--text)">${item.name} — ⬡${item.cost}</span>
       <button class="btn-admin btn-sm btn-danger" onclick="removeStoreItem('${item.id}')">Remove</button></div>`).join('')||'<p style="color:var(--text3);font-size:13px;">No items.</p>';
+  const liveEventPanel=document.getElementById('admin-live-event-mockup-panel');
+  const liveEventMockup=document.getElementById('admin-live-event-mockup');
+  if(currentUser.id==='GROSE'&&liveEventPanel&&liveEventMockup){
+    liveEventPanel.style.display='block';
+    liveEventMockup.innerHTML=buildLiveEventNightAdminMockup();
+  }else if(liveEventPanel&&liveEventMockup){
+    liveEventPanel.style.display='none';
+    liveEventMockup.innerHTML='';
+  }
 
   const isGrose=currentUser.id==='GROSE';
   const emailCount=users.filter(u=>u.on_email_list).length;
@@ -3855,6 +3871,28 @@ async function renderAdminTab(){
   renderAdminCasinoLog();
   adminTxnState.search=document.getElementById('admin-txn-search')?.value||adminTxnState.search||'';
   await loadAdminTransactions(true);
+}
+
+function buildLiveEventNightCasinoMockup(){
+  const event=liveEventNightMockup;
+  return `<div style="position:relative;overflow:hidden;padding:20px 22px;border-radius:24px;border:1px solid rgba(240,192,64,0.28);background:radial-gradient(circle at top right, rgba(255,124,77,0.22), transparent 36%),radial-gradient(circle at left center, rgba(83,214,255,0.18), transparent 30%),linear-gradient(135deg, rgba(25,18,14,0.98), rgba(41,17,12,0.96) 45%, rgba(22,21,32,0.98));box-shadow:0 28px 48px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.06);"><div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;"><div><div style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(240,192,64,0.14);border:1px solid rgba(240,192,64,0.3);color:var(--gold);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">Live Event Night Mockup</div><div style="font-size:28px;font-weight:800;letter-spacing:-0.04em;color:#fff;margin-top:12px;">${event.title}</div><div style="font-size:14px;color:rgba(255,255,255,0.76);max-width:620px;line-height:1.6;margin-top:8px;">${event.subtitle}</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;"><span style="padding:7px 11px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);font-size:12px;color:rgba(255,255,255,0.84);">Hosted by ${event.host}</span><span style="padding:7px 11px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);font-size:12px;color:rgba(255,255,255,0.84);">${event.windowLabel}</span><span style="padding:7px 11px;border-radius:999px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.24);font-size:12px;color:var(--green);">Ends in ${event.countdown}</span></div></div><div style="min-width:220px;padding:14px 16px;border-radius:20px;background:rgba(7,7,12,0.36);border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px);"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.55);margin-bottom:10px;">Tonight's Heat</div><div style="display:flex;flex-direction:column;gap:9px;">${event.modifiers.map(mod=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;"><span style="color:#fff;font-weight:700;">${mod.label}</span><span style="color:${mod.tone};font-weight:700;">${mod.detail}</span></div>`).join('')}</div></div></div></div>`;
+}
+
+function buildLiveEventNightAdminMockup(){
+  const event=liveEventNightMockup;
+  return `<div style="display:grid;grid-template-columns:minmax(320px,1.15fr) minmax(260px,0.85fr);gap:18px;align-items:start;"><div style="padding:20px;border-radius:22px;border:1px solid rgba(240,192,64,0.24);background:radial-gradient(circle at top right, rgba(255,124,77,0.18), transparent 34%),linear-gradient(135deg, rgba(22,18,15,0.98), rgba(17,17,24,0.98));box-shadow:0 20px 40px rgba(0,0,0,0.24);"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);font-weight:800;">Admin Event Controller</div><div style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#fff;margin-top:8px;">${event.title}</div><div style="font-size:13px;color:rgba(255,255,255,0.72);line-height:1.55;margin-top:8px;max-width:520px;">A featured casino night with timed boosts, a temporary leaderboard, and visible modifier pills on each game card.</div></div><div style="padding:10px 12px;border-radius:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);font-size:12px;color:rgba(255,255,255,0.82);">Preview Only</div></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px;"><div style="padding:14px;border-radius:18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);"><div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.1em;">Schedule</div><div style="font-size:14px;color:#fff;font-weight:700;margin-top:8px;">${event.windowLabel}</div><div style="font-size:12px;color:rgba(255,255,255,0.66);margin-top:6px;">Flash bonus every 15 minutes for 5 minutes.</div></div><div style="padding:14px;border-radius:18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);"><div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.1em;">Reward Pool</div><div style="font-size:14px;color:#fff;font-weight:700;margin-top:8px;">⬡ 5,000 + Event Badge</div><div style="font-size:12px;color:rgba(255,255,255,0.66);margin-top:6px;">Top 10 earn cosmetics, top 3 earn bonus credits.</div></div></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px;">${event.modifiers.map(mod=>`<div style="padding:13px 14px;border-radius:18px;background:rgba(8,8,14,0.34);border:1px solid rgba(255,255,255,0.08);"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><span style="font-size:13px;color:#fff;font-weight:700;">${mod.label}</span><span style="font-size:11px;color:${mod.tone};font-weight:800;">LIVE</span></div><div style="font-size:12px;color:${mod.tone};font-weight:700;margin-top:8px;">${mod.detail}</div><div style="margin-top:10px;height:8px;border-radius:999px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="width:${mod.label==='Blackjack'?'82':'68'}%;height:100%;border-radius:999px;background:linear-gradient(90deg, ${mod.tone}, rgba(255,255,255,0.92));"></div></div></div>`).join('')}</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;"><button class="btn-admin btn-sm" style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.12);">Preview Broadcast</button><button class="btn-admin btn-sm" style="background:linear-gradient(135deg,#f0c040,#ff8a4c);color:#161015;">Go Live Now</button><button class="btn-admin btn-sm" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.34);color:#ffb8c3;">End Event</button></div></div><div style="display:flex;flex-direction:column;gap:18px;"><div style="padding:18px;border-radius:22px;background:var(--bg3);border:1px solid var(--border);"><div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;">Event Leaderboard</div><div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">${event.leaderboard.map((entry, idx)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 12px;border-radius:16px;background:${idx===0?'rgba(240,192,64,0.1)':'var(--bg4)'};border:1px solid ${idx===0?'rgba(240,192,64,0.24)':'var(--border)'};"><span style="font-size:13px;color:var(--text);font-weight:700;">${idx+1}. ${entry.name}</span><span style="font-size:13px;color:${idx===0?'var(--gold)':'var(--green)'};font-weight:800;">${entry.score}</span></div>`).join('')}</div></div><div style="padding:18px;border-radius:22px;background:var(--bg3);border:1px solid var(--border);"><div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;">Player-Facing Banner Preview</div><div style="margin-top:14px;">${buildLiveEventNightCasinoMockup()}</div></div></div></div>`;
+}
+
+function renderLiveEventNightPreview(){
+  const preview=document.getElementById('live-event-night-preview');
+  if(!preview) return;
+  if(currentUser?.id==='GROSE'){
+    preview.style.display='block';
+    preview.innerHTML=buildLiveEventNightCasinoMockup();
+  }else{
+    preview.style.display='none';
+    preview.innerHTML='';
+  }
 }
 
 function handleAdminLogSearchKey(event, type){
