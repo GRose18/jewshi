@@ -2010,23 +2010,24 @@ async function renderExchangeTab(){
   const overdueLoans=(data.loans||[]).filter(loan=>loan.status==='overdue'||loan.is_overdue);
   const currentLoans=(data.loans||[]).filter(loan=>loan.status==='active'&&!loan.is_overdue);
   const userOptions=(data.users||[]).map(user=>`<option value="${esc(user.id)}">${esc(user.name)} · ${formatExchangeCredits(user.credits)} · Score ${user.shekelScore}</option>`).join('');
+  const lenderTone=exchangeBandTone(data.lender?.shekelScore||650);
   root.innerHTML=`
     <div class="exchange-grid">
       <div>
         <div class="exchange-hero">
           <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
             <div style="max-width:640px;">
-              <div class="exchange-score-band" style="color:${tone.color};background:${tone.bg};border-color:${tone.border};">Exchange Desk · Admin Only</div>
-              <div style="font-size:30px;font-weight:800;letter-spacing:-0.04em;color:#fff;margin-top:14px;">Shekel Score + Credit Exchange</div>
-              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">This is your personal lending desk. You are always the lender on this screen, and you can extend exchange offers to eligible users while tracking overdue collection.</div>
+              <div class="exchange-score-band" style="color:${tone.color};background:${tone.bg};border-color:${tone.border};">Exchange</div>
+              <div style="font-size:30px;font-weight:800;letter-spacing:-0.04em;color:#fff;margin-top:14px;">Credit Exchange</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">Request personal exchanges, track what people owe you, and see overdue collection once a loan passes its due date.</div>
             </div>
             <div class="exchange-score-card" style="min-width:260px;">
-              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Your Lending Balance</div>
+              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Your Balance</div>
               <div style="display:flex;align-items:baseline;gap:10px;margin-top:12px;">
                 <div style="font-size:40px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${formatExchangeCredits(data.lender?.credits||0)}</div>
-                <div style="padding:6px 10px;border-radius:999px;background:${tone.bg};border:1px solid ${tone.border};color:${tone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${tone.label}</div>
+                <div style="padding:6px 10px;border-radius:999px;background:${lenderTone.bg};border:1px solid ${lenderTone.border};color:${lenderTone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${lenderTone.label}</div>
               </div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Signed in as ${esc(data.lender?.name||currentUser?.name||currentUser?.id||'You')}. Shekel Scores still help you judge who is safest to lend to.</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Signed in as ${esc(data.lender?.name||currentUser?.name||currentUser?.id||'You')}.</div>
             </div>
           </div>
           <div class="exchange-stat-grid">
@@ -2066,7 +2067,7 @@ async function renderExchangeTab(){
             <input id="exchange-note-input" placeholder="Why does the borrower need the credits?">
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;">
-            <div style="font-size:12px;color:var(--text3);">You are always the lender here. Only accounts at least 10 days old are eligible. Flat ${data.settings?.interestPercent||5}% interest. Automatic deductions begin only after overdue.</div>
+            <div style="font-size:12px;color:var(--text3);">Only other admins are eligible right now, and their accounts must be at least 10 days old. Flat ${data.settings?.interestPercent||5}% interest. Automatic deductions begin only after overdue.</div>
             <button class="btn-admin" onclick="createExchangeRequest()">Create Offer</button>
           </div>
         </div>
@@ -2141,19 +2142,14 @@ async function renderExchangeTab(){
         </div>
 
         <div class="panel">
-          <div class="panel-title">Policy Design</div>
-          <div class="exchange-policy">
-            ${[
-              ['Interest Model',`Fixed flat ${data.settings?.interestPercent||5}% interest on every approved loan. No compounding and no custom rates.`],
-              ['Auto-Collection','Jewshi leaves current loans alone. Automatic deductions begin only after a loan is overdue.'],
-              ['Shekel Score','Scores run from 300 to 850 and shift based on repayment history, active debt, and overdue exposure.'],
-              ['Personal Scope','This desk is personal. You are always the lender, and only your own offers and loans appear here.'],
-            ].map(([title,body])=>`
-              <div class="exchange-policy-row">
-                <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--text);min-width:118px;">${title}</div>
-                <div style="font-size:12px;color:var(--text2);line-height:1.65;">${body}</div>
-              </div>
-            `).join('')}
+          <div class="panel-title">Your Shekel Score</div>
+          <div class="exchange-score-card" style="border-radius:18px;background:linear-gradient(180deg, ${lenderTone.bg}, rgba(13,13,20,0.96));border:1px solid ${lenderTone.border};">
+            <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Current Score</div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-top:12px;">
+              <div style="font-size:52px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${data.lender?.shekelScore||650}</div>
+              <div style="padding:6px 10px;border-radius:999px;background:${lenderTone.bg};border:1px solid ${lenderTone.border};color:${lenderTone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${data.lender?.band||lenderTone.label}</div>
+            </div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-top:12px;">Your score lives in the 300–850 range. It rises with completed exchanges and falls when your open loans go overdue.</div>
           </div>
         </div>
 
@@ -6141,7 +6137,6 @@ async function loadRouletteHistory(){
 }
 
 function openCoinFlip(){
-  if(currentUser?.role!=='admin'){showToast('Coin Flip is admin-only for testing right now.');return;}
   document.getElementById('casino-lobby').style.display='none';
   hideCasinoGameViews();
   document.getElementById('casino-coinflip').style.display='block';

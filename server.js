@@ -1092,7 +1092,7 @@ async function collectOverdueExchangeDebtForUser(userId){
 }
 async function buildExchangeDashboardData(lenderUserId){
   await syncExchangeLoanStatuses();
-  const users=await db.all("SELECT id,name,role,grade,CAST(credits AS TEXT) as credits_text,created_at FROM users WHERE role='student' AND id!=? ORDER BY name ASC",[lenderUserId]);
+  const users=await db.all("SELECT id,name,role,grade,CAST(credits AS TEXT) as credits_text,created_at FROM users WHERE role='admin' AND id!=? ORDER BY name ASC",[lenderUserId]);
   const lenderUser=await db.get('SELECT id,name,role,CAST(credits AS TEXT) as credits_text FROM users WHERE id=?',[lenderUserId]);
   const eligibleUsers=users.filter(isExchangeEligibleUser);
   const requests=await db.all(`
@@ -1209,12 +1209,19 @@ async function buildExchangeDashboardData(lenderUserId){
   const overdueLoans=activeLoans.filter(row=>row.is_overdue || row.status==='overdue');
   const totalOutstanding=activeLoans.reduce((sum,row)=>sum+row.remaining,0);
   const avgScore=usersWithScores.length ? Math.round(usersWithScores.reduce((sum,row)=>sum+row.shekelScore,0)/usersWithScores.length) : 650;
+  let lenderShekelScore=690;
+  lenderShekelScore += Math.min(loanRows.filter(row=>row.status==='paid').length * 10, 60);
+  lenderShekelScore += Math.min(Math.floor(toSafeNumber(lenderUser?.credits_text,0)/500), 24);
+  lenderShekelScore -= overdueLoans.length * 14;
+  lenderShekelScore=clampShekelScore(lenderShekelScore);
   return {
     settings:{interestPercent:EXCHANGE_INTEREST_PERCENT},
     lender:{
       id:lenderUser?.id||lenderUserId,
       name:lenderUser?.name||lenderUserId,
       credits:toSafeNumber(lenderUser?.credits_text,0),
+      shekelScore:lenderShekelScore,
+      band:getShekelBand(lenderShekelScore),
     },
     summary:{
       avgScore,
@@ -2269,7 +2276,7 @@ app.post('/api/admin/exchange/requests', authMiddleware, adminOnly, async(req,re
     if(borrowerId===req.user.id) return res.status(400).json({error:'You cannot lend to yourself'});
     if(!amount || amount<1) return res.status(400).json({error:'Enter a valid amount'});
     const [borrower,lender]=await Promise.all([
-      db.get("SELECT id,name,role,created_at FROM users WHERE id=? AND role='student'",[borrowerId]),
+      db.get("SELECT id,name,role,created_at FROM users WHERE id=? AND role='admin'",[borrowerId]),
       db.get("SELECT id,name,role,CAST(credits AS TEXT) as credits_text FROM users WHERE id=?",[req.user.id]),
     ]);
     if(!borrower || !lender) return res.status(404).json({error:'Borrower or lender not found'});
@@ -3635,7 +3642,7 @@ app.post('/api/casino/mines/cashout', authMiddleware, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message});}
 });
 
-app.post('/api/casino/coinflip', authMiddleware, adminOnly, async(req,res)=>{
+app.post('/api/casino/coinflip', authMiddleware, async(req,res)=>{
   try{
     const amount = Math.floor(Number(req.body.betAmount));
     const side = String(req.body.side||'heads').toLowerCase();
