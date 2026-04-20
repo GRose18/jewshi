@@ -93,6 +93,22 @@
   .main-content{padding:28px;max-width:1100px;margin:0 auto}
   .panel{background:var(--bg2);border-radius:var(--radius-lg);border:1px solid var(--border);padding:22px;margin-bottom:18px}
   .panel-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:16px}
+  .exchange-hero{position:relative;overflow:hidden;border-radius:24px;padding:26px 28px;border:1px solid rgba(0,208,132,0.18);background:
+    radial-gradient(circle at top right, rgba(0,208,132,0.14), transparent 34%),
+    radial-gradient(circle at left center, rgba(124,106,247,0.12), transparent 28%),
+    linear-gradient(135deg, rgba(12,19,18,0.98), rgba(13,22,20,0.98) 45%, rgba(18,17,29,0.98));
+    box-shadow:0 24px 44px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.04)}
+  .exchange-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,0.85fr);gap:18px;align-items:start}
+  .exchange-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+  .exchange-stat{padding:16px 18px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)}
+  .exchange-stat-label{font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3)}
+  .exchange-stat-value{font-size:24px;font-weight:800;letter-spacing:-0.03em;color:var(--text);margin-top:10px}
+  .exchange-score-card{padding:20px;border-radius:22px;background:linear-gradient(180deg, rgba(0,208,132,0.11), rgba(13,13,20,0.96));border:1px solid rgba(0,208,132,0.18)}
+  .exchange-score-band{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:999px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.2);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--green)}
+  .exchange-list{display:flex;flex-direction:column;gap:10px}
+  .exchange-item{padding:14px 15px;border-radius:18px;background:var(--bg3);border:1px solid var(--border)}
+  .exchange-policy{display:flex;flex-direction:column;gap:10px}
+  .exchange-policy-row{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)}
 
   /* MARKETS */
   .markets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
@@ -498,6 +514,7 @@
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
     <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
     <div class="nav-tab" data-tab="suggestions" onclick="switchTab('suggestions')">Suggestions</div>
+    <div class="nav-tab admin-only" data-tab="exchange" onclick="switchTab('exchange')" style="display:none;">Exchange</div>
     <div class="nav-tab assistance-only" data-tab="assistance" onclick="switchTab('assistance')" style="display:none;">Assistance</div>
     <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
@@ -1153,6 +1170,16 @@
           <div id="suggestions-list"><div class="loading">Loading suggestions…</div></div>
         </div>
       </div>
+    </div>
+
+    <div id="tab-exchange" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Exchange</h2>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Admin-only lending system preview with Shekel Score, trust policy, and overdue auto-collection rules.</p>
+        </div>
+      </div>
+      <div id="exchange-root"></div>
     </div>
 
     <div id="tab-assistance" class="tab-content">
@@ -1867,6 +1894,170 @@ function renderCasinoConfigReadout(){
   }).join('');
 }
 
+const exchangeMockupData={
+  score:742,
+  band:'Reliable',
+  availableCredit:'⬡ 1,250',
+  activeDebt:'⬡ 380',
+  overdueExposure:'⬡ 120',
+  summary:'Exchange is planned as a peer credit desk: users can request loans from one another, lenders earn fixed interest, and Jewshi only auto-collects once a loan is overdue.',
+  requests:[
+    {name:'Ezra Samet', amount:'⬡ 250', term:'7 days', score:781, note:'Needs credits for markets before the playoff slate.'},
+    {name:'Burke Wise', amount:'⬡ 120', term:'3 days', score:688, note:'Wants a short bridge loan before daily spin resets.'},
+  ],
+  loansGiven:[
+    {name:'Gabe', principal:'⬡ 300', repayment:'⬡ 315', due:'Apr 24, 4:00 PM', status:'Current'},
+    {name:'Taj', principal:'⬡ 80', repayment:'⬡ 84', due:'Apr 22, 9:15 AM', status:'Current'},
+  ],
+  overdueQueue:[
+    {name:'Student 002', remaining:'⬡ 120', overdue:'2 days overdue', action:'Auto-collect enabled'},
+    {name:'Student 003', remaining:'⬡ 45', overdue:'1 day overdue', action:'Store access blocked'},
+  ],
+  policy:[
+    ['Interest Model','Fixed flat interest on every approved loan. No custom rates, no compounding, no negotiations.'],
+    ['Auto-Collection','Jewshi does not touch active loans. Automatic deductions begin only after a loan becomes overdue.'],
+    ['Shekel Score','Score runs from 300 to 850 and moves based on repayment history, overdue debt, defaults, and account stability.'],
+    ['Lender Risk','Lenders are rewarded with interest, but they still take real borrower risk unless overdue collections recover the balance.'],
+  ]
+};
+
+function exchangeBandTone(score){
+  if(score>=780) return {color:'var(--green)', bg:'rgba(0,208,132,0.12)', border:'rgba(0,208,132,0.22)', label:'Trusted'};
+  if(score>=700) return {color:'#53d6ff', bg:'rgba(83,214,255,0.12)', border:'rgba(83,214,255,0.22)', label:'Reliable'};
+  if(score>=620) return {color:'var(--gold)', bg:'rgba(240,192,64,0.12)', border:'rgba(240,192,64,0.22)', label:'Watch'};
+  return {color:'var(--red)', bg:'rgba(255,69,96,0.12)', border:'rgba(255,69,96,0.24)', label:'Risk'};
+}
+
+function renderExchangeTab(){
+  if(!currentUser||currentUser.role!=='admin') return;
+  const root=document.getElementById('exchange-root');
+  if(!root) return;
+  const data=exchangeMockupData;
+  const tone=exchangeBandTone(data.score);
+  root.innerHTML=`
+    <div class="exchange-grid">
+      <div>
+        <div class="exchange-hero">
+          <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+            <div style="max-width:640px;">
+              <div class="exchange-score-band" style="color:${tone.color};background:${tone.bg};border-color:${tone.border};">Exchange Preview · Admin Only</div>
+              <div style="font-size:30px;font-weight:800;letter-spacing:-0.04em;color:#fff;margin-top:14px;">Shekel Score + Credit Exchange</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">${data.summary}</div>
+            </div>
+            <div class="exchange-score-card" style="min-width:260px;">
+              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">System Score</div>
+              <div style="display:flex;align-items:baseline;gap:10px;margin-top:12px;">
+                <div style="font-size:54px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${data.score}</div>
+                <div style="padding:6px 10px;border-radius:999px;background:${tone.bg};border:1px solid ${tone.border};color:${tone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${data.band}</div>
+              </div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Range is 300 to 850. Better repayment history raises trust and lending capacity.</div>
+            </div>
+          </div>
+          <div class="exchange-stat-grid">
+            <div class="exchange-stat">
+              <div class="exchange-stat-label">Request Capacity</div>
+              <div class="exchange-stat-value" style="color:var(--green);">${data.availableCredit}</div>
+            </div>
+            <div class="exchange-stat">
+              <div class="exchange-stat-label">Active Debt</div>
+              <div class="exchange-stat-value" style="color:var(--gold);">${data.activeDebt}</div>
+            </div>
+            <div class="exchange-stat">
+              <div class="exchange-stat-label">Overdue Exposure</div>
+              <div class="exchange-stat-value" style="color:${data.overdueExposure==='⬡ 0'?'var(--green)':'var(--red)'};">${data.overdueExposure}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Incoming Credit Requests</div>
+          <div class="exchange-list">
+            ${data.requests.map(req=>`
+              <div class="exchange-item">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                  <div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">${req.name}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:4px;">${req.term} · Shekel Score ${req.score}</div>
+                    <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:10px;">${req.note}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-size:18px;font-weight:800;color:var(--green);">${req.amount}</div>
+                    <div style="font-size:11px;color:var(--text3);margin-top:4px;">requested</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+                  <button class="btn-admin btn-sm" style="background:rgba(0,208,132,0.14);border:1px solid rgba(0,208,132,0.24);color:var(--green);">Approve + 5%</button>
+                  <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2);">Review Profile</button>
+                  <button class="btn-admin btn-sm btn-danger">Decline</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Loans You Have Given</div>
+          <div class="exchange-list">
+            ${data.loansGiven.map(loan=>`
+              <div class="exchange-item">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                  <div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">${loan.name}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:4px;">Principal ${loan.principal} · Repays ${loan.repayment}</div>
+                  </div>
+                  <div style="padding:6px 10px;border-radius:999px;background:rgba(83,214,255,0.10);border:1px solid rgba(83,214,255,0.2);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#53d6ff;">${loan.status}</div>
+                </div>
+                <div style="font-size:12px;color:var(--text2);margin-top:12px;">Due ${loan.due}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div class="panel">
+          <div class="panel-title">Overdue Collection Queue</div>
+          <div class="exchange-list">
+            ${data.overdueQueue.map(item=>`
+              <div class="exchange-item" style="border-color:rgba(255,69,96,0.14);">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                  <div>
+                    <div style="font-size:13px;font-weight:700;color:var(--text);">${item.name}</div>
+                    <div style="font-size:12px;color:var(--red);margin-top:5px;">${item.overdue}</div>
+                  </div>
+                  <div style="font-size:16px;font-weight:800;color:var(--gold);">${item.remaining}</div>
+                </div>
+                <div style="font-size:12px;color:var(--text2);margin-top:12px;">${item.action}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Policy Design</div>
+          <div class="exchange-policy">
+            ${data.policy.map(([title,body])=>`
+              <div class="exchange-policy-row">
+                <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--text);min-width:118px;">${title}</div>
+                <div style="font-size:12px;color:var(--text2);line-height:1.65;">${body}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">What Launches First</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;color:var(--text2);line-height:1.65;">
+            <div>1. Peer loan requests with fixed interest and due dates.</div>
+            <div>2. Shekel Score shown on request approval screens and profiles.</div>
+            <div>3. Borrowers keep full control while current; Jewshi only starts auto-deducting once overdue.</div>
+            <div>4. Overdue borrowers lose loan access and redemptions until balances recover.</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function switchTab(tab){
   if(tab==='assistance'&&!canUseAssistanceTab()) return;
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
@@ -1880,6 +2071,7 @@ function switchTab(tab){
   if(tab==='store')renderStore();
   if(tab==='messages')renderMessages();
   if(tab==='suggestions')renderSuggestions();
+  if(tab==='exchange')renderExchangeTab();
   if(tab==='assistance')renderAssistanceTab();
   if(tab==='admin')renderAdminTab();
   if(tab==='popup')renderPopupTab();
