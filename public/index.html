@@ -1290,6 +1290,30 @@
               <span style="font-size:12px;color:var(--text3);" id="popup-send-status"></span>
             </div>
           </div>
+          <div class="panel">
+            <div class="panel-title">User Polls</div>
+            <div class="form-group">
+              <label>Recipients</label>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                <button class="btn-admin btn-sm" type="button" onclick="selectAllPopupPollRecipients()">Select All</button>
+                <button class="btn-admin btn-sm" type="button" onclick="clearAllPopupPollRecipients()" style="background:var(--bg4);color:var(--text2);">Clear</button>
+              </div>
+              <div id="popup-poll-recipient-list" style="min-height:160px;max-height:220px;overflow:auto;padding:10px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+            <div class="form-group"><label>Question</label><input type="text" id="popup-poll-question" placeholder="How do you feel about this week's Jewshi markets?"></div>
+            <div class="admin-form-row">
+              <div class="form-group"><label>Option 1</label><input type="text" id="popup-poll-option-1" placeholder="Very good"></div>
+              <div class="form-group"><label>Option 2</label><input type="text" id="popup-poll-option-2" placeholder="Good"></div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group"><label>Option 3</label><input type="text" id="popup-poll-option-3" placeholder="Mid"></div>
+              <div class="form-group"><label>Option 4</label><input type="text" id="popup-poll-option-4" placeholder="Needs work"></div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <button class="btn-admin" id="popup-poll-send-btn" onclick="createPopupPoll()">Launch Poll</button>
+              <span style="font-size:12px;color:var(--text3);" id="popup-poll-status"></span>
+            </div>
+          </div>
           <div class="panel" id="popup-password-panel">
             <div class="panel-title">Tab Password</div>
             <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Change the extra password required to open this tab on your machine.</p>
@@ -1305,6 +1329,15 @@
           </div>
           <div id="popup-active-list"><p style="font-size:13px;color:var(--text3);">No active pop-ups right now.</p></div>
         </div>
+        <div class="panel" style="margin-top:18px;">
+          <div class="panel-title">Poll Results</div>
+          <div id="popup-poll-admin-results"><p style="font-size:13px;color:var(--text3);">No polls yet.</p></div>
+        </div>
+      </div>
+      <div class="panel" id="popup-poll-user-panel" style="display:none;margin-top:18px;">
+        <div class="panel-title">Your Polls</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Answer polls sent through the Pop-up system. Admins can see the aggregate responses.</p>
+        <div id="popup-poll-user-list"><p style="font-size:13px;color:var(--text3);">No polls for you right now.</p></div>
       </div>
     </div>
     
@@ -1538,6 +1571,7 @@ let liveInterval=null,countdownInterval=null,marketCountdownInterval=null,liveMa
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
+let popupPollsState={admin:[],user:[]};
 let activeIncomingPopupId=null;
 let popupRaveInterval=null;
 let popupAlertInterval=null;
@@ -1894,33 +1928,6 @@ function renderCasinoConfigReadout(){
   }).join('');
 }
 
-const exchangeMockupData={
-  score:742,
-  band:'Reliable',
-  availableCredit:'⬡ 1,250',
-  activeDebt:'⬡ 380',
-  overdueExposure:'⬡ 120',
-  summary:'Exchange is planned as a peer credit desk: users can request loans from one another, lenders earn fixed interest, and Jewshi only auto-collects once a loan is overdue.',
-  requests:[
-    {name:'Ezra Samet', amount:'⬡ 250', term:'7 days', score:781, note:'Needs credits for markets before the playoff slate.'},
-    {name:'Burke Wise', amount:'⬡ 120', term:'3 days', score:688, note:'Wants a short bridge loan before daily spin resets.'},
-  ],
-  loansGiven:[
-    {name:'Gabe', principal:'⬡ 300', repayment:'⬡ 315', due:'Apr 24, 4:00 PM', status:'Current'},
-    {name:'Taj', principal:'⬡ 80', repayment:'⬡ 84', due:'Apr 22, 9:15 AM', status:'Current'},
-  ],
-  overdueQueue:[
-    {name:'Student 002', remaining:'⬡ 120', overdue:'2 days overdue', action:'Auto-collect enabled'},
-    {name:'Student 003', remaining:'⬡ 45', overdue:'1 day overdue', action:'Store access blocked'},
-  ],
-  policy:[
-    ['Interest Model','Fixed flat interest on every approved loan. No custom rates, no compounding, no negotiations.'],
-    ['Auto-Collection','Jewshi does not touch active loans. Automatic deductions begin only after a loan becomes overdue.'],
-    ['Shekel Score','Score runs from 300 to 850 and moves based on repayment history, overdue debt, defaults, and account stability.'],
-    ['Lender Risk','Lenders are rewarded with interest, but they still take real borrower risk unless overdue collections recover the balance.'],
-  ]
-};
-
 function exchangeBandTone(score){
   if(score>=780) return {color:'var(--green)', bg:'rgba(0,208,132,0.12)', border:'rgba(0,208,132,0.22)', label:'Trusted'};
   if(score>=700) return {color:'#53d6ff', bg:'rgba(83,214,255,0.12)', border:'rgba(83,214,255,0.22)', label:'Reliable'};
@@ -1928,88 +1935,193 @@ function exchangeBandTone(score){
   return {color:'var(--red)', bg:'rgba(255,69,96,0.12)', border:'rgba(255,69,96,0.24)', label:'Risk'};
 }
 
-function renderExchangeTab(){
+function formatExchangeCredits(value){
+  return '⬡ '+Number(value||0).toLocaleString();
+}
+
+function formatExchangeDueLabel(timestamp){
+  if(!timestamp) return 'No due date';
+  const diff=timestamp-Date.now();
+  if(diff<=0){
+    const overdueHours=Math.floor(Math.abs(diff)/3600000);
+    if(overdueHours<24) return `${Math.max(1, overdueHours)}h overdue`;
+    const overdueDays=Math.floor(Math.abs(diff)/86400000);
+    return `${Math.max(1, overdueDays)}d overdue`;
+  }
+  const hours=Math.floor(diff/3600000);
+  if(hours<24) return `${Math.max(1, hours)}h left`;
+  const days=Math.floor(diff/86400000);
+  return `${Math.max(1, days)}d left`;
+}
+
+async function createExchangeRequest(){
+  try{
+    const borrowerId=document.getElementById('exchange-borrower-select')?.value||'';
+    const lenderId=document.getElementById('exchange-lender-select')?.value||'';
+    const amount=Math.floor(Number(document.getElementById('exchange-amount-input')?.value));
+    const termDays=Math.floor(Number(document.getElementById('exchange-term-input')?.value));
+    const note=document.getElementById('exchange-note-input')?.value||'';
+    await api('POST','/admin/exchange/requests',{borrowerId,lenderId,amount,termDays,note});
+    showToast('Exchange request created.');
+    await renderExchangeTab();
+  }catch(e){showToast(e.message);}
+}
+
+async function approveExchangeRequest(id){
+  try{
+    await api('POST',`/admin/exchange/requests/${id}/approve`,{});
+    showToast('Request approved.');
+    await renderExchangeTab();
+  }catch(e){showToast(e.message);}
+}
+
+async function declineExchangeRequest(id){
+  try{
+    await api('POST',`/admin/exchange/requests/${id}/decline`,{});
+    showToast('Request declined.');
+    await renderExchangeTab();
+  }catch(e){showToast(e.message);}
+}
+
+async function repayExchangeLoan(id){
+  const input=document.getElementById(`exchange-repay-${id}`);
+  const amount=Math.floor(Number(input?.value));
+  if(!amount||amount<1){showToast('Enter a repayment amount.');return;}
+  try{
+    await api('POST',`/admin/exchange/loans/${id}/repay`,{amount});
+    showToast('Repayment applied.');
+    await renderExchangeTab();
+  }catch(e){showToast(e.message);}
+}
+
+async function renderExchangeTab(){
   if(!currentUser||currentUser.role!=='admin') return;
   const root=document.getElementById('exchange-root');
   if(!root) return;
-  const data=exchangeMockupData;
-  const tone=exchangeBandTone(data.score);
+  root.innerHTML='<div class="panel"><div class="loading">Loading exchange desk…</div></div>';
+  let data;
+  try{
+    data=await api('GET','/admin/exchange');
+    exchangeState=data;
+  }catch(e){
+    root.innerHTML=`<div class="panel"><div class="error-msg" style="display:block;">${esc(e.message||'Failed to load exchange desk.')}</div></div>`;
+    return;
+  }
+  const tone=exchangeBandTone(data.summary?.avgScore||650);
+  const overdueLoans=(data.loans||[]).filter(loan=>loan.status==='overdue'||loan.is_overdue);
+  const currentLoans=(data.loans||[]).filter(loan=>loan.status==='active'&&!loan.is_overdue);
+  const userOptions=(data.users||[]).map(user=>`<option value="${esc(user.id)}">${esc(user.name)} · ${formatExchangeCredits(user.credits)} · Score ${user.shekelScore}</option>`).join('');
   root.innerHTML=`
     <div class="exchange-grid">
       <div>
         <div class="exchange-hero">
           <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
             <div style="max-width:640px;">
-              <div class="exchange-score-band" style="color:${tone.color};background:${tone.bg};border-color:${tone.border};">Exchange Preview · Admin Only</div>
+              <div class="exchange-score-band" style="color:${tone.color};background:${tone.bg};border-color:${tone.border};">Exchange Desk · Admin Only</div>
               <div style="font-size:30px;font-weight:800;letter-spacing:-0.04em;color:#fff;margin-top:14px;">Shekel Score + Credit Exchange</div>
-              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">${data.summary}</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">Create requests, approve peer loans, and monitor overdue collection. Jewshi only starts automatic deductions after a loan becomes overdue.</div>
             </div>
             <div class="exchange-score-card" style="min-width:260px;">
-              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">System Score</div>
+              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Average Shekel Score</div>
               <div style="display:flex;align-items:baseline;gap:10px;margin-top:12px;">
-                <div style="font-size:54px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${data.score}</div>
-                <div style="padding:6px 10px;border-radius:999px;background:${tone.bg};border:1px solid ${tone.border};color:${tone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${data.band}</div>
+                <div style="font-size:54px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${data.summary?.avgScore||650}</div>
+                <div style="padding:6px 10px;border-radius:999px;background:${tone.bg};border:1px solid ${tone.border};color:${tone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${tone.label}</div>
               </div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Range is 300 to 850. Better repayment history raises trust and lending capacity.</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Scores run from 300 to 850. Current debt hurts a little. Overdue debt hurts a lot.</div>
             </div>
           </div>
           <div class="exchange-stat-grid">
             <div class="exchange-stat">
-              <div class="exchange-stat-label">Request Capacity</div>
-              <div class="exchange-stat-value" style="color:var(--green);">${data.availableCredit}</div>
+              <div class="exchange-stat-label">Pending Requests</div>
+              <div class="exchange-stat-value" style="color:var(--green);">${Number(data.summary?.pendingRequests||0).toLocaleString()}</div>
             </div>
             <div class="exchange-stat">
-              <div class="exchange-stat-label">Active Debt</div>
-              <div class="exchange-stat-value" style="color:var(--gold);">${data.activeDebt}</div>
+              <div class="exchange-stat-label">Outstanding Debt</div>
+              <div class="exchange-stat-value" style="color:var(--gold);">${formatExchangeCredits(data.summary?.activeDebt||0)}</div>
             </div>
             <div class="exchange-stat">
               <div class="exchange-stat-label">Overdue Exposure</div>
-              <div class="exchange-stat-value" style="color:${data.overdueExposure==='⬡ 0'?'var(--green)':'var(--red)'};">${data.overdueExposure}</div>
+              <div class="exchange-stat-value" style="color:${Number(data.summary?.overdueDebt||0)<=0?'var(--green)':'var(--red)'};">${formatExchangeCredits(data.summary?.overdueDebt||0)}</div>
             </div>
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-title">Incoming Credit Requests</div>
+          <div class="panel-title">Create Exchange Request</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+            <div class="form-group" style="margin:0;">
+              <label>Borrower</label>
+              <select id="exchange-borrower-select">${userOptions}</select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Lender</label>
+              <select id="exchange-lender-select">${userOptions}</select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Amount</label>
+              <input id="exchange-amount-input" type="number" min="1" placeholder="250">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Term (days)</label>
+              <input id="exchange-term-input" type="number" min="1" max="30" value="7">
+            </div>
+          </div>
+          <div class="form-group" style="margin:12px 0 0;">
+            <label>Note</label>
+            <input id="exchange-note-input" placeholder="Why does the borrower need the credits?">
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;">
+            <div style="font-size:12px;color:var(--text3);">Flat ${data.settings?.interestPercent||5}% interest. Automatic deductions begin only after overdue.</div>
+            <button class="btn-admin" onclick="createExchangeRequest()">Create Request</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Pending Credit Requests</div>
           <div class="exchange-list">
-            ${data.requests.map(req=>`
+            ${(data.requests||[]).length ? data.requests.map(req=>`
               <div class="exchange-item">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
                   <div>
-                    <div style="font-size:14px;font-weight:700;color:var(--text);">${req.name}</div>
-                    <div style="font-size:12px;color:var(--text3);margin-top:4px;">${req.term} · Shekel Score ${req.score}</div>
-                    <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:10px;">${req.note}</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(req.borrower_name)} → ${esc(req.lender_name)}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:4px;">${req.term_days} day${req.term_days===1?'':'s'} · Borrower score ${req.borrower_score}</div>
+                    <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:10px;">${esc(req.note||'No note added.')}</div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="font-size:18px;font-weight:800;color:var(--green);">${req.amount}</div>
+                    <div style="font-size:18px;font-weight:800;color:var(--green);">${formatExchangeCredits(req.amount)}</div>
                     <div style="font-size:11px;color:var(--text3);margin-top:4px;">requested</div>
                   </div>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
-                  <button class="btn-admin btn-sm" style="background:rgba(0,208,132,0.14);border:1px solid rgba(0,208,132,0.24);color:var(--green);">Approve + 5%</button>
-                  <button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2);">Review Profile</button>
-                  <button class="btn-admin btn-sm btn-danger">Decline</button>
+                  <button class="btn-admin btn-sm" style="background:rgba(0,208,132,0.14);border:1px solid rgba(0,208,132,0.24);color:var(--green);" onclick="approveExchangeRequest('${req.id}')">Approve + ${req.interest_percent}%</button>
+                  <button class="btn-admin btn-sm btn-danger" onclick="declineExchangeRequest('${req.id}')">Decline</button>
                 </div>
               </div>
-            `).join('')}
+            `).join('') : '<div class="exchange-item" style="color:var(--text3);">No pending requests right now.</div>'}
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-title">Loans You Have Given</div>
+          <div class="panel-title">Current Loans</div>
           <div class="exchange-list">
-            ${data.loansGiven.map(loan=>`
+            ${currentLoans.length ? currentLoans.map(loan=>`
               <div class="exchange-item">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
                   <div>
-                    <div style="font-size:14px;font-weight:700;color:var(--text);">${loan.name}</div>
-                    <div style="font-size:12px;color:var(--text3);margin-top:4px;">Principal ${loan.principal} · Repays ${loan.repayment}</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(loan.borrower_name)} owes ${esc(loan.lender_name)}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:4px;">Principal ${formatExchangeCredits(loan.principal)} · Repays ${formatExchangeCredits(loan.repayment_amount)}</div>
                   </div>
-                  <div style="padding:6px 10px;border-radius:999px;background:rgba(83,214,255,0.10);border:1px solid rgba(83,214,255,0.2);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#53d6ff;">${loan.status}</div>
+                  <div style="padding:6px 10px;border-radius:999px;background:rgba(83,214,255,0.10);border:1px solid rgba(83,214,255,0.2);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#53d6ff;">${formatExchangeDueLabel(loan.due_at)}</div>
                 </div>
-                <div style="font-size:12px;color:var(--text2);margin-top:12px;">Due ${loan.due}</div>
+                <div style="display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+                  <div style="font-size:12px;color:var(--text2);">Remaining ${formatExchangeCredits(loan.remaining)} · Borrower score ${loan.borrower_score}</div>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <input id="exchange-repay-${loan.id}" type="number" min="1" max="${loan.remaining}" placeholder="Repay" style="width:108px;padding:8px 10px;background:var(--bg4);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;">
+                    <button class="btn-admin btn-sm" onclick="repayExchangeLoan('${loan.id}')">Record Repayment</button>
+                  </div>
+                </div>
               </div>
-            `).join('')}
+            `).join('') : '<div class="exchange-item" style="color:var(--text3);">No active loans at the moment.</div>'}
           </div>
         </div>
       </div>
@@ -2018,25 +2130,30 @@ function renderExchangeTab(){
         <div class="panel">
           <div class="panel-title">Overdue Collection Queue</div>
           <div class="exchange-list">
-            ${data.overdueQueue.map(item=>`
+            ${overdueLoans.length ? overdueLoans.map(item=>`
               <div class="exchange-item" style="border-color:rgba(255,69,96,0.14);">
                 <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
                   <div>
-                    <div style="font-size:13px;font-weight:700;color:var(--text);">${item.name}</div>
-                    <div style="font-size:12px;color:var(--red);margin-top:5px;">${item.overdue}</div>
+                    <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(item.borrower_name)}</div>
+                    <div style="font-size:12px;color:var(--red);margin-top:5px;">${formatExchangeDueLabel(item.due_at)} · lender ${esc(item.lender_name)}</div>
                   </div>
-                  <div style="font-size:16px;font-weight:800;color:var(--gold);">${item.remaining}</div>
+                  <div style="font-size:16px;font-weight:800;color:var(--gold);">${formatExchangeCredits(item.remaining)}</div>
                 </div>
-                <div style="font-size:12px;color:var(--text2);margin-top:12px;">${item.action}</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:12px;">Auto-collection is live. Any new credits on the borrower start paying this down automatically.</div>
               </div>
-            `).join('')}
+            `).join('') : '<div class="exchange-item" style="color:var(--text3);">No overdue loans. Auto-collection is idle.</div>'}
           </div>
         </div>
 
         <div class="panel">
           <div class="panel-title">Policy Design</div>
           <div class="exchange-policy">
-            ${data.policy.map(([title,body])=>`
+            ${[
+              ['Interest Model',`Fixed flat ${data.settings?.interestPercent||5}% interest on every approved loan. No compounding and no custom rates.`],
+              ['Auto-Collection','Jewshi leaves current loans alone. Automatic deductions begin only after a loan is overdue.'],
+              ['Shekel Score','Scores run from 300 to 850 and shift based on repayment history, active debt, and overdue exposure.'],
+              ['Admin Scope','This desk is still admin-only, so requests and repayments are being managed centrally for now.'],
+            ].map(([title,body])=>`
               <div class="exchange-policy-row">
                 <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--text);min-width:118px;">${title}</div>
                 <div style="font-size:12px;color:var(--text2);line-height:1.65;">${body}</div>
@@ -2046,12 +2163,22 @@ function renderExchangeTab(){
         </div>
 
         <div class="panel">
-          <div class="panel-title">What Launches First</div>
-          <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;color:var(--text2);line-height:1.65;">
-            <div>1. Peer loan requests with fixed interest and due dates.</div>
-            <div>2. Shekel Score shown on request approval screens and profiles.</div>
-            <div>3. Borrowers keep full control while current; Jewshi only starts auto-deducting once overdue.</div>
-            <div>4. Overdue borrowers lose loan access and redemptions until balances recover.</div>
+          <div class="panel-title">Shekel Score Board</div>
+          <div class="exchange-list">
+            ${(data.users||[]).slice().sort((a,b)=>b.shekelScore-a.shekelScore).map(user=>{
+              const userTone=exchangeBandTone(user.shekelScore);
+              return `
+                <div class="exchange-item">
+                  <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
+                      <div style="font-size:12px;color:var(--text3);margin-top:4px;">${formatExchangeCredits(user.credits)} · active debt ${formatExchangeCredits(user.activeDebt)} · overdue ${formatExchangeCredits(user.overdueDebt)}</div>
+                    </div>
+                    <div style="padding:6px 10px;border-radius:999px;background:${userTone.bg};border:1px solid ${userTone.border};color:${userTone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${user.shekelScore}</div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
       </div>
@@ -4226,10 +4353,15 @@ function renderPopupTab(){
   if(controlPanel) controlPanel.style.display=popupTabUnlocked?'block':'none';
   if(lockBtn) lockBtn.style.display=popupTabUnlocked?'inline-flex':'none';
   if(passwordPanel) passwordPanel.style.display=currentUser.id==='GROSE'?'block':'none';
+  const userPollPanel=document.getElementById('popup-poll-user-panel');
+  if(userPollPanel) userPollPanel.style.display=currentUser.id==='GROSE'?'none':'block';
   if(popupTabUnlocked){
     populatePopupRecipientSelect();
+    populatePopupPollRecipientSelect();
     loadActivePopups();
+    loadAdminPopupPolls();
   }
+  loadUserPopupPolls();
 }
 
 async function populatePopupRecipientSelect(){
@@ -4249,6 +4381,23 @@ async function populatePopupRecipientSelect(){
   }
 }
 
+async function populatePopupPollRecipientSelect(){
+  const list=document.getElementById('popup-poll-recipient-list');
+  if(!list) return;
+  try{
+    const users=await api('GET','/popup/users');
+    list.innerHTML=users.length
+      ?users.map(u=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:6px 2px;cursor:pointer;color:var(--text2);font-size:13px;">
+          <input type="checkbox" class="popup-poll-recipient-checkbox" value="${esc(u.id)}" style="width:16px;height:16px;accent-color:var(--green);">
+          <span>${esc(u.name||u.id)} <span style="color:var(--text3);">(${esc(u.id)})</span></span>
+        </label>`).join('')
+      :'<p style="font-size:13px;color:var(--text3);">No recipients available</p>';
+  }catch(e){
+    list.innerHTML='<p style="font-size:13px;color:var(--red);">Failed to load users</p>';
+  }
+}
+
 function getSelectedPopupRecipientIds(){
   return [...document.querySelectorAll('.popup-recipient-checkbox:checked')].map(el=>el.value).filter(Boolean);
 }
@@ -4259,6 +4408,18 @@ function selectAllPopupRecipients(){
 
 function clearAllPopupRecipients(){
   document.querySelectorAll('.popup-recipient-checkbox').forEach(el=>{el.checked=false;});
+}
+
+function getSelectedPopupPollRecipientIds(){
+  return [...document.querySelectorAll('.popup-poll-recipient-checkbox:checked')].map(el=>el.value).filter(Boolean);
+}
+
+function selectAllPopupPollRecipients(){
+  document.querySelectorAll('.popup-poll-recipient-checkbox').forEach(el=>{el.checked=true;});
+}
+
+function clearAllPopupPollRecipients(){
+  document.querySelectorAll('.popup-poll-recipient-checkbox').forEach(el=>{el.checked=false;});
 }
 
 async function unlockPopupTab(){
@@ -4397,6 +4558,129 @@ async function loadActivePopups(){
       return;
     }
     el.innerHTML='<p style="font-size:13px;color:var(--red);">Failed to load active messages.</p>';
+  }
+}
+
+async function createPopupPoll(){
+  if(!popupTabUnlocked||!popupUnlockToken){alert('Unlock the Pop-up tab first.');return;}
+  const recipientIds=getSelectedPopupPollRecipientIds();
+  const question=document.getElementById('popup-poll-question').value.trim();
+  const options=[1,2,3,4].map(i=>document.getElementById(`popup-poll-option-${i}`)?.value.trim()).filter(Boolean);
+  if(!recipientIds.length){alert('Pick at least one recipient first.');return;}
+  if(!question){alert('Enter a poll question.');return;}
+  if(options.length<2){alert('Add at least two options.');return;}
+  const btn=document.getElementById('popup-poll-send-btn');
+  const status=document.getElementById('popup-poll-status');
+  btn.disabled=true;
+  btn.textContent='Launching…';
+  if(status) status.textContent='Creating poll…';
+  try{
+    await api('POST','/admin/popup-polls',{recipientIds,question,options},popupHeaders());
+    document.getElementById('popup-poll-question').value='';
+    [1,2,3,4].forEach(i=>{ const input=document.getElementById(`popup-poll-option-${i}`); if(input) input.value=''; });
+    document.querySelectorAll('.popup-poll-recipient-checkbox').forEach(el=>{el.checked=false;});
+    if(status) status.textContent='Poll launched.';
+    showToast('Poll launched.');
+    loadAdminPopupPolls();
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+      return;
+    }
+    if(status) status.textContent='Failed.';
+    alert(e.message);
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Launch Poll';
+  }
+}
+
+async function loadAdminPopupPolls(){
+  const el=document.getElementById('popup-poll-admin-results');
+  if(!el||!popupTabUnlocked||!popupUnlockToken) return;
+  try{
+    const polls=await api('GET','/admin/popup-polls',null,popupHeaders());
+    popupPollsState.admin=polls;
+    el.innerHTML=polls.length?polls.map(poll=>`
+      <div style="padding:14px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(poll.question)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">${poll.status} · ${poll.vote_count}/${poll.recipient_count} responses · ${new Date(poll.created_at).toLocaleString()}</div>
+          </div>
+          ${poll.status==='active'?`<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2);" onclick="closePopupPoll('${poll.id}')">Close Poll</button>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+          ${poll.votesByOption.map(option=>`
+            <div style="padding:10px 12px;border-radius:14px;background:var(--bg3);border:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;color:var(--text);">
+                <span>${esc(option.label)}</span>
+                <span style="color:var(--green);">${option.count} vote${option.count===1?'':'s'}</span>
+              </div>
+              <div style="font-size:11px;color:var(--text3);margin-top:6px;">${option.voters.length?option.voters.map(voter=>esc(voter.voter_name||voter.voter_id)).join(', '):'No votes yet'}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join(''):'<p style="font-size:13px;color:var(--text3);">No polls yet.</p>';
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+      return;
+    }
+    el.innerHTML='<p style="font-size:13px;color:var(--red);">Failed to load poll results.</p>';
+  }
+}
+
+async function closePopupPoll(id){
+  try{
+    await api('POST',`/admin/popup-polls/${id}/close`,{},popupHeaders());
+    showToast('Poll closed.');
+    loadAdminPopupPolls();
+  }catch(e){
+    if(String(e.message||'').includes('locked')){
+      lockPopupTab();
+      return;
+    }
+    alert(e.message);
+  }
+}
+
+async function loadUserPopupPolls(){
+  const el=document.getElementById('popup-poll-user-list');
+  if(!el||!currentUser||currentUser.id==='GROSE') return;
+  try{
+    const polls=await api('GET','/popup-polls');
+    popupPollsState.user=polls;
+    el.innerHTML=polls.length?polls.map(poll=>`
+      <div style="padding:14px 16px;border-radius:18px;background:var(--bg2);border:1px solid var(--border);margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(poll.question)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">${poll.status==='active'?'Open for votes':'Closed'} · sent ${new Date(poll.created_at).toLocaleString()}</div>
+          </div>
+          ${poll.selected_option!==null&&poll.selected_option!==undefined?`<div style="padding:6px 10px;border-radius:999px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.2);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--green);">Voted</div>`:''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:14px;">
+          ${poll.options.map((option,idx)=>`
+            <button class="btn-admin btn-sm" ${poll.status!=='active'?'disabled':''} onclick="voteOnPopupPoll('${poll.id}',${idx})" style="justify-content:flex-start;background:${poll.selected_option===idx?'rgba(0,208,132,0.12)':'var(--bg3)'};border:1px solid ${poll.selected_option===idx?'rgba(0,208,132,0.24)':'var(--border-hi)'};color:${poll.selected_option===idx?'var(--green)':'var(--text2)'};">${esc(option)}</button>
+          `).join('')}
+        </div>
+      </div>
+    `).join(''):'<p style="font-size:13px;color:var(--text3);">No polls for you right now.</p>';
+  }catch(e){
+    el.innerHTML='<p style="font-size:13px;color:var(--red);">Failed to load your polls.</p>';
+  }
+}
+
+async function voteOnPopupPoll(id,optionIndex){
+  try{
+    await api('POST',`/popup-polls/${id}/vote`,{optionIndex});
+    showToast('Vote saved.');
+    loadUserPopupPolls();
+    if(popupTabUnlocked) loadAdminPopupPolls();
+  }catch(e){
+    alert(e.message);
   }
 }
 
@@ -5054,6 +5338,8 @@ let rouletteSpinning=false;
 let rouletteRotation=0;
 let coinFlipSide='heads';
 let coinFlipBusy=false;
+let coinFlipRotation=0;
+let exchangeState=null;
 
 function openBlackjack(){
   document.getElementById('casino-lobby').style.display='none';
@@ -5865,6 +6151,7 @@ function openCoinFlip(){
   hideCasinoGameViews();
   document.getElementById('casino-coinflip').style.display='block';
   coinFlipBusy=false;
+  coinFlipRotation=0;
   document.getElementById('coinflip-balance').textContent='⬡ '+(currentUser?.credits||0).toLocaleString();
   document.getElementById('coinflip-result-pill').textContent='Choose a side';
   document.getElementById('coinflip-result-pill').style.background='var(--bg3)';
@@ -5931,10 +6218,13 @@ async function flipCoin(){
   try{
     const data=await api('POST','/casino/coinflip',{betAmount,side:coinFlipSide});
     const finalDeg=data.landed==='heads'?0:180;
-    const spins=1800;
-    coin.style.transform=`rotateY(${spins+finalDeg}deg) translateY(-14px)`;
+    const normalized=((coinFlipRotation%360)+360)%360;
+    let delta=(finalDeg-normalized+360)%360;
+    if(delta===0) delta=360;
+    coinFlipRotation += 1800 + delta;
+    coin.style.transform=`rotateY(${coinFlipRotation}deg) translateY(-14px)`;
     setTimeout(()=>{
-      coin.style.transform=`rotateY(${spins+finalDeg}deg) translateY(0)`;
+      coin.style.transform=`rotateY(${coinFlipRotation}deg) translateY(0)`;
       pill.textContent=data.won?`${data.landed.toUpperCase()} · +⬡ ${data.profit}`:`${data.landed.toUpperCase()} · -⬡ ${betAmount}`;
       pill.style.background=data.won?'rgba(0,208,132,0.14)':'rgba(255,69,96,0.12)';
       pill.style.border=data.won?'1px solid rgba(0,208,132,0.30)':'1px solid rgba(255,69,96,0.28)';
