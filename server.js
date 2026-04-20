@@ -1981,6 +1981,19 @@ app.post('/api/markets/:id/close', authMiddleware, adminOnly, async(req,res)=>{
   bumpBetsSnapshotVersion();
   res.json({success:true});
 });
+app.post('/api/markets/:id/close-date', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const {closeDate}=req.body;
+    const normalizedCloseDate=normalizeCloseDate(closeDate);
+    if(!normalizedCloseDate) return res.status(400).json({error:'Invalid close date'});
+    const market=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
+    if(!market) return res.status(404).json({error:'Market not found'});
+    if(!['open','closed'].includes(market.status)) return res.status(400).json({error:'Resolved markets cannot be edited'});
+    await db.run('UPDATE markets SET close_date=? WHERE id=?',[normalizedCloseDate,req.params.id]);
+    bumpBetsSnapshotVersion();
+    res.json(await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]));
+  }catch(e){res.status(500).json({error:e.message});}
+});
 
 app.delete('/api/markets/:id', authMiddleware, adminOnly, async(req,res)=>{
   try{

@@ -103,6 +103,9 @@
   .market-category{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
   .market-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px;line-height:1.45}
   .market-line{font-size:12px;color:var(--gold);margin-bottom:10px;font-weight:600}
+  .market-countdown{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.22);color:var(--green);font-size:11px;font-weight:700;letter-spacing:0.03em;margin:2px 0 12px}
+  .market-countdown.is-soon{background:rgba(240,192,64,0.12);border-color:rgba(240,192,64,0.22);color:var(--gold)}
+  .market-countdown.is-urgent{background:rgba(255,69,96,0.12);border-color:rgba(255,69,96,0.24);color:var(--red)}
   .market-odds{display:flex;gap:8px;margin-bottom:14px}
   .odds-bar-wrap{flex:1}
   .odds-label{font-size:11px;font-weight:600;margin-bottom:5px;display:flex;justify-content:space-between}
@@ -1504,7 +1507,7 @@ let authToken=localStorage.getItem('ew_token');
 let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
 let unreadPollInterval=null,resolutionPollInterval=null,notificationPollInterval=null;
-let liveInterval=null,countdownInterval=null,liveMarketsData=[];
+let liveInterval=null,countdownInterval=null,marketCountdownInterval=null,liveMarketsData=[];
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
@@ -2691,6 +2694,40 @@ function formatMarketCloseDate(value){
     minute:'2-digit'
   });
 }
+function formatMarketCloseInputValue(value){
+  const ts=Date.parse(value||'');
+  if(Number.isNaN(ts)) return '';
+  const localDate=new Date(ts - new Date(ts).getTimezoneOffset()*60000);
+  return localDate.toISOString().slice(0,16);
+}
+function formatMarketTimeRemaining(closeDate){
+  const closeTs=getMarketCloseTimestamp({close_date:closeDate});
+  if(!closeTs) return 'No close time';
+  const diff=closeTs-Date.now();
+  if(diff<=0) return 'Closed';
+  const days=Math.floor(diff/86400000);
+  const hours=Math.floor((diff%86400000)/3600000);
+  const minutes=Math.floor((diff%3600000)/60000);
+  const seconds=Math.floor((diff%60000)/1000);
+  if(days>0) return `${days}d ${hours}h ${minutes}m`;
+  if(hours>0) return `${hours}h ${minutes}m ${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+function updateMarketCountdowns(){
+  document.querySelectorAll('.market-countdown[data-close]').forEach(el=>{
+    const closeValue=el.dataset.close;
+    const closeTs=getMarketCloseTimestamp({close_date:closeValue});
+    if(!closeTs){
+      el.textContent='Time remaining: —';
+      el.classList.remove('is-soon','is-urgent');
+      return;
+    }
+    const diff=closeTs-Date.now();
+    el.textContent=`Time remaining: ${formatMarketTimeRemaining(closeValue)}`;
+    el.classList.toggle('is-soon',diff>0&&diff<=3600000);
+    el.classList.toggle('is-urgent',diff>0&&diff<=300000);
+  });
+}
 async function renderMarkets(){
   const grid=document.getElementById('markets-grid');
   grid.innerHTML='<div class="loading">Loading markets…</div>';
@@ -2719,10 +2756,13 @@ async function renderMarkets(){
       <div class="market-category">${m.category}</div>
       <div class="market-title">${esc(m.question)}</div>
       ${isOU?`<div class="market-line">Line: ${m.line}</div>`:''}
+      <div class="market-countdown" data-close="${esc(m.close_date||'')}">Time remaining: ${formatMarketTimeRemaining(m.close_date)}</div>
       ${oddsHtml}
       <div class="market-meta"><span>${bettingOpen?'Closes':'Closed'} ${formatMarketCloseDate(m.close_date)} · ⬡ ${(m.pool||0).toLocaleString()} pool</span>${statusTag}</div>
     </div>`;
   }).join('');
+  updateMarketCountdowns();
+  if(!marketCountdownInterval) marketCountdownInterval=setInterval(updateMarketCountdowns,1000);
 }
 
 // ── BET MODAL ──
@@ -3762,6 +3802,10 @@ async function renderAdminTab(){
       <div style="flex:1;min-width:200px;">
         <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(m.question)}${isOU?` <span style="color:var(--gold);font-size:11px;">(Line: ${m.line})</span>`:''}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px;">${m.category} · ${pctDisplay} · Pool ⬡${m.pool||0} · ${adminStatus} · Bets close ${formatMarketCloseDate(m.close_date)}</div>
+        ${['open','closed'].includes(m.status)?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <input type="datetime-local" id="close-date-${m.id}" value="${formatMarketCloseInputValue(m.close_date)}" style="padding:6px 8px;font-size:12px;background:var(--bg4);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;">
+          <button class="btn-admin btn-sm" style="background:rgba(124,106,247,0.14);border:1px solid rgba(124,106,247,0.32);color:var(--accent)" onclick="updateMarketCloseDate('${m.id}')">Update Close Time</button>
+        </div>`:''}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${['open','closed'].includes(m.status)?(isOU?`
@@ -4472,6 +4516,18 @@ async function resolveOU(id){
   catch(e){alert(e.message);}
 }
 async function closeMarket(id){await api('POST','/markets/'+id+'/close');renderAdminTab();}
+async function updateMarketCloseDate(id){
+  const input=document.getElementById('close-date-'+id);
+  const value=input?.value;
+  if(!value){alert('Enter a close time first.');return;}
+  const closeDate=new Date(value);
+  if(Number.isNaN(closeDate.getTime())){alert('Enter a valid close time.');return;}
+  try{
+    await api('POST','/markets/'+id+'/close-date',{closeDate:closeDate.toISOString()});
+    renderAdminTab();
+    showToast('Close time updated.');
+  }catch(e){alert(e.message);}
+}
 
 async function deleteMarket(id){
   if(!confirm('Delete this market? All active bets will be refunded.'))return;
