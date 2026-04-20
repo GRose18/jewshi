@@ -1957,11 +1957,10 @@ function formatExchangeDueLabel(timestamp){
 async function createExchangeRequest(){
   try{
     const borrowerId=document.getElementById('exchange-borrower-select')?.value||'';
-    const lenderId=document.getElementById('exchange-lender-select')?.value||'';
     const amount=Math.floor(Number(document.getElementById('exchange-amount-input')?.value));
     const termDays=Math.floor(Number(document.getElementById('exchange-term-input')?.value));
     const note=document.getElementById('exchange-note-input')?.value||'';
-    await api('POST','/admin/exchange/requests',{borrowerId,lenderId,amount,termDays,note});
+    await api('POST','/admin/exchange/requests',{borrowerId,amount,termDays,note});
     showToast('Exchange request created.');
     await renderExchangeTab();
   }catch(e){showToast(e.message);}
@@ -2019,15 +2018,15 @@ async function renderExchangeTab(){
             <div style="max-width:640px;">
               <div class="exchange-score-band" style="color:${tone.color};background:${tone.bg};border-color:${tone.border};">Exchange Desk · Admin Only</div>
               <div style="font-size:30px;font-weight:800;letter-spacing:-0.04em;color:#fff;margin-top:14px;">Shekel Score + Credit Exchange</div>
-              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">Create requests, approve peer loans, and monitor overdue collection. Jewshi only starts automatic deductions after a loan becomes overdue.</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.76);line-height:1.7;margin-top:10px;">This is your personal lending desk. You are always the lender on this screen, and you can extend exchange offers to eligible users while tracking overdue collection.</div>
             </div>
             <div class="exchange-score-card" style="min-width:260px;">
-              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Average Shekel Score</div>
+              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Your Lending Balance</div>
               <div style="display:flex;align-items:baseline;gap:10px;margin-top:12px;">
-                <div style="font-size:54px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${data.summary?.avgScore||650}</div>
+                <div style="font-size:40px;font-weight:900;letter-spacing:-0.05em;color:#fff;">${formatExchangeCredits(data.lender?.credits||0)}</div>
                 <div style="padding:6px 10px;border-radius:999px;background:${tone.bg};border:1px solid ${tone.border};color:${tone.color};font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${tone.label}</div>
               </div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Scores run from 300 to 850. Current debt hurts a little. Overdue debt hurts a lot.</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.68);margin-top:12px;">Signed in as ${esc(data.lender?.name||currentUser?.name||currentUser?.id||'You')}. Shekel Scores still help you judge who is safest to lend to.</div>
             </div>
           </div>
           <div class="exchange-stat-grid">
@@ -2047,15 +2046,11 @@ async function renderExchangeTab(){
         </div>
 
         <div class="panel">
-          <div class="panel-title">Create Exchange Request</div>
+          <div class="panel-title">Create Exchange Offer</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
             <div class="form-group" style="margin:0;">
-              <label>Borrower</label>
+              <label>Viewer</label>
               <select id="exchange-borrower-select">${userOptions}</select>
-            </div>
-            <div class="form-group" style="margin:0;">
-              <label>Lender</label>
-              <select id="exchange-lender-select">${userOptions}</select>
             </div>
             <div class="form-group" style="margin:0;">
               <label>Amount</label>
@@ -2071,19 +2066,19 @@ async function renderExchangeTab(){
             <input id="exchange-note-input" placeholder="Why does the borrower need the credits?">
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;">
-            <div style="font-size:12px;color:var(--text3);">Flat ${data.settings?.interestPercent||5}% interest. Automatic deductions begin only after overdue.</div>
-            <button class="btn-admin" onclick="createExchangeRequest()">Create Request</button>
+            <div style="font-size:12px;color:var(--text3);">You are always the lender here. Only accounts at least 10 days old are eligible. Flat ${data.settings?.interestPercent||5}% interest. Automatic deductions begin only after overdue.</div>
+            <button class="btn-admin" onclick="createExchangeRequest()">Create Offer</button>
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-title">Pending Credit Requests</div>
+          <div class="panel-title">Your Pending Exchange Offers</div>
           <div class="exchange-list">
             ${(data.requests||[]).length ? data.requests.map(req=>`
               <div class="exchange-item">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
                   <div>
-                    <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(req.borrower_name)} → ${esc(req.lender_name)}</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">Offer to ${esc(req.borrower_name)}</div>
                     <div style="font-size:12px;color:var(--text3);margin-top:4px;">${req.term_days} day${req.term_days===1?'':'s'} · Borrower score ${req.borrower_score}</div>
                     <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:10px;">${esc(req.note||'No note added.')}</div>
                   </div>
@@ -2093,8 +2088,8 @@ async function renderExchangeTab(){
                   </div>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
-                  <button class="btn-admin btn-sm" style="background:rgba(0,208,132,0.14);border:1px solid rgba(0,208,132,0.24);color:var(--green);" onclick="approveExchangeRequest('${req.id}')">Approve + ${req.interest_percent}%</button>
-                  <button class="btn-admin btn-sm btn-danger" onclick="declineExchangeRequest('${req.id}')">Decline</button>
+                  <button class="btn-admin btn-sm" style="background:rgba(0,208,132,0.14);border:1px solid rgba(0,208,132,0.24);color:var(--green);" onclick="approveExchangeRequest('${req.id}')">Fund + ${req.interest_percent}%</button>
+                  <button class="btn-admin btn-sm btn-danger" onclick="declineExchangeRequest('${req.id}')">Cancel Offer</button>
                 </div>
               </div>
             `).join('') : '<div class="exchange-item" style="color:var(--text3);">No pending requests right now.</div>'}
@@ -2108,7 +2103,7 @@ async function renderExchangeTab(){
               <div class="exchange-item">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
                   <div>
-                    <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(loan.borrower_name)} owes ${esc(loan.lender_name)}</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(loan.borrower_name)} owes you</div>
                     <div style="font-size:12px;color:var(--text3);margin-top:4px;">Principal ${formatExchangeCredits(loan.principal)} · Repays ${formatExchangeCredits(loan.repayment_amount)}</div>
                   </div>
                   <div style="padding:6px 10px;border-radius:999px;background:rgba(83,214,255,0.10);border:1px solid rgba(83,214,255,0.2);font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#53d6ff;">${formatExchangeDueLabel(loan.due_at)}</div>
@@ -2135,7 +2130,7 @@ async function renderExchangeTab(){
                 <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
                   <div>
                     <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(item.borrower_name)}</div>
-                    <div style="font-size:12px;color:var(--red);margin-top:5px;">${formatExchangeDueLabel(item.due_at)} · lender ${esc(item.lender_name)}</div>
+                    <div style="font-size:12px;color:var(--red);margin-top:5px;">${formatExchangeDueLabel(item.due_at)} · personal loan</div>
                   </div>
                   <div style="font-size:16px;font-weight:800;color:var(--gold);">${formatExchangeCredits(item.remaining)}</div>
                 </div>
@@ -2152,7 +2147,7 @@ async function renderExchangeTab(){
               ['Interest Model',`Fixed flat ${data.settings?.interestPercent||5}% interest on every approved loan. No compounding and no custom rates.`],
               ['Auto-Collection','Jewshi leaves current loans alone. Automatic deductions begin only after a loan is overdue.'],
               ['Shekel Score','Scores run from 300 to 850 and shift based on repayment history, active debt, and overdue exposure.'],
-              ['Admin Scope','This desk is still admin-only, so requests and repayments are being managed centrally for now.'],
+              ['Personal Scope','This desk is personal. You are always the lender, and only your own offers and loans appear here.'],
             ].map(([title,body])=>`
               <div class="exchange-policy-row">
                 <div style="font-size:12px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--text);min-width:118px;">${title}</div>

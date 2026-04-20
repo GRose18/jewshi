@@ -70,6 +70,7 @@ const adminCasinoCache = new Map();
 const EXCHANGE_INTEREST_PERCENT = 5;
 const EXCHANGE_MIN_TERM_DAYS = 1;
 const EXCHANGE_MAX_TERM_DAYS = 30;
+const EXCHANGE_MIN_ACCOUNT_AGE_MS = 1000 * 60 * 60 * 24 * 10;
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -179,7 +180,8 @@ async function initDB() {
       role TEXT DEFAULT 'student', credits INTEGER DEFAULT 200, grade TEXT DEFAULT '',
       email_verified INTEGER DEFAULT 1, on_email_list INTEGER DEFAULT 0, bio TEXT DEFAULT '',
       popup_access INTEGER DEFAULT 0,
-      assistance_access INTEGER DEFAULT 0
+      assistance_access INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL,
@@ -404,10 +406,12 @@ async function initDB() {
     await db.run("ALTER TABLE posts ADD COLUMN image TEXT DEFAULT NULL").catch(()=>{});
     await db.run("ALTER TABLE users ADD COLUMN popup_access INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE users ADD COLUMN assistance_access INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("ALTER TABLE users ADD COLUMN created_at INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN closeout_enabled INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("UPDATE users SET created_at=0 WHERE created_at IS NULL").catch(()=>{});
     await db.exec(`
       CREATE INDEX IF NOT EXISTS idx_markets_status_created_at ON markets(status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_bets_user_status_timestamp ON bets(user_id, status, timestamp DESC);
@@ -483,7 +487,7 @@ async function seedIfEmpty() {
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list) VALUES (?,?,?,?,?,?,?,1,0)',
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list,created_at) VALUES (?,?,?,?,?,?,?,1,0,0)',
       [u.id,u.name,u.email,hash,u.role,u.credits,u.grade]);
   }
   const items = [
@@ -973,6 +977,10 @@ async function finishBlackjackGame(userId){
 function clampExchangeTermDays(value){
   return clampNumber(Math.floor(Number(value)||7), EXCHANGE_MIN_TERM_DAYS, EXCHANGE_MAX_TERM_DAYS);
 }
+function isExchangeEligibleUser(user){
+  const createdAt=Number(user?.created_at||0);
+  return createdAt===0 || createdAt <= Date.now() - EXCHANGE_MIN_ACCOUNT_AGE_MS;
+}
 function getExchangeRepaymentAmount(principal, interestPercent=EXCHANGE_INTEREST_PERCENT){
   const safePrincipal=Math.max(0, Math.floor(Number(principal)||0));
   return Math.round(safePrincipal * (1 + (Number(interestPercent)||0) / 100));
@@ -1082,9 +1090,11 @@ async function collectOverdueExchangeDebtForUser(userId){
   }
   return collected;
 }
-async function buildExchangeDashboardData(){
+async function buildExchangeDashboardData(lenderUserId){
   await syncExchangeLoanStatuses();
-  const users=await db.all("SELECT id,name,role,grade,CAST(credits AS TEXT) as credits_text FROM users WHERE role='student' ORDER BY name ASC");
+  const users=await db.all("SELECT id,name,role,grade,CAST(credits AS TEXT) as credits_text,created_at FROM users WHERE role='student' AND id!=? ORDER BY name ASC",[lenderUserId]);
+  const lenderUser=await db.get('SELECT id,name,role,CAST(credits AS TEXT) as credits_text FROM users WHERE id=?',[lenderUserId]);
+  const eligibleUsers=users.filter(isExchangeEligibleUser);
   const requests=await db.all(`
     SELECT r.*,
       borrower.name as borrower_name,
@@ -1092,8 +1102,9 @@ async function buildExchangeDashboardData(){
     FROM exchange_requests r
     JOIN users borrower ON borrower.id=r.borrower_id
     JOIN users lender ON lender.id=r.lender_id
+    WHERE r.lender_id=?
     ORDER BY CASE WHEN r.status='pending' THEN 0 ELSE 1 END, r.created_at DESC
-  `);
+  `,[lenderUserId]);
   const loans=await db.all(`
     SELECT l.*,
       borrower.name as borrower_name,
@@ -1101,8 +1112,9 @@ async function buildExchangeDashboardData(){
     FROM exchange_loans l
     JOIN users borrower ON borrower.id=l.borrower_id
     JOIN users lender ON lender.id=l.lender_id
+    WHERE l.lender_id=?
     ORDER BY CASE WHEN l.status IN ('overdue','active') THEN 0 ELSE 1 END, l.due_at ASC, l.created_at DESC
-  `);
+  `,[lenderUserId]);
   const scoreMap=new Map();
   users.forEach(user=>{
     scoreMap.set(user.id,{
@@ -1141,7 +1153,7 @@ async function buildExchangeDashboardData(){
     }
     if(lender) lender.totalLent += Number(loan.principal||0);
   });
-  const usersWithScores=users.map(user=>{
+  const usersWithScores=eligibleUsers.map(user=>{
     const metrics=scoreMap.get(user.id);
     let score=650;
     score += Math.min(metrics.onTimeLoans * 24, 120);
@@ -1157,6 +1169,7 @@ async function buildExchangeDashboardData(){
       id:user.id,
       name:user.name,
       grade:user.grade||'',
+      createdAt:Number(user.created_at||0),
       credits:metrics.credits,
       shekelScore:score,
       band:getShekelBand(score),
@@ -1198,6 +1211,11 @@ async function buildExchangeDashboardData(){
   const avgScore=usersWithScores.length ? Math.round(usersWithScores.reduce((sum,row)=>sum+row.shekelScore,0)/usersWithScores.length) : 650;
   return {
     settings:{interestPercent:EXCHANGE_INTEREST_PERCENT},
+    lender:{
+      id:lenderUser?.id||lenderUserId,
+      name:lenderUser?.name||lenderUserId,
+      credits:toSafeNumber(lenderUser?.credits_text,0),
+    },
     summary:{
       avgScore,
       activeDebt:totalOutstanding,
@@ -1340,12 +1358,14 @@ function makeMineSet(mineCount){
   }
   return new Set(pool.slice(0, mineCount));
 }
-function getAdjustedSafeChance(baseSafeChance, slider){
+function getAdjustedSafeChance(baseSafeChance, slider, mineCount=0){
   if(slider<=0) return 0;
   if(slider>=200) return 1;
+  if(mineCount>=20) return baseSafeChance;
   if(slider<100) return baseSafeChance * (slider/100);
   const boost = 0.06 + (((slider - 100) / 100) * 0.94);
-  return Math.min(1, baseSafeChance + (1 - baseSafeChance) * boost);
+  const cappedBoost = mineCount>=15 ? Math.min(boost, 0.18) : boost;
+  return Math.min(1, baseSafeChance + (1 - baseSafeChance) * cappedBoost);
 }
 function serializeMinesState(game, revealAll=false){
   const revealed = new Set(game.revealedSafe || []);
@@ -1556,8 +1576,8 @@ app.post('/api/auth/verify-code', async(req,res)=>{
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[pending.email]))
       return res.status(409).json({error:'An account with that email already exists'});
     const uid=generateId('U');
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list) VALUES (?,?,?,?,?,?,?,1,0)',
-      [uid,pending.name,pending.email,pending.password,'student',200,pending.grade]);
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list,created_at) VALUES (?,?,?,?,?,?,?,1,0,?)',
+      [uid,pending.name,pending.email,pending.password,'student',200,pending.grade,Date.now()]);
     await db.run('DELETE FROM pending_registrations WHERE id=?',[pendingId]);
     await recordTx(uid,200,'signup_bonus',null,'Welcome bonus');
     appendToSheet(pending.name,pending.email,pending.grade);
@@ -2232,34 +2252,34 @@ app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
 });
 app.get('/api/admin/exchange', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    const overdueBorrowers=await db.all("SELECT DISTINCT borrower_id FROM exchange_loans WHERE status IN ('active','overdue') AND due_at<=? AND repaid_amount<repayment_amount",[Date.now()]);
+    const overdueBorrowers=await db.all("SELECT DISTINCT borrower_id FROM exchange_loans WHERE lender_id=? AND status IN ('active','overdue') AND due_at<=? AND repaid_amount<repayment_amount",[req.user.id, Date.now()]);
     for(const row of overdueBorrowers){
       await collectOverdueExchangeDebtForUser(row.borrower_id).catch(()=>{});
     }
-    res.json(await buildExchangeDashboardData());
+    res.json(await buildExchangeDashboardData(req.user.id));
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/admin/exchange/requests', authMiddleware, adminOnly, async(req,res)=>{
   try{
     const borrowerId=String(req.body.borrowerId||'').trim();
-    const lenderId=String(req.body.lenderId||'').trim();
     const amount=Math.floor(Number(req.body.amount));
     const termDays=clampExchangeTermDays(req.body.termDays);
     const note=String(req.body.note||'').trim().slice(0,220);
-    if(!borrowerId || !lenderId) return res.status(400).json({error:'Borrower and lender are required'});
-    if(borrowerId===lenderId) return res.status(400).json({error:'Borrower and lender must be different'});
+    if(!borrowerId) return res.status(400).json({error:'Choose who should receive the loan'});
+    if(borrowerId===req.user.id) return res.status(400).json({error:'You cannot lend to yourself'});
     if(!amount || amount<1) return res.status(400).json({error:'Enter a valid amount'});
     const [borrower,lender]=await Promise.all([
-      db.get("SELECT id,name,role FROM users WHERE id=? AND role='student'",[borrowerId]),
-      db.get("SELECT id,name,role,CAST(credits AS TEXT) as credits_text FROM users WHERE id=? AND role='student'",[lenderId]),
+      db.get("SELECT id,name,role,created_at FROM users WHERE id=? AND role='student'",[borrowerId]),
+      db.get("SELECT id,name,role,CAST(credits AS TEXT) as credits_text FROM users WHERE id=?",[req.user.id]),
     ]);
     if(!borrower || !lender) return res.status(404).json({error:'Borrower or lender not found'});
+    if(!isExchangeEligibleUser(borrower)) return res.status(400).json({error:'Accounts must be at least 10 days old to use Exchange'});
     if(toSafeNumber(lender.credits_text,0) < amount) return res.status(400).json({error:'Lender does not have enough credits'});
     await db.run(
       'INSERT INTO exchange_requests (id,borrower_id,lender_id,amount,interest_percent,term_days,note,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      [generateId('xrq'), borrowerId, lenderId, amount, EXCHANGE_INTEREST_PERCENT, termDays, note, 'pending', Date.now()]
+      [generateId('xrq'), borrowerId, req.user.id, amount, EXCHANGE_INTEREST_PERCENT, termDays, note, 'pending', Date.now()]
     );
-    await createNotification(lenderId,'exchange','New credit request',`${borrower.name} requested ⬡${amount.toLocaleString()} for ${termDays} day${termDays===1?'':'s'}.`,'/app/exchange');
+    await createNotification(borrowerId,'exchange','Exchange offer pending',`${lender.name||'An admin'} prepared a credit exchange offer worth ⬡${amount.toLocaleString()}.`,'/app/exchange');
     res.json({success:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -2268,6 +2288,7 @@ app.post('/api/admin/exchange/requests/:id/approve', authMiddleware, adminOnly, 
     const request=await db.get('SELECT * FROM exchange_requests WHERE id=?',[req.params.id]);
     if(!request) return res.status(404).json({error:'Request not found'});
     if(request.status!=='pending') return res.status(400).json({error:'Request is no longer pending'});
+    if(request.lender_id!==req.user.id) return res.status(403).json({error:'This is not your exchange request'});
     const [borrower,lender]=await Promise.all([
       db.get('SELECT id,name FROM users WHERE id=?',[request.borrower_id]),
       db.get('SELECT id,name,CAST(credits AS TEXT) as credits_text FROM users WHERE id=?',[request.lender_id]),
@@ -2298,6 +2319,7 @@ app.post('/api/admin/exchange/requests/:id/decline', authMiddleware, adminOnly, 
     const request=await db.get('SELECT * FROM exchange_requests WHERE id=?',[req.params.id]);
     if(!request) return res.status(404).json({error:'Request not found'});
     if(request.status!=='pending') return res.status(400).json({error:'Request is no longer pending'});
+    if(request.lender_id!==req.user.id) return res.status(403).json({error:'This is not your exchange request'});
     await db.run("UPDATE exchange_requests SET status='declined', decided_at=?, decided_by=? WHERE id=?",[Date.now(), req.user.id, request.id]);
     await createNotification(request.borrower_id,'exchange','Credit request declined','Your exchange request was declined.','/app/exchange');
     res.json({success:true});
@@ -2318,6 +2340,7 @@ app.post('/api/admin/exchange/loans/:id/repay', authMiddleware, adminOnly, async
       WHERE l.id=?
     `,[req.params.id]);
     if(!loan) return res.status(404).json({error:'Loan not found'});
+    if(loan.lender_id!==req.user.id) return res.status(403).json({error:'This is not your loan'});
     if(loan.status==='paid') return res.status(400).json({error:'Loan is already paid'});
     if(!amount || amount<1) return res.status(400).json({error:'Enter a repayment amount'});
     const available=toSafeNumber(loan.borrower_credits_text,0);
@@ -3553,7 +3576,7 @@ app.post('/api/casino/mines/reveal', authMiddleware, async(req,res)=>{
     const minesOdds = effective.minesOdds;
     const remainingSafe = 25 - game.mineCount - game.revealedSafe.size;
     const remainingTiles = 25 - game.revealedSafe.size;
-    const desiredSafe = remainingSafe>0 && Math.random() < getAdjustedSafeChance(remainingSafe/remainingTiles, minesOdds);
+    const desiredSafe = remainingSafe>0 && Math.random() < getAdjustedSafeChance(remainingSafe/remainingTiles, minesOdds, game.mineCount);
     flipMineCell(game, index, desiredSafe);
     const hitMine = game.mineSet.has(index);
     if(hitMine){
