@@ -12,10 +12,34 @@ const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'jewshi-secret-change-in-production';
+const bootstrapSecrets = new Map();
+function getBootstrapSecret(envKey, label, length = 18) {
+  if (process.env[envKey]) return process.env[envKey];
+  if (!bootstrapSecrets.has(envKey)) {
+    const generated = crypto.randomBytes(length).toString('base64url');
+    console.warn(`[security] ${label} not set. Generated one-time bootstrap value for this process.`);
+    bootstrapSecrets.set(envKey, generated);
+  }
+  return bootstrapSecrets.get(envKey);
+}
+function normalizeCloseDate(value) {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return null;
+  return new Date(timestamp).toISOString();
+}
+function isMarketBettingClosed(market, now = Date.now()) {
+  if (!market) return true;
+  if (market.status !== 'open') return true;
+  if (!market.close_date) return false;
+  const closeAt = Date.parse(market.close_date);
+  return !Number.isNaN(closeAt) && closeAt <= now;
+}
+
+const JWT_SECRET = getBootstrapSecret('JWT_SECRET', 'JWT_SECRET');
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 const POPUP_TAB_PASSWORD_KEY = 'popup_tab_password_hash';
-const DEFAULT_POPUP_TAB_PASSWORD = process.env.POPUP_TAB_PASSWORD || 'BryceB0mb!';
+const DEFAULT_POPUP_TAB_PASSWORD = getBootstrapSecret('POPUP_TAB_PASSWORD', 'POPUP_TAB_PASSWORD');
 const POPUP_UNLOCK_TTL_MS = 1000 * 60 * 45;
 const popupAdminUnlocks = new Map();
 const UPLOAD_ROOT = path.join(__dirname, 'public', 'uploads', 'popups');
@@ -378,11 +402,13 @@ async function ensureProtectedSettings() {
 async function seedIfEmpty() {
   const row = await db.get('SELECT COUNT(*) as c FROM users');
   if (row.c > 0) return;
+  const defaultAdminPassword = getBootstrapSecret('INITIAL_ADMIN_PASSWORD', 'INITIAL_ADMIN_PASSWORD');
+  const defaultAccessPassword = getBootstrapSecret('INITIAL_ACCESS_PASSWORD', 'INITIAL_ACCESS_PASSWORD');
   const users = [
-    { id:'GROSE',       name:'Administrator', email:'grose@emeryweiner.org', password:'BryceB0mb!', role:'admin',   credits:0,   grade:'' },
-    { id:'STUDENT-001', name:'Blake Gubitz',  email:'blake@jewshi.com',      password:'daren',      role:'student', credits:500, grade:'' },
-    { id:'STUDENT-002', name:'Student 002',   email:'student2@jewshi.com',   password:'Hello123',   role:'student', credits:500, grade:'' },
-    { id:'STUDENT-003', name:'Student 003',   email:'student3@jewshi.com',   password:'BigIce',     role:'student', credits:500, grade:'' },
+    { id:'GROSE',       name:'Administrator', email:'grose@emeryweiner.org', password:defaultAdminPassword, role:'admin',   credits:0,   grade:'' },
+    { id:'STUDENT-001', name:'Blake Gubitz',  email:'blake@jewshi.com',      password:getBootstrapSecret('SEED_STUDENT_001_PASSWORD', 'SEED_STUDENT_001_PASSWORD'), role:'student', credits:500, grade:'' },
+    { id:'STUDENT-002', name:'Student 002',   email:'student2@jewshi.com',   password:getBootstrapSecret('SEED_STUDENT_002_PASSWORD', 'SEED_STUDENT_002_PASSWORD'), role:'student', credits:500, grade:'' },
+    { id:'STUDENT-003', name:'Student 003',   email:'student3@jewshi.com',   password:getBootstrapSecret('SEED_STUDENT_003_PASSWORD', 'SEED_STUDENT_003_PASSWORD'), role:'student', credits:500, grade:'' },
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
@@ -402,7 +428,7 @@ async function seedIfEmpty() {
   await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     ['m2','Will the school play open on time?','School','open','2025-05-15',0,0,100,0,Date.now(),'binary']);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
-  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password','jewshi2025')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password',?)",[defaultAccessPassword]);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_dice_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_plinko_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_blackjack_odds','100')");
@@ -1241,7 +1267,8 @@ app.post('/api/auth/resend-code', async(req,res)=>{
 app.post('/api/access/verify', async(req,res)=>{
   const {password}=req.body;
   const row=await db.get("SELECT value FROM settings WHERE key='access_password'");
-  if(password===(row?.value||'jewshi2025')) res.json({success:true});
+  if(!row?.value) return res.status(503).json({error:'Access password is not configured'});
+  if(password===row.value) res.json({success:true});
   else res.status(401).json({error:'Wrong password'});
 });
 
@@ -1893,13 +1920,15 @@ app.post('/api/markets', authMiddleware, adminOnly, async(req,res)=>{
     const {question,category,closeDate,market_type,line}=req.body;
     if(!question||!closeDate) return res.status(400).json({error:'Missing fields'});
     if(market_type==='overunder'&&(line===undefined||line===null)) return res.status(400).json({error:'Line required'});
+    const normalizedCloseDate=normalizeCloseDate(closeDate);
+    if(!normalizedCloseDate) return res.status(400).json({error:'Invalid close date'});
     const id=generateId('m');
     if(market_type==='overunder'){
       await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type,line,over_shares,under_shares) VALUES (?,?,?,'open',?,0,0,100,0,?,?,?,0,0)`,
-        [id,question,category||'Sports',closeDate,Date.now(),'overunder',line]);
+        [id,question,category||'Sports',normalizedCloseDate,Date.now(),'overunder',line]);
     } else {
       await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,'open',?,0,0,100,0,?,'binary')`,
-        [id,question,category||'General',closeDate,Date.now()]);
+        [id,question,category||'General',normalizedCloseDate,Date.now()]);
     }
     res.json(await db.get('SELECT * FROM markets WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
@@ -1909,7 +1938,7 @@ app.post('/api/markets/:id/resolve', authMiddleware, adminOnly, async(req,res)=>
     const {outcome}=req.body;
     if(!['YES','NO'].includes(outcome)) return res.status(400).json({error:'Bad outcome'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
-    if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
+    if(!m||!['open','closed'].includes(m.status)) return res.status(400).json({error:'Market is already resolved'});
     await db.run('UPDATE markets SET status=? WHERE id=?',[outcome==='YES'?'resolved-yes':'resolved-no',m.id]);
     const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
     const total=wins.reduce((s,b)=>s+b.amount,0);
@@ -1930,7 +1959,7 @@ app.post('/api/markets/:id/resolve-overunder', authMiddleware, adminOnly, async(
     const {actual}=req.body;
     if(actual===undefined) return res.status(400).json({error:'Actual result required'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[req.params.id]);
-    if(!m||m.status!=='open') return res.status(400).json({error:'Not open'});
+    if(!m||!['open','closed'].includes(m.status)) return res.status(400).json({error:'Market is already resolved'});
     const outcome=parseFloat(actual)>parseFloat(m.line)?'OVER':'UNDER';
     await db.run('UPDATE markets SET status=? WHERE id=?',[`resolved-${outcome.toLowerCase()}`,m.id]);
     const wins=await db.all("SELECT * FROM bets WHERE market_id=? AND side=? AND status='active'",[m.id,outcome]);
@@ -1977,6 +2006,7 @@ app.post('/api/bets', authMiddleware, async(req,res)=>{
     if(user.credits<amount) return res.status(400).json({error:'Insufficient credits'});
     const m=await db.get('SELECT * FROM markets WHERE id=?',[marketId]);
     if(!m||m.status!=='open') return res.status(400).json({error:'Market not available'});
+    if(isMarketBettingClosed(m)) return res.status(400).json({error:'Betting is closed for this market'});
     if(m.market_type==='overunder'&&!['OVER','UNDER'].includes(side)) return res.status(400).json({error:'Side must be OVER or UNDER'});
     if(m.market_type==='binary'&&!['YES','NO'].includes(side)) return res.status(400).json({error:'Side must be YES or NO'});
     const betCount = await db.get('SELECT COUNT(*) as c FROM bets WHERE user_id=? AND market_id=?', [req.user.id, marketId]);
@@ -2544,7 +2574,7 @@ app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
       bigWins,
       newUsers:newUsersCount||0,
       creditsDistributed:creditsRow?.s||0,
-      accessPassword:accessRow?.value||'jewshi2025',
+      accessPassword:accessRow?.value||'',
       siteUrl:CLIENT_URL,
     };
     const sent=await sendViaAppsScript('weekly_digest',payload);
