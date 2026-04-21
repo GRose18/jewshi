@@ -57,6 +57,7 @@ const casinoBetsCache = new Map();
 const BETS_MINE_CACHE_TTL_MS = 10000;
 const betsMineCache = new Map();
 let betsSnapshotVersion = 0;
+const CASINO_ENABLED = false;
 const NOTIFICATIONS_CACHE_TTL_MS = 15000;
 const notificationsListCache = new Map();
 const notificationsUnreadCache = new Map();
@@ -163,6 +164,10 @@ function bumpPopupVersion(userId){
 }
 function getAdminCacheKey(search, limit, offset){
   return JSON.stringify([search || '', limit || 0, offset || 0]);
+}
+function chanceGamesDisabled(req,res,next){
+  if(CASINO_ENABLED) return next();
+  return res.status(404).json({error:'Casino is currently unavailable'});
 }
 
 async function initDB() {
@@ -465,6 +470,11 @@ async function initDB() {
     throw error;
   }
 }
+
+app.use('/api/casino', authMiddleware, chanceGamesDisabled);
+app.use('/api/admin/casino', authMiddleware, adminOnly, chanceGamesDisabled);
+app.use('/api/matches', authMiddleware, chanceGamesDisabled);
+app.use('/api/spin', authMiddleware, chanceGamesDisabled);
 
 async function ensureProtectedSettings() {
   const popupPassword = await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);
@@ -2423,7 +2433,7 @@ app.post('/api/users/:id/toggle-assistance-access', authMiddleware, adminOnly, a
   await db.run('UPDATE users SET assistance_access=? WHERE id=?',[newVal,req.params.id]);
   res.json({assistance_access:newVal});
 });
-app.post('/api/users/:id/lucky-streak', authMiddleware, async(req,res)=>{
+app.post('/api/users/:id/lucky-streak', authMiddleware, chanceGamesDisabled, async(req,res)=>{
   try{
     if(!(await canGrantLuckyStreak(req.user.id))) return res.status(403).json({error:'Only GROSE and Guy Tambour can grant Lucky Streak'});
     const target=await db.get('SELECT id,name FROM users WHERE id=?',[req.params.id]);

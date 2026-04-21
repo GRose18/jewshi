@@ -484,7 +484,7 @@
     </div>
     <div class="topbar-right">
       <div class="credits-badge" onclick="openBuyCredits()">⬡ <span id="topbar-credits">0</span> credits</div>
-      <button class="btn-buy" id="spin-topbar-btn" onclick="openSpinModal()" style="background:var(--accent-bg);border-color:var(--accent);color:var(--accent);">⬡ Daily Spin</button>
+      <button class="btn-buy" id="spin-topbar-btn" onclick="openSpinModal()" style="display:none;background:var(--accent-bg);border-color:var(--accent);color:var(--accent);">⬡ Daily Spin</button>
       <div class="topbar-action-wrap">
         <button class="notif-bell" id="notifications-bell" onclick="toggleNotificationsPanel(event)" aria-label="Open notifications">
           <span style="font-size:16px;">🔔</span>
@@ -507,7 +507,7 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
-    <div class="nav-tab" data-tab="casino" onclick="switchTab('casino')">Casino</div>
+    <div class="nav-tab" data-tab="casino" onclick="switchTab('casino')" style="display:none;">Casino</div>
     <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
@@ -1573,6 +1573,7 @@ let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
 let popupPollsState={admin:[],user:[]};
 let activeIncomingPopupId=null;
+let activeIncomingPopupData=null;
 let popupRaveInterval=null;
 let popupAlertInterval=null;
 let popupSirenAudioCtx=null;
@@ -1580,6 +1581,11 @@ let popupSirenNodes=null;
 let popupIntroTimeouts=[];
 let popupBackGuardActive=false;
 let popupCanClose=false;
+let popupDomGuardInterval=null;
+const incomingPopupOverlayMarkup=(()=>{
+  const overlay=document.getElementById('incoming-popup-overlay');
+  return overlay?overlay.outerHTML:'';
+})();
 let assistanceDirectory=[];
 let assistanceState={contacts:[],incomingRequests:[],helperFor:[],currentSessions:[],recentSessions:[]};
 let assistanceEventSource=null;
@@ -1596,6 +1602,7 @@ let assistanceSnapshotInterval=null;
 let assistanceSnapshotBusy=false;
 let assistanceSelectedTargetsBySession={};
 let assistanceFullscreenSessionId=null;
+const CASINO_ENABLED=false;
 let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
@@ -1615,7 +1622,48 @@ function canUseAssistanceTab(){
   return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
 }
 function canUseOnlineMatches(){
-  return !!(currentUser&&currentUser.role==='admin');
+  return !!(CASINO_ENABLED&&currentUser&&currentUser.role==='admin');
+}
+function applyChanceGamesAvailability(){
+  const spinBtn=document.getElementById('spin-topbar-btn');
+  if(spinBtn) spinBtn.style.display=CASINO_ENABLED?'inline-flex':'none';
+  const casinoTabButton=document.querySelector('.nav-tab[data-tab="casino"]');
+  if(casinoTabButton) casinoTabButton.style.display=CASINO_ENABLED?'block':'none';
+  const casinoTab=document.getElementById('tab-casino');
+  if(casinoTab) casinoTab.style.display=CASINO_ENABLED?'':'none';
+}
+function clearPopupDomGuard(){
+  clearInterval(popupDomGuardInterval);
+  popupDomGuardInterval=null;
+}
+function ensureIncomingPopupOverlay(){
+  const requiredIds=[
+    'incoming-popup-overlay',
+    'incoming-popup-title',
+    'incoming-popup-message',
+    'incoming-popup-alert-sequence',
+    'incoming-popup-main-content',
+    'incoming-popup-media-wrap',
+    'incoming-popup-audio',
+    'incoming-popup-close-btn',
+    'incoming-popup-audio-status',
+  ];
+  const overlay=document.getElementById('incoming-popup-overlay');
+  const missingRequired=requiredIds.some(id=>!document.getElementById(id));
+  if(overlay && !missingRequired) return overlay;
+  if(overlay) overlay.remove();
+  if(!incomingPopupOverlayMarkup) return null;
+  document.body.insertAdjacentHTML('beforeend', incomingPopupOverlayMarkup);
+  return document.getElementById('incoming-popup-overlay');
+}
+function startPopupDomGuard(){
+  clearPopupDomGuard();
+  if(!activeIncomingPopupId || popupCanClose) return;
+  popupDomGuardInterval=setInterval(()=>{
+    const overlay=ensureIncomingPopupOverlay();
+    if(!overlay || !activeIncomingPopupData) return;
+    if(overlay.style.display==='none') showIncomingPopup(activeIncomingPopupData);
+  },1000);
 }
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
@@ -1862,6 +1910,7 @@ async function enterApp(){
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
   document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
   document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
+  applyChanceGamesAvailability();
   updateTopbar();renderMarkets();
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
   unreadPollInterval=setInterval(pollUnreadCount,20000);pollUnreadCount();
@@ -1875,7 +1924,7 @@ async function enterApp(){
   bindAssistanceRuntime();
   await loadAssistanceState(false);
   if(canUseAssistanceTab()) await loadAssistanceDirectory();
-  await loadCasinoConfig();
+  if(CASINO_ENABLED) await loadCasinoConfig();
   startAssistanceStream();
   if(canUseAssistanceTab()) renderAssistanceTab();
   document.addEventListener('click',handleGlobalClick,true);
@@ -2178,6 +2227,7 @@ async function renderExchangeTab(){
 
 function switchTab(tab){
   if(tab==='assistance'&&!canUseAssistanceTab()) return;
+  if(tab==='casino'&&!CASINO_ENABLED) return;
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
@@ -4076,11 +4126,27 @@ async function pollResolutions(){
 // ── ADMIN ──
 async function renderAdminTab(){
   if(!currentUser||currentUser.role!=='admin')return;
-  const _fallbacks=[{students:0,openMarkets:0,totalBets:0,pendingVol:0},[],[],[],{stats:{},bets:[],total:0,hasMore:false}];
-  const _results=await Promise.allSettled([
-    api('GET','/admin/stats'),api('GET','/markets'),api('GET','/users'),api('GET','/store'),api('GET','/admin/casino'),
-  ]);
-  const [stats,markets,users,storeItems,casinoData]=_results.map((r,i)=>r.status==='fulfilled'?r.value:(_fallbacks[i]??{}));
+  const requests=[
+    api('GET','/admin/stats'),
+    api('GET','/markets'),
+    api('GET','/users'),
+    api('GET','/store'),
+  ];
+  const fallbacks=[
+    {students:0,openMarkets:0,totalBets:0,pendingVol:0},
+    [],
+    [],
+    [],
+  ];
+  if(CASINO_ENABLED){
+    requests.push(api('GET','/admin/casino'));
+    fallbacks.push({stats:{},bets:[],total:0,hasMore:false});
+  }
+  const _results=await Promise.allSettled(requests);
+  const [stats,markets,users,storeItems]=_results.slice(0,4).map((r,i)=>r.status==='fulfilled'?r.value:(fallbacks[i]??{}));
+  const casinoData=CASINO_ENABLED
+    ?(_results[4]?.status==='fulfilled'?_results[4].value:(fallbacks[4]??{stats:{},bets:[],total:0,hasMore:false}))
+    :{stats:{},bets:[],total:0,hasMore:false};
   document.getElementById('admin-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
@@ -4152,7 +4218,7 @@ async function renderAdminTab(){
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.assistance_access?'checked':''} onchange="toggleAssistanceAccess('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:#39c9ff;">`:'—'}
         </td>
-        <td style="color:var(--text)">${esc(u.name)||'—'}${u.lucky_streak?.active?`<div style="font-size:11px;color:var(--gold);margin-top:4px;">Lucky Streak until ${new Date(u.lucky_streak.expiresAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>`:''}</td>
+        <td style="color:var(--text)">${esc(u.name)||'—'}${CASINO_ENABLED&&u.lucky_streak?.active?`<div style="font-size:11px;color:var(--gold);margin-top:4px;">Lucky Streak until ${new Date(u.lucky_streak.expiresAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>`:''}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
         <td>${u.grade||'—'}</td>
         <td><span class="history-pill" style="background:${u.role==='admin'?'var(--accent-bg)':'var(--bg4)'};color:${u.role==='admin'?'var(--accent)':'var(--text3)'}">${u.role}</span></td>
@@ -4164,16 +4230,27 @@ async function renderAdminTab(){
           ${isGrose?(u.role==='student'
             ?`<button class="btn-admin btn-sm btn-warning" onclick="makeAdmin('${u.id}')">Make Admin</button>`
             :`<button class="btn-admin btn-sm" style="background:var(--bg4);color:var(--text2)" onclick="makeStudent('${u.id}')">Demote</button>`):''}
-          <button class="btn-admin btn-sm" style="background:rgba(240,192,64,0.14);border:1px solid rgba(240,192,64,0.34);color:var(--gold);" onclick="grantLuckyStreak('${u.id}')">Add Luck</button>
+          ${CASINO_ENABLED?`<button class="btn-admin btn-sm" style="background:rgba(240,192,64,0.14);border:1px solid rgba(240,192,64,0.34);color:var(--gold);" onclick="grantLuckyStreak('${u.id}')">Add Luck</button>`:''}
           <button class="btn-admin btn-sm btn-warning" onclick="roundCredits('${u.id}')">Floor</button>
           <button class="btn-admin btn-sm btn-danger" onclick="deleteUser('${u.id}')">Delete</button>
         </div></td>
       </tr>`).join('')}</tbody>
     </table>`;
 
+  const casinoActivityPanel=document.getElementById('admin-casino-meta')?.closest('.panel');
   const cs=casinoData.stats||{};
   const controlsPanel=document.getElementById('admin-casino-controls-panel');
   const controlsEl=document.getElementById('admin-casino-controls');
+  if(!CASINO_ENABLED){
+    controlsPanel.style.display='none';
+    controlsEl.innerHTML='';
+    if(casinoActivityPanel) casinoActivityPanel.style.display='none';
+    adminCasinoState={bets:[],search:'',offset:0,limit:100,total:0,hasMore:false};
+    adminTxnState.search=document.getElementById('admin-txn-search')?.value||adminTxnState.search||'';
+    await loadAdminTransactions(true);
+    return;
+  }
+  if(casinoActivityPanel) casinoActivityPanel.style.display='block';
   if(currentUser.id==='GROSE'){
     controlsPanel.style.display='block';
     controlsEl.innerHTML=`
@@ -4240,7 +4317,7 @@ async function renderAdminTab(){
 function handleAdminLogSearchKey(event, type){
   if(event.key!=='Enter') return;
   if(type==='transactions') loadAdminTransactions(true);
-  if(type==='casino') loadAdminCasinoActivity(true);
+  if(type==='casino'&&CASINO_ENABLED) loadAdminCasinoActivity(true);
 }
 
 async function loadAdminTransactions(reset=false){
@@ -4266,6 +4343,7 @@ async function loadAdminTransactions(reset=false){
 }
 
 async function loadAdminCasinoActivity(reset=false){
+  if(!CASINO_ENABLED) return;
   if(!currentUser||currentUser.role!=='admin') return;
   const searchEl=document.getElementById('admin-casino-search');
   const nextSearch=String(searchEl?.value||'').trim();
@@ -4714,7 +4792,9 @@ async function pollIncomingPopup(){
       hideIncomingPopup();
       return;
     }
-    if(activeIncomingPopupId!==popup.id){
+    const overlay=document.getElementById('incoming-popup-overlay');
+    const overlayVisible=!!overlay && overlay.style.display!=='none';
+    if(activeIncomingPopupId!==popup.id || !overlayVisible){
       showIncomingPopup(popup);
     }
   }catch(e){}
@@ -4722,7 +4802,9 @@ async function pollIncomingPopup(){
 
 function hideIncomingPopup(){
   activeIncomingPopupId=null;
+  activeIncomingPopupData=null;
   popupCanClose=false;
+  clearPopupDomGuard();
   const overlay=document.getElementById('incoming-popup-overlay');
   const intro=document.getElementById('incoming-popup-alert-sequence');
   const main=document.getElementById('incoming-popup-main-content');
@@ -4847,8 +4929,10 @@ function stopPopupSiren(){
 
 async function showIncomingPopup(popup){
   activeIncomingPopupId=popup.id;
+  activeIncomingPopupData=popup;
   popupCanClose=!!Number(popup.closeout_enabled);
-  const overlay=document.getElementById('incoming-popup-overlay');
+  const overlay=ensureIncomingPopupOverlay();
+  if(!overlay) return;
   const banner=document.getElementById('incoming-popup-alert-banner');
   const title=document.getElementById('incoming-popup-title');
   const message=document.getElementById('incoming-popup-message');
@@ -4876,6 +4960,7 @@ async function showIncomingPopup(popup){
   }else{
     popupBackGuardActive=false;
   }
+  startPopupDomGuard();
   if(Number(popup.rave_enabled)) startPopupRave();
   else stopPopupRave();
   if(Number(popup.alert_enabled)) startPopupAlert();
@@ -5192,6 +5277,10 @@ function drawSpinWheel(rot){
 }
 
 async function openSpinModal(){
+  if(!CASINO_ENABLED){
+    showToast('Chance games are currently disabled.');
+    return;
+  }
   document.getElementById('spin-modal').style.display='flex';
   document.getElementById('spin-result').innerHTML='';
   document.getElementById('spin-cooldown').textContent='';
