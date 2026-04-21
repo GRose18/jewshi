@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.ico">
-<title>Jewshi Markets</title>
+<title>Sclshi Markets</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -18,15 +18,17 @@
     --gold:#f0c040;--gold-bg:rgba(240,192,64,0.1);
     --blue:#3b9eff;--blue-bg:rgba(59,158,255,0.08);--blue-dim:rgba(59,158,255,0.2);
     --orange:#ff8c42;--orange-bg:rgba(255,140,66,0.08);--orange-dim:rgba(255,140,66,0.2);
+    --live-bg:#0d1324;--live-line:#21304d;--live-brand:#c9d7ff;--live-accent:#6ea8ff;--live-muted:#7185ad;
     --shadow:0 2px 16px rgba(0,0,0,0.4);--shadow-lg:0 8px 40px rgba(0,0,0,0.6);
     --radius:10px;--radius-lg:14px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;transition:background 0.25s ease,color 0.25s ease}
 
   /* AUTH */
   #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center}
-  .auth-card{background:var(--bg2);border:1px solid var(--border-hi);border-radius:18px;padding:44px 40px;width:400px;box-shadow:var(--shadow-lg)}
+  .auth-card{background:var(--bg2);border:1px solid var(--border-hi);border-radius:18px;padding:44px 40px;width:400px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+  .auth-card::before{content:'';position:absolute;inset:-40% auto auto -10%;width:220px;height:220px;background:radial-gradient(circle, var(--accent-bg), transparent 65%);pointer-events:none}
   .auth-logo{text-align:center;margin-bottom:32px}
   .auth-logo .brand{font-size:30px;font-weight:700;letter-spacing:-0.03em}
   .auth-logo .brand span{color:var(--accent)}
@@ -44,23 +46,24 @@
   .error-msg{background:var(--red-bg);border:1px solid var(--red-dim);color:var(--red);padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:14px}
 
   /* LIVE SCREEN */
-  #live-screen{display:none;min-height:100vh;background:#0d0a1e;color:#fff;font-family:'Inter',sans-serif}
+  #live-screen{display:none;min-height:100vh;background:var(--live-bg);color:#fff;font-family:'Inter',sans-serif}
   .live-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:40px 20px}
   .live-brand{font-size:52px;font-weight:700;letter-spacing:-0.04em;margin-bottom:4px}
-  .live-brand span{color:#a78bfa}
-  .live-tagline{font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:#1e1540;margin-bottom:60px}
+  .live-brand{color:var(--live-brand)}
+  .live-brand span{color:var(--live-accent)}
+  .live-tagline{font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:var(--live-muted);margin-bottom:60px}
   .live-stats{display:flex;gap:60px;margin-bottom:60px;flex-wrap:wrap;justify-content:center}
   .live-stat{text-align:center}
-  .live-stat-num{font-size:48px;font-weight:700;letter-spacing:-0.03em;color:#e8e0ff;font-variant-numeric:tabular-nums}
-  .live-stat-label{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#f0c040;margin-top:6px}
+  .live-stat-num{font-size:48px;font-weight:700;letter-spacing:-0.03em;color:var(--live-brand);font-variant-numeric:tabular-nums}
+  .live-stat-label{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-top:6px}
   .live-markets{width:100%;max-width:600px;margin-bottom:60px}
-  .live-market-row{border-top:1px solid #1e1540;padding:20px 0;display:flex;justify-content:space-between;align-items:center;gap:20px}
-  .live-market-row:last-child{border-bottom:1px solid #1e1540}
-  .live-market-q{font-size:14px;font-weight:500;color:#3d2a70}
+  .live-market-row{border-top:1px solid var(--live-line);padding:20px 0;display:flex;justify-content:space-between;align-items:center;gap:20px}
+  .live-market-row:last-child{border-bottom:1px solid var(--live-line)}
+  .live-market-q{font-size:14px;font-weight:500;color:var(--live-brand)}
   .live-countdown{font-size:22px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:#fff}
   .live-countdown.urgent{color:#ff4560}
   .live-countdown.soon{color:#f0c040}
-  .live-dot{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#1e1540;margin-bottom:40px}
+  .live-dot{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--live-muted);margin-bottom:40px}
   .dot{width:5px;height:5px;border-radius:50%;background:#00d084;animation:pulse 2s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}
   .access-gate{display:flex;flex-direction:column;align-items:center;gap:16px;margin-top:20px}
@@ -381,12 +384,12 @@
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">
-      <span class="star">✡</span>
-      <div class="brand">Jew<span>shi</span></div>
+      <span class="star">✦</span>
+      <div class="brand">Scl<span>shi</span></div>
       <div class="tagline">Prediction Markets</div>
     </div>
     <div id="auth-error" class="error-msg" style="display:none;"></div>
-    <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
+    <div class="form-group"><label>Email or Username</label><input type="text" id="login-email" placeholder="admin@sclshi.com"></div>
     <div class="form-group"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">Sign In</button>
     <div class="auth-toggle" style="margin-top:12px;"><a onclick="showForgotPassword()" style="color:var(--text3);font-size:12px;">Forgot password?</a></div>
@@ -438,10 +441,20 @@
 <div id="register-screen" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div class="auth-card" style="max-height:90vh;overflow-y:auto;">
     <h2 style="font-size:18px;font-weight:700;margin-bottom:6px;text-align:center;color:var(--text);">Create Account</h2>
-    <p style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;">Sign up to start trading on Jewshi.</p>
+    <p style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;">Sign up to start trading on Sclshi.</p>
     <div id="reg-error" class="error-msg" style="display:none;"></div>
     <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
     <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
+    <div class="form-group"><label>School</label>
+      <select id="reg-school" onchange="previewSchoolTheme(this.value)">
+        <option value="sclshi">Sclshi</option>
+        <option value="lakeside">Lakeside Academy</option>
+        <option value="ridgeview">Ridgeview Prep</option>
+        <option value="northfield">Northfield School</option>
+        <option value="crestmont">Crestmont High</option>
+        <option value="brookstone">Brookstone Academy</option>
+      </select>
+    </div>
     <div class="form-group"><label>Grade</label>
       <select id="reg-grade"><option>6th Grade</option><option>7th Grade</option><option>8th Grade</option><option>9th Grade</option><option>10th Grade</option><option>11th Grade</option><option>12th Grade</option></select>
     </div>
@@ -454,7 +467,7 @@
 <!-- LIVE SCREEN -->
 <div id="live-screen">
   <div class="live-wrap">
-    <div class="live-brand">Jew<span>shi</span></div>
+    <div class="live-brand">Scl<span>shi</span></div>
     <div class="live-tagline">Markets</div>
     <div class="live-dot"><div class="dot"></div>Live</div>
     <div class="live-stats">
@@ -464,11 +477,8 @@
     </div>
     <div class="live-markets" id="live-markets"></div>
     <div class="access-gate">
-      <div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#444;margin-bottom:12px;">Go follow the Jewshi instagram.</div>
-      <a href="https://www.instagram.com/jewshi.official/" target="_blank" style="display:flex;align-items:center;gap:8px;color:#fff;text-decoration:none;font-size:15px;font-weight:600;margin-bottom:28px;opacity:0.7;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
-        @jewshi.official
-      </a>
+      <div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--live-muted);margin-bottom:12px;">Built for school communities</div>
+      <div style="max-width:340px;text-align:center;color:var(--text2);font-size:14px;line-height:1.6;margin-bottom:28px;">Choose your school during signup and Sclshi automatically matches the app colors to your campus identity.</div>
       <button onclick="goToMarkets()" style="background:#7c6af7;color:#fff;border:none;padding:14px 40px;border-radius:10px;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.02em;">Go to Markets →</button>
     </div>
     </div>
@@ -479,7 +489,7 @@
 <div id="app">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:20px;">
-      <div class="topbar-brand">Jew<span>shi</span></div>
+      <div class="topbar-brand">Scl<span>shi</span></div>
       <span style="font-size:11px;color:var(--text3);letter-spacing:0.08em;text-transform:uppercase;">Markets</span>
     </div>
     <div class="topbar-right">
@@ -494,7 +504,7 @@
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
             <div>
               <div style="font-size:16px;font-weight:700;color:var(--text);">Notifications</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:3px;">Bet wins, new messages, and JewGram activity.</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:3px;">Bet wins, new messages, and SclGram activity.</div>
             </div>
             <button class="btn-admin btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
           </div>
@@ -508,7 +518,7 @@
   <div class="nav-tabs">
     <div class="nav-tab active" data-tab="markets" onclick="switchTab('markets')">Markets</div>
     <div class="nav-tab" data-tab="casino" onclick="switchTab('casino')" style="display:none;">Casino</div>
-    <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">JewGram</div>
+    <div class="nav-tab" data-tab="feed" onclick="switchTab('feed')">SclGram</div>
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
@@ -543,7 +553,7 @@
     <div id="tab-casino" class="tab-content">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px;">
         <div>
-          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Jewshi Casino</h2>
+          <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Sclshi Casino</h2>
           <p style="font-size:12px;color:var(--text3);margin-top:3px;">Play games with your credits</p>
         </div>
       </div>
@@ -1186,7 +1196,7 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
           <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Remote Assistance</h2>
-          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Open live Jewshi sessions, see the full page, click through the app, type into fields, and coach multiple people with voice guidance.</p>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Open live Sclshi sessions, see the full page, click through the app, type into fields, and coach multiple people with voice guidance.</p>
         </div>
         <div class="assistance-badge active" id="assistance-connection-badge">Offline</div>
       </div>
@@ -1239,7 +1249,7 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
           <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;">Pop-up</h2>
-          <p style="font-size:12px;color:var(--text3);margin-top:3px;">GROSE-only control room for server-wide positive messages.</p>
+          <p style="font-size:12px;color:var(--text3);margin-top:3px;">Primary-admin control room for server-wide positive messages.</p>
         </div>
         <button class="btn-admin" onclick="lockPopupTab()" style="background:var(--bg4);color:var(--text2);display:none;" id="popup-lock-btn">Lock Tab</button>
       </div>
@@ -1300,7 +1310,7 @@
               </div>
               <div id="popup-poll-recipient-list" style="min-height:160px;max-height:220px;overflow:auto;padding:10px 12px;background:var(--bg3);border:1px solid var(--border-hi);border-radius:var(--radius);display:flex;flex-direction:column;gap:8px;"></div>
             </div>
-            <div class="form-group"><label>Question</label><input type="text" id="popup-poll-question" placeholder="How do you feel about this week's Jewshi markets?"></div>
+            <div class="form-group"><label>Question</label><input type="text" id="popup-poll-question" placeholder="How do you feel about this week's Sclshi markets?"></div>
             <div class="admin-form-row">
               <div class="form-group"><label>Option 1</label><input type="text" id="popup-poll-option-1" placeholder="Very good"></div>
               <div class="form-group"><label>Option 2</label><input type="text" id="popup-poll-option-2" placeholder="Good"></div>
@@ -1563,6 +1573,14 @@
 <script>
 const API = window.location.hostname==='localhost'?'http://localhost:3000/api':'/api';
 const CREDITS_PER_DOLLAR=100;
+const SCHOOL_THEMES={
+  sclshi:{label:'Sclshi',vars:{'--accent':'#4da3ff','--accent-bg':'rgba(77,163,255,0.14)','--accent-dim':'rgba(77,163,255,0.3)','--bg':'#07111f','--bg2':'#0c1828','--bg3':'#122338','--bg4':'#1a304b','--text2':'#8ea5c5','--text3':'#546783','--live-bg':'#08111d','--live-line':'#1d3350','--live-brand':'#d9e7ff','--live-accent':'#4da3ff','--live-muted':'#6f88ac'}},
+  lakeside:{label:'Lakeside Academy',vars:{'--accent':'#2ec4b6','--accent-bg':'rgba(46,196,182,0.14)','--accent-dim':'rgba(46,196,182,0.3)','--bg':'#061917','--bg2':'#0d2220','--bg3':'#12302d','--bg4':'#19413d','--text2':'#8db8b2','--text3':'#55756f','--live-bg':'#071816','--live-line':'#1c4e49','--live-brand':'#d9fff8','--live-accent':'#2ec4b6','--live-muted':'#7ea7a1'}},
+  ridgeview:{label:'Ridgeview Prep',vars:{'--accent':'#ff6b6b','--accent-bg':'rgba(255,107,107,0.14)','--accent-dim':'rgba(255,107,107,0.28)','--bg':'#1a0a10','--bg2':'#231019','--bg3':'#301722','--bg4':'#412032','--text2':'#c19aa7','--text3':'#7b5964','--live-bg':'#18080f','--live-line':'#4f2131','--live-brand':'#ffe0e4','--live-accent':'#ff6b6b','--live-muted':'#b78a97'}},
+  northfield:{label:'Northfield School',vars:{'--accent':'#f4b942','--accent-bg':'rgba(244,185,66,0.16)','--accent-dim':'rgba(244,185,66,0.28)','--bg':'#171308','--bg2':'#221c0d','--bg3':'#302715','--bg4':'#433620','--text2':'#c7b48a','--text3':'#857252','--live-bg':'#161106','--live-line':'#534321','--live-brand':'#ffefc9','--live-accent':'#f4b942','--live-muted':'#baa679'}},
+  crestmont:{label:'Crestmont High',vars:{'--accent':'#8e7dff','--accent-bg':'rgba(142,125,255,0.15)','--accent-dim':'rgba(142,125,255,0.3)','--bg':'#0f0d1f','--bg2':'#15122a','--bg3':'#1f1a3b','--bg4':'#2c2550','--text2':'#a29ac9','--text3':'#665e8b','--live-bg':'#0e0b1b','--live-line':'#31285e','--live-brand':'#ede8ff','--live-accent':'#8e7dff','--live-muted':'#968ec2'}},
+  brookstone:{label:'Brookstone Academy',vars:{'--accent':'#7bc043','--accent-bg':'rgba(123,192,67,0.16)','--accent-dim':'rgba(123,192,67,0.3)','--bg':'#10170a','--bg2':'#17210e','--bg3':'#223017','--bg4':'#314421','--text2':'#9fb58b','--text3':'#687a57','--live-bg':'#0f1509','--live-line':'#31481f','--live-brand':'#ebffd8','--live-accent':'#7bc043','--live-muted':'#93a982'}}
+};
 let authToken=localStorage.getItem('ew_token');
 let currentUser=null,currentBetMarket=null,currentBetSide='YES';
 let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
@@ -1602,7 +1620,8 @@ let assistanceSnapshotInterval=null;
 let assistanceSnapshotBusy=false;
 let assistanceSelectedTargetsBySession={};
 let assistanceFullscreenSessionId=null;
-const CASINO_ENABLED=false;
+const desktopBridge=window.sclshiDesktop||window.jewshiDesktop;
+const CASINO_ENABLED=true;
 let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
@@ -1618,11 +1637,26 @@ let minesCount=3;
 let minesResolvedBoard=null;
 let minesLastRevealIndex=null;
 let minesIntroAnimation=true;
+function normalizeSchool(school){
+  const key=String(school||'sclshi').trim().toLowerCase();
+  return SCHOOL_THEMES[key]?key:'sclshi';
+}
+function getSchoolLabel(school){
+  return SCHOOL_THEMES[normalizeSchool(school)].label;
+}
+function applySchoolTheme(school){
+  const theme=SCHOOL_THEMES[normalizeSchool(school)];
+  Object.entries(theme.vars).forEach(([key,value])=>document.documentElement.style.setProperty(key,value));
+  document.body.dataset.school=normalizeSchool(school);
+}
+function previewSchoolTheme(school){
+  applySchoolTheme(school);
+}
 function canUseAssistanceTab(){
-  return !!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access));
+  return !!(currentUser&&(currentUser.id==='ADMIN'||currentUser.assistance_access));
 }
 function canUseOnlineMatches(){
-  return !!(CASINO_ENABLED&&currentUser&&currentUser.role==='admin');
+  return !!(currentUser&&currentUser.role==='admin');
 }
 function applyChanceGamesAvailability(){
   const spinBtn=document.getElementById('spin-topbar-btn');
@@ -1668,7 +1702,8 @@ function startPopupDomGuard(){
 async function api(method,path,body,extraHeaders={},timeoutMs=8000){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(),timeoutMs);
-  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{}),...extraHeaders},signal:controller.signal};
+  const desktopHeaders=desktopBridge?.isDesktopApp?{'X-Jewshi-Desktop':'1'}:{};
+  const opts={method,headers:{'Content-Type':'application/json',...(authToken?{Authorization:'Bearer '+authToken}:{}),...desktopHeaders,...extraHeaders},signal:controller.signal};
   if(body) opts.body=JSON.stringify(body);
   try{
     const res=await fetch(API+path,opts);
@@ -1762,13 +1797,14 @@ function goToMarkets(){
 
 // ── AUTH ──
 async function doLogin(){
-  const email=document.getElementById('login-email').value.trim();
+  const identifier=document.getElementById('login-email').value.trim();
   const password=document.getElementById('login-pass').value;
   const errEl=document.getElementById('auth-error');
   errEl.style.display='none';
   try{
-    const data=await api('POST','/auth/login',{email,password});
+    const data=await api('POST','/auth/login',{identifier,password});
     authToken=data.token;localStorage.setItem('ew_token',authToken);currentUser=data.user;
+    applySchoolTheme(currentUser.school);
     if(currentUser.role==='admin'||sessionStorage.getItem('access_granted')) enterApp();
     else showLiveScreen();
   }catch(e){errEl.textContent=e.message;errEl.style.display='block';}
@@ -1776,14 +1812,15 @@ async function doLogin(){
 async function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim();
+  const school=document.getElementById('reg-school').value;
   const grade=document.getElementById('reg-grade').value;
   const password=document.getElementById('reg-pass').value;
-  if(!name||!email||!password){showRegError('Please fill all fields.');return;}
+  if(!name||!email||!password||!school){showRegError('Please fill all fields.');return;}
   if(password.length<6){showRegError('Password must be at least 6 characters.');return;}
   const btn=document.getElementById('reg-btn');
   btn.disabled=true;btn.textContent='Creating…';
   try{
-    const data=await api('POST','/auth/register',{name,email,password,grade});
+    const data=await api('POST','/auth/register',{name,email,password,grade,school});
     hideRegister();
     showVerifyScreen(data.pendingId);
   }catch(e){showRegError(e.message);btn.disabled=false;btn.textContent='Create Account';}
@@ -1797,7 +1834,7 @@ async function doForgotPassword(){
   catch(e){errEl.textContent=e.message;errEl.style.display='block';}
 }
 function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
-function showRegister(){document.getElementById('register-screen').style.display='flex';}
+function showRegister(){document.getElementById('register-screen').style.display='flex';previewSchoolTheme(document.getElementById('reg-school').value);}
 function showAuthScreen(){document.getElementById('live-screen').style.display='none';document.getElementById('auth-screen').style.display='flex';}
 function hideRegister(){document.getElementById('register-screen').style.display='none';}
 function showForgotPassword(){document.getElementById('forgot-screen').style.display='flex';}
@@ -1901,14 +1938,15 @@ function doLogout(){
 }
 async function enterApp(){
   currentUser=await api('GET','/me');
+  applySchoolTheme(currentUser.school);
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('live-screen').style.display='none';
   document.getElementById('app').style.display='block';
   if(currentUser.role==='admin') document.querySelectorAll('.admin-only:not(.grose-only)').forEach(el=>el.style.display='block');
   else document.querySelectorAll('.admin-only:not(.grose-only)').forEach(el=>el.style.display='none');
-  if(currentUser.id==='GROSE') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
+  if(currentUser.id==='ADMIN') document.querySelectorAll('.grose-only').forEach(el=>el.style.display='block');
   else document.querySelectorAll('.grose-only').forEach(el=>el.style.display='none');
-  document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='GROSE'||currentUser.popup_access)?'block':'none');
+  document.querySelectorAll('.popup-only').forEach(el=>el.style.display=(currentUser.id==='ADMIN'||currentUser.popup_access)?'block':'none');
   document.querySelectorAll('.assistance-only').forEach(el=>el.style.display=canUseAssistanceTab()?'block':'none');
   applyChanceGamesAvailability();
   updateTopbar();renderMarkets();
@@ -1932,7 +1970,7 @@ async function enterApp(){
 }
 function updateTopbar(){
   if(!currentUser)return;
-  document.getElementById('topbar-user').textContent=currentUser.name+' · '+currentUser.id;
+  document.getElementById('topbar-user').textContent=currentUser.name+' · '+getSchoolLabel(currentUser.school);
   document.getElementById('topbar-credits').textContent=currentUser.credits.toLocaleString();
 }
 async function refreshUser(){currentUser=await api('GET','/me');updateTopbar();}
@@ -2300,7 +2338,7 @@ function getSeniorAssistanceSession(){
   return assistanceState.currentSessions.find(s=>s.status==='active'&&s.senior_user_id===currentUser?.id)||null;
 }
 function isManagedAssistanceSession(session){
-  return !!(session&&session.helper_user_id==='GROSE'&&session.senior_user_id!=='GROSE');
+  return !!(session&&session.helper_user_id==='ADMIN'&&session.senior_user_id!=='ADMIN');
 }
 async function loadAssistanceDirectory(){
   if(!authToken) return;
@@ -2326,7 +2364,7 @@ function renderAssistanceTab(){
   const currentSessionEl=document.getElementById('assistance-current-session');
   const helperConsoleEl=document.getElementById('assistance-helper-console');
   const recentSessionsEl=document.getElementById('assistance-recent-sessions');
-  const canAssist=!!(currentUser.id==='GROSE'||currentUser.assistance_access);
+  const canAssist=!!(currentUser.id==='ADMIN'||currentUser.assistance_access);
   if(canAssist){
     const accessibleUsers=assistanceDirectory;
     contactsList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
@@ -2343,13 +2381,13 @@ function renderAssistanceTab(){
         </div>
       </div>
     `).join(''):`<p style="font-size:13px;color:var(--text3);">No people are available to observe yet.</p>`;
-    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Assistance starts right away for any account you open here. You can click around Jewshi, type into fields, and use voice guidance from this dashboard while the user keeps a calm support experience.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Assistance starts right away for any account you open here. You can click around Sclshi, type into fields, and use voice guidance from this dashboard while the user keeps a calm support experience.</div></div>`;
     helperForList.innerHTML=accessibleUsers.length?accessibleUsers.map(user=>`
       <div class="assistance-item">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--text);">${esc(user.name)}</div>
-            <div style="font-size:12px;color:var(--text3);margin-top:4px;">${user.online?'Currently in Jewshi and ready to assist right away.':'Not currently online in Jewshi.'}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">${user.online?'Currently in Sclshi and ready to assist right away.':'Not currently online in Sclshi.'}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
             <div class="assistance-badge ${user.online?'active':'stopped'}">${user.online?'Online':'Offline'}</div>
@@ -2371,7 +2409,7 @@ function renderAssistanceTab(){
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
           <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Live People</div><div style="font-size:24px;font-weight:800;color:var(--text);">${helperSessions.length}</div></div>
           <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Voice Guidance</div><div style="font-size:15px;font-weight:700;color:var(--green);">Enabled</div></div>
-          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Control</div><div style="font-size:15px;font-weight:700;color:var(--green);">On in Jewshi</div></div>
+          <div><div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">Control</div><div style="font-size:15px;font-weight:700;color:var(--green);">On in Sclshi</div></div>
         </div>
       </div>`:`<p style="font-size:13px;color:var(--text3);">No live assistance sessions yet. Check a few people on the left and click Assist Selected.</p>`;
     helperConsoleEl.innerHTML=helperSessions.length?`<div class="assistance-observer-grid">${helperSessions.map(session=>{
@@ -2393,7 +2431,7 @@ function renderAssistanceTab(){
           <input id="assist-input-${session.id}" type="text" placeholder="Type into the selected field" style="flex:1;min-width:180px;">
           <button class="btn-admin btn-sm" onclick="sendAssistanceInputForSession('${session.id}','assist-input-${session.id}')">Send Text</button>
         </div>
-        <div style="font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;">Clicking inside the preview activates Jewshi elements for them. Use the text box for fields, then send a calm spoken instruction if helpful.</div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;">Clicking inside the preview activates Sclshi elements for them. Use the text box for fields, then send a calm spoken instruction if helpful.</div>
         <textarea id="assist-voice-${session.id}" placeholder="Example: The messages tab is open. Look near the left side for your conversations." style="width:100%;min-height:84px;resize:vertical;margin-top:10px;"></textarea>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;">
           <div class="assistance-badge active">Interactive</div>
@@ -2402,16 +2440,16 @@ function renderAssistanceTab(){
       </div>`;
     }).join('')}</div>`:`<p style="font-size:13px;color:var(--text3);">Live monitors will appear here once people are being assisted.</p>`;
   }else{
-    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">You can view the Assistance page because GROSE granted your account access. This page is informational on non-GROSE accounts.</div></div>`;
-    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Only GROSE can start or stop observer sessions, choose who is being assisted, and send voice guidance.</div></div>`;
+    contactsList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">You can view the Assistance page because the primary admin granted your account access. This page is informational on non-primary-admin accounts.</div></div>`;
+    incomingList.innerHTML=`<div class="assistance-item"><div style="font-size:13px;color:var(--text2);line-height:1.6;">Only the primary admin can start or stop observer sessions, choose who is being assisted, and send voice guidance.</div></div>`;
     helperForList.innerHTML=`<p style="font-size:13px;color:var(--text3);">No observer controls are available on this account.</p>`;
     const session=getSeniorAssistanceSession()||assistancePendingSession;
     currentSessionEl.innerHTML=session?`
       <div class="assistance-item">
         <div style="font-size:15px;font-weight:700;color:var(--text);">Support status</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:6px;">${esc(session.helper_name||'GROSE')} is currently connected to an observer session for this account.</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px;">${esc(session.helper_name||'ADMIN')} is currently connected to an observer session for this account.</div>
       </div>`:`<p style="font-size:13px;color:var(--text3);">No observer session is active right now.</p>`;
-    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Live monitors and speech controls are only available to GROSE.</p>`;
+    helperConsoleEl.innerHTML=`<p style="font-size:13px;color:var(--text3);">Live monitors and speech controls are only available to the primary admin.</p>`;
   }
   recentSessionsEl.innerHTML=assistanceState.recentSessions.length?assistanceState.recentSessions.map(session=>`
     <div class="assistance-item">
@@ -2498,7 +2536,7 @@ function describeAssistPreviewTarget(target){
 }
 function renderAssistancePreviewMarkup(sessionId, preview, seniorName){
   if(!preview?.html||!preview?.styles){
-    return `<div id="assist-preview-empty-${sessionId}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Jewshi preview from ${esc(seniorName)}.</div>`;
+    return `<div id="assist-preview-empty-${sessionId}" class="assistance-preview" style="display:flex;align-items:center;justify-content:center;padding:20px;color:var(--text3);font-size:13px;text-align:center;">Waiting for a live Sclshi preview from ${esc(seniorName)}.</div>`;
   }
   return `<iframe id="assist-preview-frame-${sessionId}" class="assistance-preview assistance-preview-frame" style="background:#0f1117;" sandbox="allow-same-origin" referrerpolicy="no-referrer" srcdoc="${esc(buildAssistancePreviewDoc(preview))}"></iframe>`;
 }
@@ -2542,7 +2580,7 @@ function openAssistanceLiveModal(sessionId){
   const meta=document.getElementById('assistance-live-modal-meta');
   const preview=assistancePreviewFrames[sessionId]||null;
   if(name) name.textContent=session.senior_name||'Live Session';
-  if(meta) meta.textContent=preview?.capturedAt?`Viewing ${preview.tab||'Jewshi'} · Updated ${timeAgo(preview.capturedAt)}`:'Waiting for preview…';
+  if(meta) meta.textContent=preview?.capturedAt?`Viewing ${preview.tab||'Sclshi'} · Updated ${timeAgo(preview.capturedAt)}`:'Waiting for preview…';
   if(frame){
     frame.srcdoc=buildAssistancePreviewDoc(preview,'full');
     bindAssistancePreviewFrame(frame, sessionId);
@@ -2622,7 +2660,7 @@ async function removeAssistanceContact(contactId){
   }catch(e){alert(e.message);}
 }
 async function startAssistanceSession(seniorUserId, shouldToast=true){
-  if(!(currentUser&&(currentUser.id==='GROSE'||currentUser.assistance_access))){alert('This account does not have Assistance access.');return;}
+  if(!(currentUser&&(currentUser.id==='ADMIN'||currentUser.assistance_access))){alert('This account does not have Assistance access.');return;}
   try{
     await api('POST','/assistance/sessions',{seniorUserId,mode:'assist',guidedMode:false,voiceEnabled:true,recordingEnabled:true});
     if(shouldToast) showToast('Assistance session started.');
@@ -2794,7 +2832,7 @@ function queueAssistanceSnapshot(){
 }
 function getCurrentVisibleTabName(){
   const activeTab=document.querySelector('.nav-tab.active');
-  return activeTab?.textContent?.trim()||'Jewshi';
+  return activeTab?.textContent?.trim()||'Sclshi';
 }
 async function createAssistanceSnapshotData(){
   const appRoot=document.getElementById('app');
@@ -2851,7 +2889,7 @@ function syncAssistanceOverlay(){
   controlCard.style.display='none';
   if(active){
     document.getElementById('assistance-banner-text').textContent='Guided support active';
-    document.getElementById('assistance-banner-subtext').textContent='Voice guidance may play while you use Jewshi.';
+    document.getElementById('assistance-banner-subtext').textContent='Voice guidance may play while you use Sclshi.';
   }
 }
 function getTransactionTypeLabel(tx){
@@ -2950,7 +2988,7 @@ function applyAssistanceEvent(event, sessionId){
   if(!session) return;
   const payload=event.payload||{};
   if(event.event_type==='snapshot'&&session.helper_user_id===currentUser.id){
-    assistancePreviewFrames[session.id]={html:payload.html||'',styles:payload.styles||'',tab:payload.tab||'Jewshi',capturedAt:payload.capturedAt||Date.now()};
+    assistancePreviewFrames[session.id]={html:payload.html||'',styles:payload.styles||'',tab:payload.tab||'Sclshi',capturedAt:payload.capturedAt||Date.now()};
     const frame=document.getElementById(`assist-preview-frame-${session.id}`);
     const empty=document.getElementById(`assist-preview-empty-${session.id}`);
     const meta=document.getElementById(`assist-preview-meta-${session.id}`);
@@ -2963,7 +3001,7 @@ function applyAssistanceEvent(event, sessionId){
     }else if(document.getElementById('tab-assistance')?.classList.contains('active')){
       renderAssistanceTab();
     }
-    if(meta) meta.textContent=`Viewing ${payload.tab||'Jewshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
+    if(meta) meta.textContent=`Viewing ${payload.tab||'Sclshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
     if(assistanceFullscreenSessionId===session.id){
       const modalFrame=document.getElementById('assistance-live-modal-frame');
       const modalMeta=document.getElementById('assistance-live-modal-meta');
@@ -2971,7 +3009,7 @@ function applyAssistanceEvent(event, sessionId){
         modalFrame.srcdoc=buildAssistancePreviewDoc(assistancePreviewFrames[session.id],'full');
         bindAssistancePreviewFrame(modalFrame, session.id);
       }
-      if(modalMeta) modalMeta.textContent=`Viewing ${payload.tab||'Jewshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
+      if(modalMeta) modalMeta.textContent=`Viewing ${payload.tab||'Sclshi'} · Updated ${timeAgo(payload.capturedAt||Date.now())}`;
     }
     return;
   }
@@ -3340,7 +3378,7 @@ async function openProfile(userId){
       <div class="profile-header">
         <div class="profile-big-avatar">${av}</div>
         <div class="profile-name">${esc(p.name)}</div>
-        <div class="profile-grade">${p.grade||''}</div>
+        <div class="profile-grade">${[p.school?esc(getSchoolLabel(p.school)):'',p.grade?esc(p.grade):''].filter(Boolean).join(' · ')}</div>
         <div style="margin-top:10px;">
           <button class="btn-admin btn-sm" onclick="startDMFromProfile('${p.id}','${p.name.replace(/'/g,"\\'")}' )">Message</button>
         </div>
@@ -3404,7 +3442,7 @@ async function renderLeaderboard(){
     return `<div class="leaderboard-row" style="${isMe?'background:var(--accent-bg);border-radius:var(--radius);padding:12px 10px;':''}" onclick="${hasProfile&&!isMe?`openProfile('${u.id}')`:'' }">
       <span class="lb-rank" style="${i<3?'font-size:18px;':''}">${i<3?medals[i]:'#'+(i+1)}</span>
       <div class="lb-avatar">${ini}</div>
-      <div style="flex:1;"><div class="lb-name">${esc(u.name)||u.id} ${isMe?'<span style="font-size:11px;color:var(--accent)">(you)</span>':''}</div><div class="lb-id">${esc(u.grade||'')} · ${esc(u.id)}</div></div>
+      <div style="flex:1;"><div class="lb-name">${esc(u.name)||u.id} ${isMe?'<span style="font-size:11px;color:var(--accent)">(you)</span>':''}</div><div class="lb-id">${[u.school?esc(getSchoolLabel(u.school)):'',u.grade?esc(u.grade):'',esc(u.id)].filter(Boolean).join(' · ')}</div></div>
       <div style="font-size:14px;font-weight:700;color:var(--green)">⬡ ${u.credits.toLocaleString()}</div>
     </div>`;
   }).join('');
@@ -3830,7 +3868,7 @@ async function showNewDM(){
 function notificationLinkLabel(link){
   if(link==='messages') return 'Open Messages';
   if(link==='portfolio') return 'Open My Bets';
-  if(link==='feed') return 'Open JewGram';
+  if(link==='feed') return 'Open SclGram';
   return 'Open';
 }
 function setNotificationsPanelOpen(open){
@@ -4152,13 +4190,13 @@ async function renderAdminTab(){
     <div class="stat-card"><div class="stat-label">Open Markets</div><div class="stat-value">${stats.openMarkets}</div></div>
     <div class="stat-card"><div class="stat-label">Total Bets</div><div class="stat-value">${stats.totalBets}</div></div>
     <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${stats.pendingVol}</div></div>`;
-  const mailWarning=(!stats.mailConfigured&&currentUser.id==='GROSE')
+  const mailWarning=(!stats.mailConfigured&&currentUser.id==='ADMIN')
     ?`<div style="margin:14px 0 0;padding:12px 14px;border:1px solid rgba(255,87,87,0.22);border-radius:12px;background:rgba(120,16,16,0.18);color:#ffd2d2;font-size:12px;line-height:1.6;">Email delivery is not configured on the running server. Set <code>APPS_SCRIPT_URL</code> in the server environment and restart before using forgot password or digest emails.</div>`
     :'';
   document.getElementById('admin-stats').insertAdjacentHTML('beforeend', mailWarning);
 
   const grosePanel=document.getElementById('grose-only-panel');
-  if(currentUser.id==='GROSE'){
+  if(currentUser.id==='ADMIN'){
     grosePanel.innerHTML=`
       <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Change access password</p>
       <div class="admin-form-row">
@@ -4202,12 +4240,12 @@ async function renderAdminTab(){
     <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-size:20px;">${item.icon}</span><span style="flex:1;font-size:13px;color:var(--text)">${item.name} — ⬡${item.cost}</span>
       <button class="btn-admin btn-sm btn-danger" onclick="removeStoreItem('${item.id}')">Remove</button></div>`).join('')||'<p style="color:var(--text3);font-size:13px;">No items.</p>';
-  const isGrose=currentUser.id==='GROSE';
+  const isGrose=currentUser.id==='ADMIN';
   const emailCount=users.filter(u=>u.on_email_list).length;
   document.getElementById('admin-users-list').innerHTML=`
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">${emailCount} user${emailCount!==1?'s':''} on email list. Check the box to include them in digest and password emails.</p>
     <table class="portfolio-table">
-      <thead><tr><th>Email List</th><th>Pop-up</th><th>Assist</th><th>Name</th><th>Email</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Email List</th><th>Pop-up</th><th>Assist</th><th>Name</th><th>Email</th><th>School</th><th>Grade</th><th>Role</th><th>Balance</th><th>Actions</th></tr></thead>
       <tbody>${users.map(u=>`<tr>
         <td style="text-align:center;">
           ${isGrose?`<input type="checkbox" ${u.on_email_list?'checked':''} onchange="toggleEmailList('${u.id}',this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">`:'—'}
@@ -4220,6 +4258,7 @@ async function renderAdminTab(){
         </td>
         <td style="color:var(--text)">${esc(u.name)||'—'}${CASINO_ENABLED&&u.lucky_streak?.active?`<div style="font-size:11px;color:var(--gold);margin-top:4px;">Lucky Streak until ${new Date(u.lucky_streak.expiresAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>`:''}</td>
         <td style="color:var(--text3);font-size:12px;">${esc(u.email)||'—'}</td>
+        <td>${u.school?esc(getSchoolLabel(u.school)):'—'}</td>
         <td>${u.grade||'—'}</td>
         <td><span class="history-pill" style="background:${u.role==='admin'?'var(--accent-bg)':'var(--bg4)'};color:${u.role==='admin'?'var(--accent)':'var(--text3)'}">${u.role}</span></td>
         <td style="color:var(--green)">⬡ ${u.credits.toLocaleString()}</td>
@@ -4251,7 +4290,7 @@ async function renderAdminTab(){
     return;
   }
   if(casinoActivityPanel) casinoActivityPanel.style.display='block';
-  if(currentUser.id==='GROSE'){
+  if(currentUser.id==='ADMIN'){
     controlsPanel.style.display='block';
     controlsEl.innerHTML=`
       <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">These sliders are disclosed in the casino banner. Higher means friendlier odds for players; lower means tougher odds.</p>
@@ -4307,7 +4346,7 @@ async function renderAdminTab(){
       <div class="stat-card"><div class="stat-label">Total Wagered</div><div class="stat-value" style="color:var(--accent)">⬡ ${(cs.total_wagered||0).toLocaleString()}</div></div>
       <div class="stat-card"><div class="stat-label">House Profit</div><div class="stat-value" style="color:${-(cs.house_profit||0)>=0?'var(--green)':'var(--red)'}">⬡ ${(-(cs.house_profit||0)).toLocaleString()}</div></div>
     </div>`;
-  if(currentUser.id==='GROSE') syncCasinoOddsSliders();
+  if(currentUser.id==='ADMIN') syncCasinoOddsSliders();
   adminCasinoState={bets:casinoData.bets||[],search:document.getElementById('admin-casino-search')?.value||'',offset:(casinoData.bets||[]).length,limit:100,total:casinoData.total||0,hasMore:!!casinoData.hasMore};
   renderAdminCasinoLog();
   adminTxnState.search=document.getElementById('admin-txn-search')?.value||adminTxnState.search||'';
@@ -4410,7 +4449,7 @@ function renderAdminCasinoLog(){
 }
 
 function renderPopupTab(){
-  if(!currentUser||!(currentUser.id==='GROSE'||currentUser.popup_access)){
+  if(!currentUser||!(currentUser.id==='ADMIN'||currentUser.popup_access)){
     switchTab('markets');
     return;
   }
@@ -4421,9 +4460,9 @@ function renderPopupTab(){
   if(authPanel) authPanel.style.display=popupTabUnlocked?'none':'block';
   if(controlPanel) controlPanel.style.display=popupTabUnlocked?'block':'none';
   if(lockBtn) lockBtn.style.display=popupTabUnlocked?'inline-flex':'none';
-  if(passwordPanel) passwordPanel.style.display=currentUser.id==='GROSE'?'block':'none';
+  if(passwordPanel) passwordPanel.style.display=currentUser.id==='ADMIN'?'block':'none';
   const userPollPanel=document.getElementById('popup-poll-user-panel');
-  if(userPollPanel) userPollPanel.style.display=currentUser.id==='GROSE'?'none':'block';
+  if(userPollPanel) userPollPanel.style.display=currentUser.id==='ADMIN'?'none':'block';
   if(popupTabUnlocked){
     populatePopupRecipientSelect();
     populatePopupPollRecipientSelect();
@@ -4717,7 +4756,7 @@ async function closePopupPoll(id){
 
 async function loadUserPopupPolls(){
   const el=document.getElementById('popup-poll-user-list');
-  if(!el||!currentUser||currentUser.id==='GROSE') return;
+  if(!el||!currentUser||currentUser.id==='ADMIN') return;
   try{
     const polls=await api('GET','/popup-polls');
     popupPollsState.user=polls;
@@ -7054,6 +7093,7 @@ function showNotif(containerId,msg,type='success'){
 }
 
 (async()=>{
+  applySchoolTheme('sclshi');
   const params=new URLSearchParams(window.location.search);
   if(params.get('reset')){
     authToken=null;

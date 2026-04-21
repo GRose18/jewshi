@@ -1,6 +1,6 @@
-# EW Markets — Backend
+# Sclshi
 
-A Node.js + Express + SQLite backend for the Emery Weiner school prediction market.
+A Node.js + Express + SQLite app for school-themed prediction markets with per-school color palettes.
 
 ## Setup
 
@@ -24,27 +24,24 @@ npm run dev
 
 ## Accounts
 
-| Role    | ID          | Password    |
-|---------|-------------|-------------|
-| Admin   | GROSE       | BryceB0mb!  |
-| Student | STUDENT-001 | daren       |
-| Student | STUDENT-002 | Hello123    |
-| Student | STUDENT-003 | BigIce      |
+| Role  | Email             | Password    |
+|-------|-------------------|-------------|
+| Admin | admin@sclshi.com  | Ozb!041611  |
 
-> Passwords are hashed with bcrypt. The database is auto-created on first run.
+> Passwords are hashed with bcrypt. The local `sclshi.db` database is auto-created on first run.
 
 ---
 
 ## File Structure
 
 ```
-ew-markets/
+sclshi/
 ├── server.js         ← main backend
-├── ew-markets.db     ← SQLite database (auto-created)
+├── sclshi.db         ← SQLite database (auto-created)
 ├── package.json
 ├── README.md
 └── public/
-    └── index.html    ← put your frontend HTML here
+    └── index.html    ← main frontend
 ```
 
 ---

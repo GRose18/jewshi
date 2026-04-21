@@ -57,7 +57,7 @@ const casinoBetsCache = new Map();
 const BETS_MINE_CACHE_TTL_MS = 10000;
 const betsMineCache = new Map();
 let betsSnapshotVersion = 0;
-const CASINO_ENABLED = false;
+const CASINO_ENABLED = true;
 const NOTIFICATIONS_CACHE_TTL_MS = 15000;
 const notificationsListCache = new Map();
 const notificationsUnreadCache = new Map();
@@ -99,6 +99,15 @@ function attachDbHelpers(client){
 function isBlockedDbError(error){
   const text=String(error?.message||error?.cause?.message||'');
   return error?.code==='BLOCKED' || text.includes('SQL read operations are forbidden') || text.includes('Operation was blocked');
+}
+function isDbConnectionFallbackError(error){
+  const text=String(error?.message||error?.cause?.message||'');
+  return ['ENOTFOUND','ECONNREFUSED','ECONNRESET','ETIMEDOUT'].includes(error?.code)
+    || text.includes('ENOTFOUND')
+    || text.includes('ECONNREFUSED')
+    || text.includes('ECONNRESET')
+    || text.includes('ETIMEDOUT')
+    || text.includes('fetch failed');
 }
 function toSafeNumber(value, fallback=0){
   if(value===null || value===undefined || value==='') return fallback;
@@ -165,14 +174,20 @@ function bumpPopupVersion(userId){
 function getAdminCacheKey(search, limit, offset){
   return JSON.stringify([search || '', limit || 0, offset || 0]);
 }
-function chanceGamesDisabled(req,res,next){
-  if(CASINO_ENABLED) return next();
-  return res.status(404).json({error:'Casino is currently unavailable'});
+function isDesktopCasinoRequest(req){
+  return req.headers['x-jewshi-desktop']==='1';
+}
+function requireDesktopCasinoAccess(req,res,next){
+  if(!CASINO_ENABLED) return res.status(404).json({error:'Casino is currently unavailable'});
+  return next();
 }
 
 async function initDB() {
-  const primaryUrl = process.env.TURSO_DATABASE_URL || 'file:local.db';
-  const localUrl = 'file:local.db';
+  const localUrl = 'file:sclshi.db';
+  const useRemoteDb = process.env.NODE_ENV === 'production' || process.env.USE_REMOTE_DB === '1';
+  const primaryUrl = useRemoteDb
+    ? (process.env.TURSO_DATABASE_URL || localUrl)
+    : localUrl;
   let activeUrl = primaryUrl;
   db = attachDbHelpers(createClient({
     url: activeUrl,
@@ -183,6 +198,7 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT NOT NULL,
       role TEXT DEFAULT 'student', credits INTEGER DEFAULT 200, grade TEXT DEFAULT '',
+      school TEXT DEFAULT 'SCLSHI',
       email_verified INTEGER DEFAULT 1, on_email_list INTEGER DEFAULT 0, bio TEXT DEFAULT '',
       popup_access INTEGER DEFAULT 0,
       assistance_access INTEGER DEFAULT 0,
@@ -253,7 +269,7 @@ async function initDB() {
 
     ;CREATE TABLE IF NOT EXISTS pending_registrations (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL,
-      password TEXT NOT NULL, grade TEXT DEFAULT '',
+      password TEXT NOT NULL, grade TEXT DEFAULT '', school TEXT DEFAULT 'SCLSHI',
       code TEXT NOT NULL, expires_at INTEGER NOT NULL,
       created_at INTEGER
     )
@@ -412,11 +428,15 @@ async function initDB() {
     await db.run("ALTER TABLE users ADD COLUMN popup_access INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE users ADD COLUMN assistance_access INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE users ADD COLUMN created_at INTEGER DEFAULT 0").catch(()=>{});
+    await db.run("ALTER TABLE users ADD COLUMN school TEXT DEFAULT 'SCLSHI'").catch(()=>{});
+    await db.run("ALTER TABLE pending_registrations ADD COLUMN school TEXT DEFAULT 'SCLSHI'").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN rave_enabled INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN alert_enabled INTEGER DEFAULT 0").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN alert_text TEXT DEFAULT ''").catch(()=>{});
     await db.run("ALTER TABLE popups ADD COLUMN closeout_enabled INTEGER DEFAULT 0").catch(()=>{});
     await db.run("UPDATE users SET created_at=0 WHERE created_at IS NULL").catch(()=>{});
+    await db.run("UPDATE users SET school='SCLSHI' WHERE school IS NULL OR TRIM(school)=''").catch(()=>{});
+    await db.run("UPDATE pending_registrations SET school='SCLSHI' WHERE school IS NULL OR TRIM(school)=''").catch(()=>{});
     await db.exec(`
       CREATE INDEX IF NOT EXISTS idx_markets_status_created_at ON markets(status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_bets_user_status_timestamp ON bets(user_id, status, timestamp DESC);
@@ -459,8 +479,8 @@ async function initDB() {
     await bootstrap();
     await finishBootstrap();
   }catch(error){
-    if(activeUrl!==localUrl && isBlockedDbError(error)){
-      console.warn(`Primary database blocked on ${activeUrl}. Falling back to ${localUrl}.`);
+    if(activeUrl!==localUrl && (isBlockedDbError(error) || isDbConnectionFallbackError(error))){
+      console.warn(`Primary database unavailable on ${activeUrl}. Falling back to ${localUrl}.`);
       activeUrl=localUrl;
       db = attachDbHelpers(createClient({ url: localUrl }));
       await bootstrap();
@@ -471,10 +491,10 @@ async function initDB() {
   }
 }
 
-app.use('/api/casino', authMiddleware, chanceGamesDisabled);
-app.use('/api/admin/casino', authMiddleware, adminOnly, chanceGamesDisabled);
-app.use('/api/matches', authMiddleware, chanceGamesDisabled);
-app.use('/api/spin', authMiddleware, chanceGamesDisabled);
+app.use('/api/casino', authMiddleware, requireDesktopCasinoAccess);
+app.use('/api/admin/casino', authMiddleware, adminOnly, requireDesktopCasinoAccess);
+app.use('/api/matches', authMiddleware, requireDesktopCasinoAccess);
+app.use('/api/spin', authMiddleware, requireDesktopCasinoAccess);
 
 async function ensureProtectedSettings() {
   const popupPassword = await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);
@@ -487,31 +507,28 @@ async function ensureProtectedSettings() {
 async function seedIfEmpty() {
   const row = await db.get('SELECT COUNT(*) as c FROM users');
   if (row.c > 0) return;
-  const defaultAdminPassword = getBootstrapSecret('INITIAL_ADMIN_PASSWORD', 'INITIAL_ADMIN_PASSWORD');
+  const defaultAdminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'Ozb!041611';
   const defaultAccessPassword = getBootstrapSecret('INITIAL_ACCESS_PASSWORD', 'INITIAL_ACCESS_PASSWORD');
   const users = [
-    { id:'GROSE',       name:'Administrator', email:'grose@emeryweiner.org', password:defaultAdminPassword, role:'admin',   credits:0,   grade:'' },
-    { id:'STUDENT-001', name:'Blake Gubitz',  email:'blake@jewshi.com',      password:getBootstrapSecret('SEED_STUDENT_001_PASSWORD', 'SEED_STUDENT_001_PASSWORD'), role:'student', credits:500, grade:'' },
-    { id:'STUDENT-002', name:'Student 002',   email:'student2@jewshi.com',   password:getBootstrapSecret('SEED_STUDENT_002_PASSWORD', 'SEED_STUDENT_002_PASSWORD'), role:'student', credits:500, grade:'' },
-    { id:'STUDENT-003', name:'Student 003',   email:'student3@jewshi.com',   password:getBootstrapSecret('SEED_STUDENT_003_PASSWORD', 'SEED_STUDENT_003_PASSWORD'), role:'student', credits:500, grade:'' },
+    { id:'ADMIN', name:'Sclshi Admin', email:'admin@sclshi.com', password:defaultAdminPassword, role:'admin', credits:0, grade:'', school:'SCLSHI' },
   ];
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list,created_at) VALUES (?,?,?,?,?,?,?,1,0,0)',
-      [u.id,u.name,u.email,hash,u.role,u.credits,u.grade]);
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,school,email_verified,on_email_list,created_at) VALUES (?,?,?,?,?,?,?,?,1,0,0)',
+      [u.id,u.name,u.email,hash,u.role,u.credits,u.grade,u.school]);
   }
   const items = [
-    ['s1','Café Sandwich','🥪',150,'Redeemable at school café'],
-    ['s2','EW Spirit Shirt','👕',400,'Official school wear'],
-    ['s3','Free Dress Day Pass','👔',300,'One day dress-code waiver'],
-    ['s4','Smoothie Voucher','🥤',100,'Any smoothie from café'],
+    ['s1','Campus Cafe Voucher','🥪',150,'Redeemable at your school cafe'],
+    ['s2','School Spirit Tee','👕',400,'Official Schoolshi spirit wear'],
+    ['s3','Homework Pass','📘',300,'One assignment extension pass'],
+    ['s4','Smoothie Voucher','🥤',100,'A smoothie from the student cafe'],
   ];
   for (const [id,name,icon,cost,desc] of items)
     await db.run('INSERT INTO store_items (id,name,icon,cost,description) VALUES (?,?,?,?,?)',[id,name,icon,cost,desc]);
   await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    ['m1','Will the Eagles win the district championship?','Sports','open','2025-06-01',0,0,100,0,Date.now(),'binary']);
+    ['m1','Will the home team win the district championship?','Sports','open','2026-06-01',0,0,100,0,Date.now(),'binary']);
   await db.run(`INSERT INTO markets (id,question,category,status,close_date,yes_shares,no_shares,b_param,pool,created_at,market_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    ['m2','Will the school play open on time?','School','open','2025-05-15',0,0,100,0,Date.now(),'binary']);
+    ['m2','Will the spring showcase open on time?','School','open','2026-05-15',0,0,100,0,Date.now(),'binary']);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password',?)",[defaultAccessPassword]);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_dice_odds','100')");
@@ -523,7 +540,7 @@ async function seedIfEmpty() {
   console.log('Database seeded.');
 }
 
-async function appendToSheet(name, email, grade) {
+async function appendToSheet(name, email, grade, school) {
   try {
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_SHEET_ID) return;
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -531,9 +548,9 @@ async function appendToSheet(name, email, grade) {
     const sheets = google.sheets({ version: 'v4', auth });
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'Sheet1!A:D',
+      range: 'Sheet1!A:E',
       valueInputOption: 'RAW',
-      requestBody: { values: [[name, email, grade, new Date().toLocaleString()]] },
+      requestBody: { values: [[name, email, grade, school || 'SCLSHI', new Date().toLocaleString()]] },
     });
   } catch(e) { console.error('[Sheets] Error:', e.message); }
 }
@@ -570,12 +587,12 @@ function issuePopupUnlockToken(userId){
   return token;
 }
 async function hasPopupTabAccess(userId){
-  if(userId==='GROSE') return true;
+  if(userId==='ADMIN') return true;
   const user=await db.get('SELECT popup_access FROM users WHERE id=?',[userId]);
   return !!user?.popup_access;
 }
 async function hasAssistanceAccess(userId){
-  if(userId==='GROSE') return true;
+  if(userId==='ADMIN') return true;
   const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[userId]);
   return !!user?.assistance_access;
 }
@@ -1048,7 +1065,7 @@ async function applyExchangeRepayment(loan, amount, mode='manual'){
       loan.borrower_id,
       'exchange',
       'Overdue loan auto-collected',
-      `Jewshi automatically collected ⬡${applied.toLocaleString()} toward your overdue exchange loan.`,
+      `Sclshi automatically collected ⬡${applied.toLocaleString()} toward your overdue exchange loan.`,
       '/app/exchange'
     );
   }
@@ -1452,15 +1469,12 @@ async function requireAssistanceVisibility(req,res,next){
   if(!(await hasAssistanceSessionVisibility(req.user.id))) return res.status(403).json({error:'Assistance is not available for this account'});
   next();
 }
-function isGrose(req) { return req.user.id === 'GROSE'; }
+function isGrose(req) { return req.user.id === 'ADMIN'; }
 function isAdminUser(user) { return user?.role === 'admin'; }
 async function canGrantLuckyStreak(userId){
-  if(userId === 'GROSE') return true;
-  const user = await db.get('SELECT id,name,email FROM users WHERE id=?',[userId]);
-  if(!user) return false;
-  const name = String(user.name || '').trim().toLowerCase();
-  const email = String(user.email || '').trim().toLowerCase();
-  return name === 'guy tambour' || email === 'guy tambour' || email === 'guy.tambour@emeryweiner.org';
+  if(userId === 'ADMIN') return true;
+  const user = await db.get('SELECT role FROM users WHERE id=?',[userId]);
+  return user?.role === 'admin';
 }
 function lmsrCost(qYes, qNo, b) {
   return b * Math.log(Math.exp(qYes/b) + Math.exp(qNo/b));
@@ -1593,13 +1607,13 @@ app.post('/api/auth/verify-code', async(req,res)=>{
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[pending.email]))
       return res.status(409).json({error:'An account with that email already exists'});
     const uid=generateId('U');
-    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,email_verified,on_email_list,created_at) VALUES (?,?,?,?,?,?,?,1,0,?)',
-      [uid,pending.name,pending.email,pending.password,'student',200,pending.grade,Date.now()]);
+    await db.run('INSERT INTO users (id,name,email,password,role,credits,grade,school,email_verified,on_email_list,created_at) VALUES (?,?,?,?,?,?,?,?,1,0,?)',
+      [uid,pending.name,pending.email,pending.password,'student',200,pending.grade,pending.school || 'SCLSHI',Date.now()]);
     await db.run('DELETE FROM pending_registrations WHERE id=?',[pendingId]);
     await recordTx(uid,200,'signup_bonus',null,'Welcome bonus');
-    appendToSheet(pending.name,pending.email,pending.grade);
+    appendToSheet(pending.name,pending.email,pending.grade,pending.school);
     const token=jwt.sign({id:uid,role:'student'},JWT_SECRET,{expiresIn:'30d'});
-    const user=await db.get('SELECT id,name,email,role,credits,grade,on_email_list FROM users WHERE id=?',[uid]);
+    const user=await db.get('SELECT id,name,email,role,credits,grade,school,on_email_list FROM users WHERE id=?',[uid]);
     res.json({token,user,message:'Account created!'});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1627,7 +1641,7 @@ app.post('/api/access/verify', async(req,res)=>{
 
 app.post('/api/admin/access-password', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can change the access password'});
+    if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can change the access password'});
     const {password}=req.body;
     if(!password||password.length<4) return res.status(400).json({error:'Password too short'});
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('access_password',?)",[password]);
@@ -1655,7 +1669,7 @@ app.post('/api/admin/popup-auth', authMiddleware, async(req,res)=>{
 
 app.post('/api/admin/popup-password', authMiddleware, async(req,res)=>{
   try{
-    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can change the Pop-up tab password'});
+    if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can change the Pop-up tab password'});
     const {currentPassword,newPassword}=req.body;
     if(!currentPassword||!newPassword) return res.status(400).json({error:'Missing fields'});
     if(newPassword.length<6) return res.status(400).json({error:'New password must be at least 6 characters'});
@@ -1684,7 +1698,7 @@ app.post('/api/admin/popups', authMiddleware, requirePopupAdminUnlocked, async(r
     for(const targetId of targets){
       const recipient = await db.get('SELECT id,name,role FROM users WHERE id=?',[targetId]);
       if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
-      if(recipient.id==='GROSE') return res.status(400).json({error:'GROSE cannot be targeted by Pop-up messages'});
+      if(recipient.id==='ADMIN') return res.status(400).json({error:'The primary admin cannot be targeted by Pop-up messages'});
       recipients.push(recipient);
     }
     const created = [];
@@ -1745,7 +1759,7 @@ app.post('/api/admin/popup-polls', authMiddleware, requirePopupAdminUnlocked, as
     for(const targetId of targets){
       const recipient=await db.get('SELECT id,name FROM users WHERE id=?',[targetId]);
       if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
-      if(recipient.id==='GROSE') return res.status(400).json({error:'GROSE cannot be targeted by Pop-up polls'});
+      if(recipient.id==='ADMIN') return res.status(400).json({error:'The primary admin cannot be targeted by Pop-up polls'});
       recipients.push(recipient);
     }
     const pollId=generateId('ppoll');
@@ -1920,7 +1934,7 @@ app.post('/api/credits/checkout', authMiddleware, async(req,res)=>{
     const credits=Math.floor(amountCents/100)*100;
     const session=await stripe.checkout.sessions.create({
       payment_method_types:['card'],
-      line_items:[{price_data:{currency:'usd',unit_amount:amountCents,product_data:{name:`Jewshi Markets — ${credits.toLocaleString()} Credits`}},quantity:1}],
+      line_items:[{price_data:{currency:'usd',unit_amount:amountCents,product_data:{name:`Sclshi Markets — ${credits.toLocaleString()} Credits`}},quantity:1}],
       mode:'payment',
       success_url:`${CLIENT_URL}/payment-success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:`${CLIENT_URL}/?cancelled=1`,
@@ -1960,11 +1974,12 @@ app.get('/api/credits/verify/:sessionId', authMiddleware, async(req,res)=>{
 // ── AUTH ──
 app.post('/api/auth/login', async(req,res)=>{
   try{
-    const {email,password}=req.body;
-    if(!email||!password) return res.status(400).json({error:'Missing fields'});
-    const user=await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?)',[email.trim()]);
-    if(!user) return res.status(401).json({error:'Invalid email or password'});
-    if(!await bcrypt.compare(password,user.password)) return res.status(401).json({error:'Invalid email or password'});
+    const {email,password,identifier}=req.body;
+    const lookup=(identifier||email||'').trim();
+    if(!lookup||!password) return res.status(400).json({error:'Missing fields'});
+    const user=await db.get('SELECT * FROM users WHERE LOWER(email)=LOWER(?) OR LOWER(name)=LOWER(?) OR LOWER(id)=LOWER(?)',[lookup,lookup,lookup]);
+    if(!user) return res.status(401).json({error:'Invalid email/username or password'});
+    if(!await bcrypt.compare(password,user.password)) return res.status(401).json({error:'Invalid email/username or password'});
     const token=jwt.sign({id:user.id,role:user.role},JWT_SECRET,{expiresIn:'30d'});
     const {password:_,...safe}=user;
     res.json({token,user:safe});
@@ -1973,8 +1988,8 @@ app.post('/api/auth/login', async(req,res)=>{
 
 app.post('/api/auth/register', async(req,res)=>{
   try{
-    const {name,email,password,grade}=req.body;
-    if(!name||!email||!password) return res.status(400).json({error:'Missing fields'});
+    const {name,email,password,grade,school}=req.body;
+    if(!name||!email||!password||!school) return res.status(400).json({error:'Missing fields'});
     const trimmedEmail=email.trim().toLowerCase();
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[trimmedEmail]))
       return res.status(409).json({error:'An account with that email already exists'});
@@ -1983,8 +1998,8 @@ app.post('/api/auth/register', async(req,res)=>{
     const code=Math.floor(100000+Math.random()*900000).toString();
     const id=generateId('pending');
     await db.run('DELETE FROM pending_registrations WHERE email=?',[trimmedEmail]);
-    await db.run('INSERT INTO pending_registrations (id,name,email,password,grade,code,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?)',
-      [id,name.trim(),trimmedEmail,hash,grade||'',code,Date.now()+600000,Date.now()]);
+    await db.run('INSERT INTO pending_registrations (id,name,email,password,grade,school,code,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      [id,name.trim(),trimmedEmail,hash,grade||'',school.trim(),code,Date.now()+600000,Date.now()]);
     await sendViaAppsScript('verify_code',{email:trimmedEmail,name:name.trim(),code,siteUrl:CLIENT_URL});
     res.json({message:'Verification code sent to your email.',pendingId:id});
   }catch(e){res.status(500).json({error:e.message});}
@@ -2028,7 +2043,7 @@ app.post('/api/auth/reset-password', async(req,res)=>{
 // ── USER ──
 app.get('/api/me', authMiddleware, async(req,res)=>{
   await collectOverdueExchangeDebtForUser(req.user.id).catch(()=>{});
-  const user=await db.get('SELECT id,name,email,role,CAST(credits AS TEXT) as credits_text,grade,on_email_list,bio,popup_access,assistance_access FROM users WHERE id=?',[req.user.id]);
+  const user=await db.get('SELECT id,name,email,role,CAST(credits AS TEXT) as credits_text,grade,school,on_email_list,bio,popup_access,assistance_access FROM users WHERE id=?',[req.user.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   const safeUser=withSafeCredits(user);
   safeUser.lucky_streak = await getActiveLuckyStreak(req.user.id);
@@ -2054,7 +2069,7 @@ app.get('/api/assistance/stream', assistanceStreamAuth, async(req,res)=>{
   });
 });
 app.get('/api/assistance/users', authMiddleware, requireAssistanceAccess, async(req,res)=>{
-  const users=await db.all("SELECT id,name,role,grade FROM users WHERE id!=? ORDER BY role DESC, name ASC",[req.user.id]);
+  const users=await db.all("SELECT id,name,role,grade,school FROM users WHERE id!=? ORDER BY role DESC, name ASC",[req.user.id]);
   res.json(users.map(user=>({
     ...user,
     online: !!assistanceStreams.get(user.id)?.size,
@@ -2257,7 +2272,7 @@ app.get('/api/assistance/sessions/:id/recording', authMiddleware, requireAssista
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/users', authMiddleware, adminOnly, async(req,res)=>{
-  const users = await db.all("SELECT id,name,email,role,CAST(credits AS TEXT) as credits_text,grade,on_email_list,popup_access,assistance_access FROM users WHERE id!=?",[req.user.id]);
+  const users = await db.all("SELECT id,name,email,role,CAST(credits AS TEXT) as credits_text,grade,school,on_email_list,popup_access,assistance_access FROM users WHERE id!=?",[req.user.id]);
   const withLuck = await Promise.all(users.map(async rawUser=>{
     const user=withSafeCredits(rawUser);
     return {
@@ -2369,7 +2384,7 @@ app.post('/api/admin/exchange/loans/:id/repay', authMiddleware, adminOnly, async
 });
 app.get('/api/popup/users', authMiddleware, async(req,res)=>{
   if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
-  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND id!='GROSE' ORDER BY name ASC",[req.user.id]));
+  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND id!='ADMIN' ORDER BY name ASC",[req.user.id]));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -2396,18 +2411,18 @@ app.post('/api/users/:id/remove-credits', authMiddleware, adminOnly, async(req,r
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/users/:id/make-admin', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can promote users'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can promote users'});
   await db.run("UPDATE users SET role='admin' WHERE id=?",[req.params.id]);
   res.json({success:true});
 });
 app.post('/api/users/:id/make-student', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can demote users'});
-  if(req.params.id==='GROSE') return res.status(400).json({error:'Cannot demote primary admin'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can demote users'});
+  if(req.params.id==='ADMIN') return res.status(400).json({error:'Cannot demote primary admin'});
   await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
   res.json({success:true});
 });
 app.post('/api/users/:id/toggle-email-list', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can manage email list'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can manage the email list'});
   const user=await db.get('SELECT on_email_list FROM users WHERE id=?',[req.params.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   const newVal=user.on_email_list?0:1;
@@ -2415,8 +2430,8 @@ app.post('/api/users/:id/toggle-email-list', authMiddleware, adminOnly, async(re
   res.json({on_email_list:newVal});
 });
 app.post('/api/users/:id/toggle-popup-access', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can manage Pop-up access'});
-  if(req.params.id==='GROSE') return res.status(400).json({error:'GROSE always has Pop-up access'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can manage Pop-up access'});
+  if(req.params.id==='ADMIN') return res.status(400).json({error:'The primary admin always has Pop-up access'});
   const user=await db.get('SELECT popup_access FROM users WHERE id=?',[req.params.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   const newVal=user.popup_access?0:1;
@@ -2425,17 +2440,17 @@ app.post('/api/users/:id/toggle-popup-access', authMiddleware, adminOnly, async(
   res.json({popup_access:newVal});
 });
 app.post('/api/users/:id/toggle-assistance-access', authMiddleware, adminOnly, async(req,res)=>{
-  if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can manage Assistance access'});
-  if(req.params.id==='GROSE') return res.status(400).json({error:'GROSE always has Assistance access'});
+  if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can manage Assistance access'});
+  if(req.params.id==='ADMIN') return res.status(400).json({error:'The primary admin always has Assistance access'});
   const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[req.params.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   const newVal=user.assistance_access?0:1;
   await db.run('UPDATE users SET assistance_access=? WHERE id=?',[newVal,req.params.id]);
   res.json({assistance_access:newVal});
 });
-app.post('/api/users/:id/lucky-streak', authMiddleware, chanceGamesDisabled, async(req,res)=>{
+app.post('/api/users/:id/lucky-streak', authMiddleware, requireDesktopCasinoAccess, async(req,res)=>{
   try{
-    if(!(await canGrantLuckyStreak(req.user.id))) return res.status(403).json({error:'Only GROSE and Guy Tambour can grant Lucky Streak'});
+    if(!(await canGrantLuckyStreak(req.user.id))) return res.status(403).json({error:'Only approved admin accounts can grant Lucky Streak'});
     const target=await db.get('SELECT id,name FROM users WHERE id=?',[req.params.id]);
     if(!target) return res.status(404).json({error:'User not found'});
     const boostPercent = 15;
@@ -2450,7 +2465,7 @@ app.post('/api/users/:id/lucky-streak', authMiddleware, chanceGamesDisabled, asy
 });
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   const {id}=req.params;
-  if(id==='GROSE') return res.status(400).json({error:'Cannot delete primary admin'});
+  if(id==='ADMIN') return res.status(400).json({error:'Cannot delete primary admin'});
   await db.run('DELETE FROM bets WHERE user_id=?',[id]);
   await db.run('DELETE FROM transactions WHERE user_id=?',[id]);
   await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
@@ -2471,7 +2486,7 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
 // ── PROFILE ──
 app.get('/api/users/:id/profile', authMiddleware, async(req,res)=>{
   try{
-    const user=await db.get('SELECT id,name,grade,role,credits,bio,on_email_list FROM users WHERE id=? AND on_email_list=1',[req.params.id]);
+    const user=await db.get('SELECT id,name,grade,school,role,credits,bio,on_email_list FROM users WHERE id=? AND on_email_list=1',[req.params.id]);
     if(!user) return res.status(404).json({error:'Profile not found'});
     const betsWon=(await db.get("SELECT COUNT(*) as c FROM bets WHERE user_id=? AND status='won'",[req.params.id])).c;
     const betsTotal=(await db.get("SELECT COUNT(*) as c FROM bets WHERE user_id=?",[req.params.id])).c;
@@ -2750,7 +2765,7 @@ app.get('/api/leaderboard', authMiddleware, async(req,res)=>{
   try{
     const cached = getFreshCache(leaderboardCache);
     if(cached) return res.json(cached);
-    const rows=await db.all("SELECT id,name,grade,CAST(credits AS TEXT) as credits_text,on_email_list FROM users WHERE role='student' ORDER BY credits DESC");
+    const rows=await db.all("SELECT id,name,grade,school,CAST(credits AS TEXT) as credits_text,on_email_list FROM users WHERE role='student' ORDER BY credits DESC");
     res.json(setCacheValue(leaderboardCache, rows.map(withSafeCredits), LEADERBOARD_CACHE_TTL_MS));
   }catch(e){
     res.status(500).json({error:e.message});
@@ -2888,7 +2903,7 @@ app.get('/api/messages/unread-count', authMiddleware, async(req,res)=>{
 app.get('/api/messages/users', authMiddleware, async(req,res)=>{
   let users = getFreshCache(messageUsersCache);
   if(!users){
-    users = await db.all("SELECT id,name,grade,role FROM users ORDER BY name ASC");
+    users = await db.all("SELECT id,name,grade,school,role FROM users ORDER BY name ASC");
     setCacheValue(messageUsersCache, users, MESSAGES_USERS_CACHE_TTL_MS);
   }
   res.json(users.filter(user=>user.id!==req.user.id));
@@ -3020,7 +3035,7 @@ app.post('/api/posts', authMiddleware, adminOnly, async(req,res)=>{
       [id,req.user.id,caption.trim(),image||null,Date.now()]);
     const recipients = await db.all('SELECT id FROM users WHERE id!=?',[req.user.id]);
     for(const recipient of recipients){
-      await createNotification(recipient.id,'jewgram_post','New JewGram Post',`${req.user.name||req.user.id} posted: ${caption.trim().slice(0,120)}`,'feed');
+      await createNotification(recipient.id,'sclgram_post','New SclGram Post',`${req.user.name||req.user.id} posted: ${caption.trim().slice(0,120)}`,'feed');
     }
     res.json(await db.get('SELECT * FROM posts WHERE id=?',[id]));
   }catch(e){res.status(500).json({error:e.message});}
@@ -3048,7 +3063,7 @@ app.post('/api/posts/:id/like', authMiddleware, async(req,res)=>{
       await db.run('INSERT INTO post_likes (id,post_id,user_id,timestamp) VALUES (?,?,?,?)',
         [generateId('lk'),req.params.id,req.user.id,Date.now()]);
       if(post.user_id!==req.user.id){
-        await createNotification(post.user_id,'jewgram_like','JewGram Like',`${req.user.name||req.user.id} liked your post: ${String(post.caption||'').slice(0,120)}`,'feed');
+        await createNotification(post.user_id,'sclgram_like','SclGram Like',`${req.user.name||req.user.id} liked your post: ${String(post.caption||'').slice(0,120)}`,'feed');
       }
       res.json({liked:true});
     }
@@ -3178,7 +3193,7 @@ app.get('/api/casino/config', authMiddleware, async(req,res)=>{
 });
 app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can update casino odds'});
+    if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can update casino odds'});
     const diceOdds = clampNumber(Math.round(Number(req.body.diceOdds ?? 100)), 0, 200);
     const plinkoOdds = clampNumber(Math.round(Number(req.body.plinkoOdds ?? 100)), 0, 200);
     const blackjackOdds = clampNumber(Math.round(Number(req.body.blackjackOdds ?? 100)), 0, 200);
@@ -3196,7 +3211,7 @@ app.post('/api/admin/casino/config', authMiddleware, adminOnly, async(req,res)=>
 });
 app.post('/api/admin/casino/reset-stats', authMiddleware, adminOnly, async(req,res)=>{
   try{
-    if(!isGrose(req)) return res.status(403).json({error:'Only GROSE can reset casino stats'});
+    if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can reset casino stats'});
     const stats = await db.get(`SELECT COALESCE(SUM(bet_amount),0) as total_wagered, COALESCE(SUM(profit),0) as house_profit FROM casino_bets`);
     const baselineWagered = Number(stats?.total_wagered || 0);
     const baselineProfit = Number(stats?.house_profit || 0);
@@ -3836,6 +3851,6 @@ app.use((err, req, res, next) => {
 
 initDB().then(()=>{
   app.listen(PORT,()=>{
-    console.log(`\n🚀 Jewshi Markets running at http://localhost:${PORT}\n`);
+    console.log(`\n🚀 Sclshi Markets running at http://localhost:${PORT}\n`);
   });
 }).catch(err=>{console.error('DB init failed:',err);process.exit(1);});
