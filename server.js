@@ -179,7 +179,12 @@ function isDesktopCasinoRequest(req){
 }
 function requireDesktopCasinoAccess(req,res,next){
   if(!CASINO_ENABLED) return res.status(404).json({error:'Casino is currently unavailable'});
+<<<<<<< HEAD
   return next();
+=======
+  if(isDesktopCasinoRequest(req)) return next();
+  return res.status(403).json({error:'Casino is only available in the Jewshi desktop app'});
+>>>>>>> 12d69b1 (checking...)
 }
 
 async function initDB() {
