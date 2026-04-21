@@ -3,16 +3,9 @@ const { app, BrowserWindow, shell } = require('electron');
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-<<<<<<< HEAD
-const packagedUrl = process.env.SCLSHI_DESKTOP_PROD_URL || process.env.JEWSHI_DESKTOP_PROD_URL || 'https://sclshi.onrender.com';
-
-function getStartUrl() {
-  if (process.env.SCLSHI_DESKTOP_START_URL) return process.env.SCLSHI_DESKTOP_START_URL;
-=======
 const packagedUrl = process.env.JEWSHI_DESKTOP_PROD_URL || 'https://jewshi.onrender.com';
 
 function getStartUrl() {
->>>>>>> 12d69b1 (checking...)
   if (process.env.JEWSHI_DESKTOP_START_URL) return process.env.JEWSHI_DESKTOP_START_URL;
   return app.isPackaged ? packagedUrl : packagedUrl;
 }
@@ -25,11 +18,7 @@ function createMainWindow() {
     height: 920,
     minWidth: 1100,
     minHeight: 760,
-<<<<<<< HEAD
-    title: 'Sclshi',
-=======
     title: 'Jewshi',
->>>>>>> 12d69b1 (checking...)
     backgroundColor: '#0a0a0f',
     show: false,
     autoHideMenuBar: true,
@@ -79,11 +68,7 @@ function createMainWindow() {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-<<<<<<< HEAD
-        <title>Sclshi Desktop</title>
-=======
         <title>Jewshi Desktop</title>
->>>>>>> 12d69b1 (checking...)
         <style>
           body{
             margin:0;
@@ -120,11 +105,7 @@ function createMainWindow() {
       </head>
       <body>
         <div class="card">
-<<<<<<< HEAD
-          <h1>Sclshi couldn’t load</h1>
-=======
           <h1>Jewshi couldn’t load</h1>
->>>>>>> 12d69b1 (checking...)
           <p>The desktop shell started, but it couldn’t reach the app URL.</p>
           <code>${validatedURL || startUrl}</code>
           <p>Error ${errorCode}: ${errorDescription}</p>
@@ -139,11 +120,7 @@ function createMainWindow() {
 }
 
 app.whenReady().then(() => {
-<<<<<<< HEAD
-  app.setName('Sclshi');
-=======
   app.setName('Jewshi');
->>>>>>> 12d69b1 (checking...)
   createMainWindow();
 
   app.on('activate', () => {

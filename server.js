@@ -57,7 +57,7 @@ const casinoBetsCache = new Map();
 const BETS_MINE_CACHE_TTL_MS = 10000;
 const betsMineCache = new Map();
 let betsSnapshotVersion = 0;
-const CASINO_ENABLED = true;
+const CASINO_ENABLED = false;
 const NOTIFICATIONS_CACHE_TTL_MS = 15000;
 const notificationsListCache = new Map();
 const notificationsUnreadCache = new Map();
@@ -179,12 +179,8 @@ function isDesktopCasinoRequest(req){
 }
 function requireDesktopCasinoAccess(req,res,next){
   if(!CASINO_ENABLED) return res.status(404).json({error:'Casino is currently unavailable'});
-<<<<<<< HEAD
-  return next();
-=======
   if(isDesktopCasinoRequest(req)) return next();
   return res.status(403).json({error:'Casino is only available in the Jewshi desktop app'});
->>>>>>> 12d69b1 (checking...)
 }
 
 async function initDB() {

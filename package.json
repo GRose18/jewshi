@@ -6,15 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "npx nodemon server.js",
-<<<<<<< HEAD
-    "desktop": "SCLSHI_DESKTOP_START_URL=https://sclshi.onrender.com electron ./electron/main.js",
-    "desktop:local": "SCLSHI_DESKTOP_START_URL=http://localhost:3000 electron ./electron/main.js",
-    "desktop:web": "SCLSHI_DESKTOP_START_URL=https://sclshi.onrender.com electron ./electron/main.js",
-=======
     "desktop": "JEWSHI_DESKTOP_START_URL=https://jewshi.onrender.com electron ./electron/main.js",
     "desktop:local": "JEWSHI_DESKTOP_START_URL=http://localhost:3000 electron ./electron/main.js",
     "desktop:web": "JEWSHI_DESKTOP_START_URL=https://jewshi.onrender.com electron ./electron/main.js",
->>>>>>> 12d69b1 (checking...)
     "desktop:dir": "electron-builder --mac dir",
     "desktop:dist": "electron-builder --mac dmg"
   },
@@ -34,13 +28,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-<<<<<<< HEAD
-    "appId": "com.sclshi.desktop",
-    "productName": "Sclshi",
-=======
     "appId": "com.jewshi.desktop",
     "productName": "Jewshi",
->>>>>>> 12d69b1 (checking...)
     "directories": {
       "output": "dist/desktop"
     },
