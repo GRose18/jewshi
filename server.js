@@ -495,7 +495,7 @@ async function initDB() {
 app.use('/api/casino', authMiddleware, requireDesktopCasinoAccess);
 app.use('/api/admin/casino', authMiddleware, adminOnly, requireDesktopCasinoAccess);
 app.use('/api/matches', authMiddleware, requireDesktopCasinoAccess);
-app.use('/api/spin', authMiddleware, requireDesktopCasinoAccess);
+app.use('/api/spin', authMiddleware);
 
 async function ensureProtectedSettings() {
   const popupPassword = await db.get('SELECT value FROM settings WHERE key=?',[POPUP_TAB_PASSWORD_KEY]);

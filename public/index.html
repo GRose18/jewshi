@@ -1603,6 +1603,7 @@ let assistanceSnapshotBusy=false;
 let assistanceSelectedTargetsBySession={};
 let assistanceFullscreenSessionId=null;
 const CASINO_ENABLED=false;
+const DAILY_SPIN_ENABLED=true;
 let onlineMatches=[];
 let onlineMatchFocus=null;
 let onlineMatchFilter='all';
@@ -1626,7 +1627,7 @@ function canUseOnlineMatches(){
 }
 function applyChanceGamesAvailability(){
   const spinBtn=document.getElementById('spin-topbar-btn');
-  if(spinBtn) spinBtn.style.display=CASINO_ENABLED?'inline-flex':'none';
+  if(spinBtn) spinBtn.style.display=DAILY_SPIN_ENABLED?'inline-flex':'none';
   const casinoTabButton=document.querySelector('.nav-tab[data-tab="casino"]');
   if(casinoTabButton) casinoTabButton.style.display=CASINO_ENABLED?'block':'none';
   const casinoTab=document.getElementById('tab-casino');
@@ -1934,6 +1935,8 @@ function updateTopbar(){
   if(!currentUser)return;
   document.getElementById('topbar-user').textContent=currentUser.name+' · '+currentUser.id;
   document.getElementById('topbar-credits').textContent=currentUser.credits.toLocaleString();
+  const spinBtn=document.getElementById('spin-topbar-btn');
+  if(spinBtn) spinBtn.style.display=DAILY_SPIN_ENABLED?'inline-flex':'none';
 }
 async function refreshUser(){currentUser=await api('GET','/me');updateTopbar();}
 async function loadCasinoConfig(){
@@ -5277,8 +5280,8 @@ function drawSpinWheel(rot){
 }
 
 async function openSpinModal(){
-  if(!CASINO_ENABLED){
-    showToast('Chance games are currently disabled.');
+  if(!DAILY_SPIN_ENABLED){
+    showToast('Daily Spin is currently unavailable.');
     return;
   }
   document.getElementById('spin-modal').style.display='flex';
