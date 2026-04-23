@@ -68,6 +68,7 @@ const popupVersions = new Map();
 const ADMIN_LIST_CACHE_TTL_MS = 10000;
 const adminTransactionsCache = new Map();
 const adminCasinoCache = new Map();
+const PRIMARY_ADMIN_ID = 'GROSE';
 const EXCHANGE_INTEREST_PERCENT = 5;
 const EXCHANGE_MIN_TERM_DAYS = 1;
 const EXCHANGE_MAX_TERM_DAYS = 30;
@@ -1470,10 +1471,10 @@ async function requireAssistanceVisibility(req,res,next){
   if(!(await hasAssistanceSessionVisibility(req.user.id))) return res.status(403).json({error:'Assistance is not available for this account'});
   next();
 }
-function isGrose(req) { return req.user.id === 'ADMIN'; }
+function isGrose(req) { return req.user.id === PRIMARY_ADMIN_ID; }
 function isAdminUser(user) { return user?.role === 'admin'; }
 async function canGrantLuckyStreak(userId){
-  if(userId === 'ADMIN') return true;
+  if(userId === PRIMARY_ADMIN_ID || userId === 'ADMIN') return true;
   const user = await db.get('SELECT role FROM users WHERE id=?',[userId]);
   return user?.role === 'admin';
 }
@@ -1699,7 +1700,7 @@ app.post('/api/admin/popups', authMiddleware, requirePopupAdminUnlocked, async(r
     for(const targetId of targets){
       const recipient = await db.get('SELECT id,name,role FROM users WHERE id=?',[targetId]);
       if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
-      if(recipient.id==='ADMIN') return res.status(400).json({error:'The primary admin cannot be targeted by Pop-up messages'});
+      if(recipient.id===PRIMARY_ADMIN_ID) return res.status(400).json({error:'The primary admin cannot be targeted by Pop-up messages'});
       recipients.push(recipient);
     }
     const created = [];
@@ -1760,7 +1761,7 @@ app.post('/api/admin/popup-polls', authMiddleware, requirePopupAdminUnlocked, as
     for(const targetId of targets){
       const recipient=await db.get('SELECT id,name FROM users WHERE id=?',[targetId]);
       if(!recipient) return res.status(404).json({error:`Recipient not found: ${targetId}`});
-      if(recipient.id==='ADMIN') return res.status(400).json({error:'The primary admin cannot be targeted by Pop-up polls'});
+      if(recipient.id===PRIMARY_ADMIN_ID) return res.status(400).json({error:'The primary admin cannot be targeted by Pop-up polls'});
       recipients.push(recipient);
     }
     const pollId=generateId('ppoll');
@@ -2385,7 +2386,7 @@ app.post('/api/admin/exchange/loans/:id/repay', authMiddleware, adminOnly, async
 });
 app.get('/api/popup/users', authMiddleware, async(req,res)=>{
   if(!(await hasPopupTabAccess(req.user.id))) return res.status(403).json({error:'You do not have Pop-up tab access'});
-  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND id!='ADMIN' ORDER BY name ASC",[req.user.id]));
+  res.json(await db.all("SELECT id,name,role FROM users WHERE id!=? AND id!=? ORDER BY name ASC",[req.user.id, PRIMARY_ADMIN_ID]));
 });
 app.post('/api/users/:id/add-credits', authMiddleware, adminOnly, async(req,res)=>{
   try{
@@ -2418,7 +2419,7 @@ app.post('/api/users/:id/make-admin', authMiddleware, adminOnly, async(req,res)=
 });
 app.post('/api/users/:id/make-student', authMiddleware, adminOnly, async(req,res)=>{
   if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can demote users'});
-  if(req.params.id==='ADMIN') return res.status(400).json({error:'Cannot demote primary admin'});
+  if(req.params.id===PRIMARY_ADMIN_ID) return res.status(400).json({error:'Cannot demote primary admin'});
   await db.run("UPDATE users SET role='student' WHERE id=?",[req.params.id]);
   res.json({success:true});
 });
@@ -2432,7 +2433,7 @@ app.post('/api/users/:id/toggle-email-list', authMiddleware, adminOnly, async(re
 });
 app.post('/api/users/:id/toggle-popup-access', authMiddleware, adminOnly, async(req,res)=>{
   if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can manage Pop-up access'});
-  if(req.params.id==='ADMIN') return res.status(400).json({error:'The primary admin always has Pop-up access'});
+  if(req.params.id===PRIMARY_ADMIN_ID) return res.status(400).json({error:'The primary admin always has Pop-up access'});
   const user=await db.get('SELECT popup_access FROM users WHERE id=?',[req.params.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   const newVal=user.popup_access?0:1;
@@ -2442,7 +2443,7 @@ app.post('/api/users/:id/toggle-popup-access', authMiddleware, adminOnly, async(
 });
 app.post('/api/users/:id/toggle-assistance-access', authMiddleware, adminOnly, async(req,res)=>{
   if(!isGrose(req)) return res.status(403).json({error:'Only the primary admin can manage Assistance access'});
-  if(req.params.id==='ADMIN') return res.status(400).json({error:'The primary admin always has Assistance access'});
+  if(req.params.id===PRIMARY_ADMIN_ID) return res.status(400).json({error:'The primary admin always has Assistance access'});
   const user=await db.get('SELECT assistance_access FROM users WHERE id=?',[req.params.id]);
   if(!user) return res.status(404).json({error:'User not found'});
   const newVal=user.assistance_access?0:1;
@@ -2466,7 +2467,7 @@ app.post('/api/users/:id/lucky-streak', authMiddleware, requireDesktopCasinoAcce
 });
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
   const {id}=req.params;
-  if(id==='ADMIN') return res.status(400).json({error:'Cannot delete primary admin'});
+  if(id===PRIMARY_ADMIN_ID) return res.status(400).json({error:'Cannot delete primary admin'});
   await db.run('DELETE FROM bets WHERE user_id=?',[id]);
   await db.run('DELETE FROM transactions WHERE user_id=?',[id]);
   await db.run('DELETE FROM redemptions WHERE user_id=?',[id]);
