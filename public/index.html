@@ -1784,7 +1784,7 @@ async function doRegister(){
   const btn=document.getElementById('reg-btn');
   btn.disabled=true;btn.textContent='Creating…';
   try{
-    const data=await api('POST','/auth/register',{name,email,password,grade});
+    const data=await api('POST','/auth/register',{name,email,password,grade,school:'Jewshi'});
     hideRegister();
     showVerifyScreen(data.pendingId);
   }catch(e){showRegError(e.message);btn.disabled=false;btn.textContent='Create Account';}

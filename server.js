@@ -1991,7 +1991,7 @@ app.post('/api/auth/login', async(req,res)=>{
 app.post('/api/auth/register', async(req,res)=>{
   try{
     const {name,email,password,grade,school}=req.body;
-    if(!name||!email||!password||!school) return res.status(400).json({error:'Missing fields'});
+    if(!name||!email||!password) return res.status(400).json({error:'Missing fields'});
     const trimmedEmail=email.trim().toLowerCase();
     if(await db.get('SELECT id FROM users WHERE LOWER(email)=?',[trimmedEmail]))
       return res.status(409).json({error:'An account with that email already exists'});
@@ -1999,9 +1999,10 @@ app.post('/api/auth/register', async(req,res)=>{
     const hash=await bcrypt.hash(password,10);
     const code=Math.floor(100000+Math.random()*900000).toString();
     const id=generateId('pending');
+    const normalizedSchool=(school||'Jewshi').trim() || 'Jewshi';
     await db.run('DELETE FROM pending_registrations WHERE email=?',[trimmedEmail]);
     await db.run('INSERT INTO pending_registrations (id,name,email,password,grade,school,code,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      [id,name.trim(),trimmedEmail,hash,grade||'',school.trim(),code,Date.now()+600000,Date.now()]);
+      [id,name.trim(),trimmedEmail,hash,grade||'',normalizedSchool,code,Date.now()+600000,Date.now()]);
     await sendViaAppsScript('verify_code',{email:trimmedEmail,name:name.trim(),code,siteUrl:CLIENT_URL});
     res.json({message:'Verification code sent to your email.',pendingId:id});
   }catch(e){res.status(500).json({error:e.message});}
