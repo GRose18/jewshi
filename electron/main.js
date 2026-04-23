@@ -4,6 +4,7 @@ const { app, BrowserWindow, shell } = require('electron');
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 const packagedUrl = process.env.JEWSHI_DESKTOP_PROD_URL || 'https://jewshi.onrender.com';
+const desktopToken = process.env.JEWSHI_DESKTOP_TOKEN || 'jewshi-desktop-app-v1';
 
 function getStartUrl() {
   if (process.env.JEWSHI_DESKTOP_START_URL) return process.env.JEWSHI_DESKTOP_START_URL;
@@ -42,6 +43,7 @@ function createMainWindow() {
       const requestUrl = new URL(details.url);
       if(requestUrl.origin === origin){
         details.requestHeaders['X-Jewshi-Desktop'] = '1';
+        details.requestHeaders['X-Jewshi-Desktop-Token'] = desktopToken;
       }
     }catch(e){}
     callback({ requestHeaders: details.requestHeaders });

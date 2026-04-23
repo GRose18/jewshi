@@ -69,6 +69,7 @@ const ADMIN_LIST_CACHE_TTL_MS = 10000;
 const adminTransactionsCache = new Map();
 const adminCasinoCache = new Map();
 const PRIMARY_ADMIN_ID = 'GROSE';
+const DESKTOP_APP_TOKEN = process.env.JEWSHI_DESKTOP_TOKEN || 'jewshi-desktop-app-v1';
 const EXCHANGE_INTEREST_PERCENT = 5;
 const EXCHANGE_MIN_TERM_DAYS = 1;
 const EXCHANGE_MAX_TERM_DAYS = 30;
@@ -176,7 +177,7 @@ function getAdminCacheKey(search, limit, offset){
   return JSON.stringify([search || '', limit || 0, offset || 0]);
 }
 function isDesktopCasinoRequest(req){
-  return req.headers['x-jewshi-desktop']==='1';
+  return req.headers['x-jewshi-desktop']==='1' && req.headers['x-jewshi-desktop-token']===DESKTOP_APP_TOKEN;
 }
 function requireDesktopCasinoAccess(req,res,next){
   if(!CASINO_ENABLED) return res.status(404).json({error:'Casino is currently unavailable'});
@@ -1449,8 +1450,34 @@ function flipMineCell(game, index, shouldBeSafe){
 function authMiddleware(req,res,next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({error:'No token'});
-  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
-  catch { res.status(401).json({error:'Invalid token'}); }
+  try { req.user = jwt.verify(token, JWT_SECRET); }
+  catch { return res.status(401).json({error:'Invalid token'}); }
+  enforceBlockingPopup(req,res,next);
+}
+async function enforceBlockingPopup(req,res,next){
+  try{
+    const path=req.path || '';
+    const bypassPaths=[
+      '/api/me',
+      '/api/popups/pending',
+      '/api/popup-polls',
+    ];
+    const canBypass = bypassPaths.includes(path) || /^\/api\/popups\/[^/]+\/dismiss$/.test(path);
+    if(canBypass) return next();
+    const popup=await db.get(`SELECT id,closeout_enabled,status
+      FROM popups
+      WHERE recipient_id=? AND status IN ('pending','active')
+      ORDER BY created_at DESC
+      LIMIT 1`,[req.user.id]);
+    if(!popup) return next();
+    return res.status(423).json({
+      error: popup.closeout_enabled ? 'Dismiss the active Pop-up before continuing' : 'A required Pop-up is active',
+      popupId: popup.id,
+      closeoutEnabled: !!popup.closeout_enabled,
+    });
+  }catch(e){
+    return res.status(500).json({error:e.message});
+  }
 }
 function assistanceStreamAuth(req,res,next) {
   const token = req.query.token || req.headers.authorization?.split(' ')[1];
@@ -2464,6 +2491,14 @@ app.post('/api/users/:id/lucky-streak', authMiddleware, requireDesktopCasinoAcce
     );
     await recordTx(req.params.id,0,'lucky_streak',null,`${req.user.id} granted Lucky Streak (+${boostPercent}% casino odds) for 5 minutes`);
     res.json({success:true, lucky_streak: await getActiveLuckyStreak(req.params.id)});
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/admin/messages/clear', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    const countRow=await db.get('SELECT COUNT(*) as c FROM messages');
+    await db.run('DELETE FROM messages');
+    await db.run("DELETE FROM notifications WHERE type='message'");
+    res.json({success:true, cleared: countRow?.c || 0});
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.delete('/api/users/:id', authMiddleware, adminOnly, async(req,res)=>{
