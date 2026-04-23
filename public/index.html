@@ -43,6 +43,46 @@
   .auth-toggle a{color:var(--accent);cursor:pointer;font-weight:500}
   .error-msg{background:var(--red-bg);border:1px solid var(--red-dim);color:var(--red);padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:14px}
 
+  /* MERCH LANDING */
+  #merch-screen{display:none;min-height:100vh;background:
+    radial-gradient(circle at top right, rgba(124,106,247,0.2), transparent 30%),
+    radial-gradient(circle at left center, rgba(240,192,64,0.12), transparent 24%),
+    linear-gradient(180deg, #09090f, #111118 46%, #0b0b12);
+    color:var(--text)}
+  .merch-shell{max-width:1100px;margin:0 auto;padding:48px 24px 64px}
+  .merch-hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,0.85fr);gap:24px;align-items:start}
+  .merch-panel{background:rgba(17,17,24,0.84);border:1px solid rgba(255,255,255,0.08);border-radius:24px;box-shadow:var(--shadow-lg)}
+  .merch-copy{padding:32px}
+  .merch-kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.2);font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold)}
+  .merch-title{font-size:52px;line-height:0.96;letter-spacing:-0.05em;font-weight:800;margin:18px 0 16px}
+  .merch-title span{color:var(--accent)}
+  .merch-subtitle{font-size:15px;line-height:1.7;color:#c7c7da;max-width:680px}
+  .merch-countdown-wrap{padding:28px 30px}
+  .merch-countdown-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:20px}
+  .merch-countdown-box{padding:18px 12px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);text-align:center}
+  .merch-countdown-value{font-size:34px;font-weight:800;letter-spacing:-0.05em;font-variant-numeric:tabular-nums}
+  .merch-countdown-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-top:8px}
+  .merch-launch-note{margin-top:16px;font-size:12px;color:var(--text3)}
+  .merch-video{padding:18px}
+  .merch-video-shell{border-radius:20px;overflow:hidden;background:#050509;border:1px solid rgba(255,255,255,0.08);aspect-ratio:16 / 9}
+  .merch-video-shell iframe,.merch-video-shell video{width:100%;height:100%;display:block;border:0;background:#000}
+  .merch-video-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--text3);font-size:14px;line-height:1.7}
+  .merch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:28px}
+  .merch-card{padding:18px;border-radius:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08)}
+  .merch-card-title{font-size:15px;font-weight:700;color:var(--text)}
+  .merch-card-copy{font-size:12px;color:var(--text3);line-height:1.6;margin-top:8px}
+  .merch-live-pill{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:8px 12px;border-radius:999px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.22);color:var(--green);font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase}
+  @media (max-width: 900px){
+    .merch-hero{grid-template-columns:1fr}
+    .merch-title{font-size:40px}
+  }
+  @media (max-width: 640px){
+    .merch-shell{padding:28px 16px 48px}
+    .merch-copy,.merch-countdown-wrap,.merch-video{padding:20px}
+    .merch-countdown-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .merch-title{font-size:34px}
+  }
+
   /* LIVE SCREEN */
   #live-screen{display:none;min-height:100vh;background:#0d0a1e;color:#fff;font-family:'Inter',sans-serif}
   .live-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:40px 20px}
@@ -109,6 +149,21 @@
   .exchange-item{padding:14px 15px;border-radius:18px;background:var(--bg3);border:1px solid var(--border)}
   .exchange-policy{display:flex;flex-direction:column;gap:10px}
   .exchange-policy-row{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)}
+  .goodbye-preview{position:relative;overflow:hidden;padding:34px;border-radius:28px;background:
+    radial-gradient(circle at top right, rgba(124,106,247,0.18), transparent 28%),
+    radial-gradient(circle at left center, rgba(240,192,64,0.12), transparent 22%),
+    linear-gradient(180deg, #0b0b12, #13131d 50%, #0d0d14);border:1px solid rgba(255,255,255,0.08);box-shadow:var(--shadow-lg)}
+  .goodbye-quote{font-size:42px;line-height:1.02;letter-spacing:-0.05em;font-weight:800;max-width:760px}
+  .goodbye-copy{margin-top:16px;max-width:720px;font-size:15px;line-height:1.75;color:#c9c9d8}
+  .goodbye-mark{margin-top:26px;display:inline-flex;align-items:center;justify-content:center;padding:16px 20px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);font-size:18px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase}
+  .goodbye-countdown-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:28px}
+  .goodbye-countdown-box{padding:18px 12px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);text-align:center}
+  .goodbye-countdown-value{font-size:34px;font-weight:800;letter-spacing:-0.05em;font-variant-numeric:tabular-nums}
+  .goodbye-countdown-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-top:8px}
+  @media (max-width: 640px){
+    .goodbye-quote{font-size:30px}
+    .goodbye-countdown-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
 
   /* MARKETS */
   .markets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
@@ -377,6 +432,44 @@
 </head>
 <body>
 
+<!-- MERCH LANDING -->
+<div id="merch-screen">
+  <div class="merch-shell">
+    <div class="merch-hero">
+      <div class="merch-panel merch-copy">
+        <div class="merch-kicker">Final Drop Incoming</div>
+        <div class="merch-title">Jew<span>shi</span> is ending.<br>The merch goes live next.</div>
+        <div class="merch-subtitle" id="merch-message">Jewshi is shutting down. The legacy lives on through the final merch drop.</div>
+        <div class="merch-grid">
+          <div class="merch-card"><div class="merch-card-title">Polos</div><div class="merch-card-copy">Clean embroidered Jewshi branding for the final sendoff.</div></div>
+          <div class="merch-card"><div class="merch-card-title">Bracelets</div><div class="merch-card-copy">Easy commemorative piece for everyone who was there.</div></div>
+          <div class="merch-card"><div class="merch-card-title">Kippahs</div><div class="merch-card-copy">A proper Jewshi edition drop piece.</div></div>
+          <div class="merch-card"><div class="merch-card-title">Graphic Tees</div><div class="merch-card-copy">Louder designs for the final run.</div></div>
+          <div class="merch-card"><div class="merch-card-title">Draws</div><div class="merch-card-copy">Deep-cut novelty merch for the lore keepers.</div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div class="merch-panel merch-video">
+          <div class="merch-video-shell" id="merch-video-shell">
+            <div class="merch-video-placeholder">Upload your farewell video, then paste the video URL into the admin panel before hitting Self-Destruct.</div>
+          </div>
+        </div>
+        <div class="merch-panel merch-countdown-wrap">
+          <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">Store Unlocks In</div>
+          <div class="merch-countdown-grid">
+            <div class="merch-countdown-box"><div class="merch-countdown-value" id="merch-days">--</div><div class="merch-countdown-label">Days</div></div>
+            <div class="merch-countdown-box"><div class="merch-countdown-value" id="merch-hours">--</div><div class="merch-countdown-label">Hours</div></div>
+            <div class="merch-countdown-box"><div class="merch-countdown-value" id="merch-minutes">--</div><div class="merch-countdown-label">Minutes</div></div>
+            <div class="merch-countdown-box"><div class="merch-countdown-value" id="merch-seconds">--</div><div class="merch-countdown-label">Seconds</div></div>
+          </div>
+          <div class="merch-live-pill" id="merch-live-pill" style="display:none;">Store live</div>
+          <div class="merch-launch-note" id="merch-launch-note">Countdown inactive until a merch launch time is set.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- AUTH -->
 <div id="auth-screen">
   <div class="auth-card">
@@ -512,11 +605,11 @@
     <div class="nav-tab" data-tab="portfolio" onclick="switchTab('portfolio')">My Bets</div>
     <div class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
     <div class="nav-tab" data-tab="store" onclick="switchTab('store')">Redeem</div>
-    <div class="nav-tab" data-tab="messages" onclick="switchTab('messages')">Messages <span id="msg-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;"></span></div>
     <div class="nav-tab" data-tab="suggestions" onclick="switchTab('suggestions')">Suggestions</div>
     <div class="nav-tab admin-only" data-tab="exchange" onclick="switchTab('exchange')" style="display:none;">Exchange</div>
     <div class="nav-tab assistance-only" data-tab="assistance" onclick="switchTab('assistance')" style="display:none;">Assistance</div>
     <div class="nav-tab popup-only" data-tab="popup" onclick="switchTab('popup')" style="display:none;">Pop-up</div>
+    <div class="nav-tab grose-only" data-tab="goodbye" onclick="switchTab('goodbye')" style="display:none;">Goodbye</div>
     <div class="nav-tab admin-only" data-tab="admin" onclick="switchTab('admin')" style="display:none;">⚙ Admin</div>
   </div>
   <div class="main-content">
@@ -1125,31 +1218,6 @@
       <div class="panel" style="margin-top:18px;"><div class="panel-title">Redemption History</div><div id="redemption-history"></div></div>
     </div>
 
-    <!-- MESSAGES -->
-    <div id="tab-messages" class="tab-content">
-      <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Messages</h2>
-      <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Direct messages</p>
-      <div style="display:grid;grid-template-columns:260px 1fr;gap:16px;height:580px;">
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;overflow:hidden;">
-          <div style="padding:14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:13px;font-weight:600;">Conversations</span>
-            <button class="btn-admin btn-sm" onclick="showNewDM()">+ New</button>
-          </div>
-          <div id="conversation-list" style="flex:1;overflow-y:auto;"></div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;overflow:hidden;">
-          <div id="thread-header" style="padding:14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text2);">Select a conversation</div>
-          <div id="thread-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
-            <p style="color:var(--text3);font-size:13px;text-align:center;margin-top:40px;">Pick a conversation or start a new one.</p>
-          </div>
-          <div id="thread-input" style="display:none;padding:12px;border-top:1px solid var(--border);gap:8px;align-items:center;">
-            <input type="text" id="msg-input" placeholder="Type a message…" style="flex:1;padding:9px 12px;font-size:13px;" onkeydown="if(event.key==='Enter')sendMessage()">
-            <button class="btn-admin" onclick="sendMessage()" style="padding:9px 16px;font-size:13px;white-space:nowrap;">Send</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div id="tab-suggestions" class="tab-content">
       <h2 style="font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px;">Suggestions</h2>
       <p style="font-size:12px;color:var(--text3);margin-bottom:20px;">Send bug reports and product ideas to admin. Suggestions are not anonymous, and each account can send up to 2 per day.</p>
@@ -1340,6 +1408,22 @@
         <div id="popup-poll-user-list"><p style="font-size:13px;color:var(--text3);">No polls for you right now.</p></div>
       </div>
     </div>
+
+    <div id="tab-goodbye" class="tab-content">
+      <div class="goodbye-preview">
+        <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--gold);font-weight:800;">Farewell Preview</div>
+        <div class="goodbye-quote">“One must imagine Sisyphus happy.”</div>
+        <div class="goodbye-copy">Jewshi started as a joke, became a ritual, and then somehow became part of the school’s daily rhythm. This preview is the final sendoff: a little absurd, a little sincere, and built to hold the last countdown before the merch drop opens.</div>
+        <div class="goodbye-mark">Never forget: 4.23.2026</div>
+        <div class="goodbye-countdown-grid">
+          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-days">--</div><div class="goodbye-countdown-label">Days</div></div>
+          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-hours">--</div><div class="goodbye-countdown-label">Hours</div></div>
+          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-minutes">--</div><div class="goodbye-countdown-label">Minutes</div></div>
+          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-seconds">--</div><div class="goodbye-countdown-label">Seconds</div></div>
+        </div>
+        <div id="goodbye-launch-note" style="margin-top:18px;font-size:12px;color:var(--text3);">Set the merch launch time in the admin panel to activate this countdown.</div>
+      </div>
+    </div>
     
     <!-- ADMIN -->
     <div id="tab-admin" class="tab-content">
@@ -1376,6 +1460,15 @@
           <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">Delete every direct-message conversation in Jewshi.</p>
           <button class="btn-admin btn-danger" onclick="clearAllMessages()">Clear All Chats</button>
           <hr class="divider">
+          <div id="self-destruct-panel" class="grose-only" style="display:none;">
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">When you're ready to shut Jewshi down, move the public site to the farewell merch countdown page.</p>
+            <div class="form-group"><label>Farewell Video URL</label><input type="text" id="merch-video-url" placeholder="Direct MP4, YouTube, or Vimeo link"></div>
+            <div class="form-group"><label>Merch Launch Time</label><input type="datetime-local" id="merch-launch-at"></div>
+            <div class="form-group"><label>Farewell Message</label><input type="text" id="merch-message-input" placeholder="Jewshi is shutting down. The legacy lives on through the final merch drop."></div>
+            <button class="btn-admin btn-danger" onclick="triggerSelfDestruct()" style="margin-bottom:8px;">Self-Destruct</button>
+            <p id="self-destruct-status" style="font-size:11px;color:var(--text3);line-height:1.6;"></p>
+            <hr class="divider">
+          </div>
           <div id="grose-only-panel"></div>
         </div>
       </div>
@@ -1568,9 +1661,11 @@ const API = window.location.hostname==='localhost'?'http://localhost:3000/api':'
 const CREDITS_PER_DOLLAR=100;
 let authToken=localStorage.getItem('ew_token');
 let currentUser=null,currentBetMarket=null,currentBetSide='YES';
-let msgPollInterval=null,convPollInterval=null,currentThreadUserId=null;
 let unreadPollInterval=null,resolutionPollInterval=null,notificationPollInterval=null;
 let liveInterval=null,countdownInterval=null,marketCountdownInterval=null,liveMarketsData=[];
+let merchCountdownInterval=null;
+let goodbyePreviewInterval=null;
+let siteState={mode:'normal',merchMode:false,videoUrl:'',launchAt:'',message:''};
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
@@ -1762,6 +1857,137 @@ function updateCountdowns(){
     else el.textContent=`${m}m ${s}s`;
   });
 }
+function normalizeEmbedUrl(url){
+  if(!url) return {type:'none',src:''};
+  try{
+    const parsed=new URL(url, window.location.origin);
+    const host=parsed.hostname.replace(/^www\./,'');
+    const pathname=parsed.pathname;
+    if(/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(parsed.href)) return {type:'video',src:parsed.href};
+    if(host==='youtube.com' || host==='youtu.be'){
+      const videoId = host==='youtu.be'
+        ? pathname.replace('/','').trim()
+        : (parsed.searchParams.get('v')||'').trim();
+      if(videoId) return {type:'iframe',src:`https://www.youtube.com/embed/${videoId}`};
+    }
+    if(host==='vimeo.com'){
+      const videoId = pathname.split('/').filter(Boolean)[0];
+      if(videoId) return {type:'iframe',src:`https://player.vimeo.com/video/${videoId}`};
+    }
+    return {type:'iframe',src:parsed.href};
+  }catch{
+    return {type:'none',src:''};
+  }
+}
+function renderMerchVideo(){
+  const shell=document.getElementById('merch-video-shell');
+  if(!shell) return;
+  const media=normalizeEmbedUrl(siteState.videoUrl);
+  if(media.type==='video'){
+    shell.innerHTML=`<video controls playsinline src="${esc(media.src)}"></video>`;
+    return;
+  }
+  if(media.type==='iframe'){
+    shell.innerHTML=`<iframe src="${esc(media.src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+    return;
+  }
+  shell.innerHTML='<div class="merch-video-placeholder">Upload your farewell video, then paste the video URL into the admin panel before hitting Self-Destruct.</div>';
+}
+function updateMerchCountdown(){
+  const launchNote=document.getElementById('merch-launch-note');
+  const livePill=document.getElementById('merch-live-pill');
+  const launchAt=siteState.launchAt ? Date.parse(siteState.launchAt) : NaN;
+  const ids=[
+    ['merch-days','--'],
+    ['merch-hours','--'],
+    ['merch-minutes','--'],
+    ['merch-seconds','--'],
+  ];
+  if(Number.isNaN(launchAt)){
+    ids.forEach(([id,fallback])=>{ const el=document.getElementById(id); if(el) el.textContent=fallback; });
+    if(launchNote) launchNote.textContent='Countdown inactive until a merch launch time is set.';
+    if(livePill) livePill.style.display='none';
+    return;
+  }
+  const diff=Math.max(0, launchAt - Date.now());
+  const days=Math.floor(diff/86400000);
+  const hours=Math.floor((diff%86400000)/3600000);
+  const minutes=Math.floor((diff%3600000)/60000);
+  const seconds=Math.floor((diff%60000)/1000);
+  const values=[
+    ['merch-days', String(days).padStart(2,'0')],
+    ['merch-hours', String(hours).padStart(2,'0')],
+    ['merch-minutes', String(minutes).padStart(2,'0')],
+    ['merch-seconds', String(seconds).padStart(2,'0')],
+  ];
+  values.forEach(([id,value])=>{ const el=document.getElementById(id); if(el) el.textContent=value; });
+  if(diff<=0){
+    if(launchNote) launchNote.textContent='The merch drop is live. Replace this landing page with your real store whenever you are ready.';
+    if(livePill) livePill.style.display='inline-flex';
+  }else{
+    if(launchNote) launchNote.textContent=`Drop opens ${new Date(launchAt).toLocaleString()}.`;
+    if(livePill) livePill.style.display='none';
+  }
+}
+function renderMerchScreen(){
+  const messageEl=document.getElementById('merch-message');
+  if(messageEl) messageEl.textContent=siteState.message || 'Jewshi is shutting down. The legacy lives on through the final merch drop.';
+  renderMerchVideo();
+  clearInterval(merchCountdownInterval);
+  updateMerchCountdown();
+  merchCountdownInterval=setInterval(updateMerchCountdown,1000);
+}
+function updateGoodbyePreviewCountdown(){
+  const launchNote=document.getElementById('goodbye-launch-note');
+  const launchAt=siteState.launchAt ? Date.parse(siteState.launchAt) : NaN;
+  const values = Number.isNaN(launchAt)
+    ? ['--','--','--','--']
+    : (() => {
+        const diff=Math.max(0, launchAt - Date.now());
+        const days=Math.floor(diff/86400000);
+        const hours=Math.floor((diff%86400000)/3600000);
+        const minutes=Math.floor((diff%3600000)/60000);
+        const seconds=Math.floor((diff%60000)/1000);
+        return [
+          String(days).padStart(2,'0'),
+          String(hours).padStart(2,'0'),
+          String(minutes).padStart(2,'0'),
+          String(seconds).padStart(2,'0'),
+        ];
+      })();
+  ['goodbye-days','goodbye-hours','goodbye-minutes','goodbye-seconds'].forEach((id,idx)=>{
+    const el=document.getElementById(id);
+    if(el) el.textContent=values[idx];
+  });
+  if(launchNote){
+    launchNote.textContent = Number.isNaN(launchAt)
+      ? 'Set the merch launch time in the admin panel to activate this countdown.'
+      : (launchAt<=Date.now()
+        ? 'The countdown is complete. The memorial page is ready for the final store launch.'
+        : `Countdown synced to ${new Date(launchAt).toLocaleString()}.`);
+  }
+}
+function renderGoodbyePreview(){
+  clearInterval(goodbyePreviewInterval);
+  updateGoodbyePreviewCountdown();
+  goodbyePreviewInterval=setInterval(updateGoodbyePreviewCountdown,1000);
+}
+function showMerchScreen(){
+  clearInterval(liveInterval);
+  clearInterval(countdownInterval);
+  document.getElementById('app').style.display='none';
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('live-screen').style.display='none';
+  document.getElementById('merch-screen').style.display='block';
+  renderMerchScreen();
+}
+async function fetchSiteState(){
+  try{
+    siteState=await api('GET','/site-state',null,{},8000);
+  }catch(e){
+    siteState={mode:'normal',merchMode:false,videoUrl:'',launchAt:'',message:''};
+  }
+}
 function goToMarkets(){
   sessionStorage.setItem('access_granted','1');
   clearInterval(liveInterval);clearInterval(countdownInterval);
@@ -1778,7 +2004,10 @@ async function doLogin(){
   try{
     const data=await api('POST','/auth/login',{email,password});
     authToken=data.token;localStorage.setItem('ew_token',authToken);currentUser=data.user;
-    if(currentUser.role==='admin'||sessionStorage.getItem('access_granted')) enterApp();
+    await fetchSiteState();
+    if(currentUser.role==='admin') enterApp();
+    else if(siteState.merchMode) showMerchScreen();
+    else if(sessionStorage.getItem('access_granted')) enterApp();
     else showLiveScreen();
   }catch(e){errEl.textContent=e.message;errEl.style.display='block';}
 }
@@ -1807,7 +2036,7 @@ async function doForgotPassword(){
 }
 function showRegError(msg){const el=document.getElementById('reg-error');el.textContent=msg;el.style.display='block';}
 function showRegister(){document.getElementById('register-screen').style.display='flex';}
-function showAuthScreen(){document.getElementById('live-screen').style.display='none';document.getElementById('auth-screen').style.display='flex';}
+function showAuthScreen(){document.getElementById('merch-screen').style.display='none';document.getElementById('live-screen').style.display='none';document.getElementById('auth-screen').style.display='flex';}
 function hideRegister(){document.getElementById('register-screen').style.display='none';}
 function showForgotPassword(){document.getElementById('forgot-screen').style.display='flex';}
 function showResetPassword(token){
@@ -1894,22 +2123,31 @@ function doLogout(){
   assistancePreviewFrames={};
   if(assistanceSnapshotInterval){clearInterval(assistanceSnapshotInterval);assistanceSnapshotInterval=null;}
   hideAssistanceOverlay();
-  clearInterval(msgPollInterval);clearInterval(convPollInterval);
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
   unreadPollInterval=null;resolutionPollInterval=null;
+  clearInterval(merchCountdownInterval);
+  merchCountdownInterval=null;
   clearInterval(notificationPollInterval);
   notificationPollInterval=null;
   notificationsPanelOpen=false;
   clearInterval(popupPollInterval);
   popupPollInterval=null;
   hideIncomingPopup();
+  document.getElementById('merch-screen').style.display='none';
   document.getElementById('app').style.display='none';
-  document.getElementById('auth-screen').style.display='flex';
+  if(siteState.merchMode) document.getElementById('auth-screen').style.display='none';
+  else document.getElementById('auth-screen').style.display='flex';
   document.getElementById('login-email').value='';document.getElementById('login-pass').value='';
   document.getElementById('auth-error').style.display='none';
+  if(siteState.merchMode) showMerchScreen();
 }
 async function enterApp(){
   currentUser=await api('GET','/me');
+  if(siteState.merchMode && currentUser.role!=='admin'){
+    showMerchScreen();
+    return;
+  }
+  document.getElementById('merch-screen').style.display='none';
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('live-screen').style.display='none';
   document.getElementById('app').style.display='block';
@@ -1922,7 +2160,6 @@ async function enterApp(){
   applyChanceGamesAvailability();
   updateTopbar();renderMarkets();
   clearInterval(unreadPollInterval);clearInterval(resolutionPollInterval);
-  unreadPollInterval=setInterval(pollUnreadCount,20000);pollUnreadCount();
   resolutionPollInterval=setInterval(pollResolutions,20000);pollResolutions();
   clearInterval(notificationPollInterval);
   notificationPollInterval=setInterval(pollNotifications,20000);
@@ -2248,12 +2485,12 @@ function switchTab(tab){
   if(tab==='portfolio')renderPortfolio();
   if(tab==='leaderboard')renderLeaderboard();
   if(tab==='store')renderStore();
-  if(tab==='messages')renderMessages();
   if(tab==='suggestions')renderSuggestions();
   if(tab==='exchange')renderExchangeTab();
   if(tab==='assistance')renderAssistanceTab();
   if(tab==='admin')renderAdminTab();
   if(tab==='popup')renderPopupTab();
+  if(tab==='goodbye')renderGoodbyePreview();
   if(tab==='casino'){initCasino();}
 }
 
@@ -3352,9 +3589,6 @@ async function openProfile(userId){
         <div class="profile-big-avatar">${av}</div>
         <div class="profile-name">${esc(p.name)}</div>
         <div class="profile-grade">${p.grade||''}</div>
-        <div style="margin-top:10px;">
-          <button class="btn-admin btn-sm" onclick="startDMFromProfile('${p.id}','${p.name.replace(/'/g,"\\'")}' )">Message</button>
-        </div>
       </div>
       <div class="profile-stats">
         <div><div class="profile-stat-num" style="color:var(--green)">⬡ ${p.credits.toLocaleString()}</div><div class="profile-stat-label">Credits</div></div>
@@ -3364,7 +3598,6 @@ async function openProfile(userId){
   }catch(e){document.getElementById('profile-content').innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">Profile not available.</p>';}
 }
 function closeProfileModal(event){if(!event||event.target===document.getElementById('profile-modal'))document.getElementById('profile-modal').style.display='none';}
-function startDMFromProfile(userId,userName){closeProfileModal();switchTab('messages');setTimeout(()=>openThread(userId,userName),100);}
 
 // ── PORTFOLIO ──
 async function renderPortfolio(){
@@ -3769,77 +4002,8 @@ async function redeemItem(itemId){
   catch(e){showNotif('store-notification',e.message,'error');}
 }
 
-// ── MESSAGES ──
-async function renderMessages(){
-  clearInterval(msgPollInterval);clearInterval(convPollInterval);
-  currentThreadUserId=null;
-  document.getElementById('thread-header').textContent='Select a conversation';
-  document.getElementById('thread-messages').innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;margin-top:40px;">Pick a conversation or start a new one.</p>';
-  document.getElementById('thread-input').style.display='none';
-  try{await loadConversations();}catch(e){document.getElementById('conversation-list').innerHTML='<p style="color:var(--red);font-size:12px;padding:16px;">Failed to load: '+e.message+'</p>';}
-  convPollInterval=setInterval(loadConversations,10000);
-}
-async function loadConversations(){
-  const convs=await api('GET','/messages/conversations');
-  const el=document.getElementById('conversation-list');
-  if(!convs.length){el.innerHTML='<p style="color:var(--text3);font-size:12px;padding:16px;text-align:center;">No conversations yet.</p>';return;}
-  el.innerHTML=convs.map(c=>{
-    const isActive=currentThreadUserId===c.other.id,unread=c.unreadCount>0;
-    return `<div onclick="openThread('${c.other.id}','${c.other.name.replace(/'/g,"\\'")}' )"
-      style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);background:${isActive?'var(--accent-bg)':'transparent'};">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-       <span style="font-size:13px;font-weight:${unread?'600':'400'};color:${unread?'var(--text)':'var(--text2)'};">${esc(c.other.name)}</span>
-        ${unread?`<span style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;">${c.unreadCount}</span>`:''}
-      </div>
-      <div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">
-        ${c.lastMessage?(c.lastMessage.sender_id===currentUser.id?'You: ':'')+esc(c.lastMessage.text):''}
-      </div>
-    </div>`;
-  }).join('');
-}
-async function openThread(userId,userName){
-  currentThreadUserId=userId;
-  document.getElementById('thread-header').textContent=userName;
-  document.getElementById('thread-input').style.display='flex';
-  document.getElementById('msg-input').focus();
-  clearInterval(msgPollInterval);
-  await loadThread();
-  msgPollInterval=setInterval(loadThread,10000);
-  await loadConversations();
-}
-async function loadThread(){
-  if(!currentThreadUserId)return;
-  const msgs=await api('GET','/messages/thread/'+currentThreadUserId);
-  const el=document.getElementById('thread-messages');
-  if(!msgs.length){el.innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;margin-top:40px;">No messages yet. Say hi!</p>';return;}
-  const wasAtBottom=el.scrollHeight-el.scrollTop-el.clientHeight<60;
-  el.innerHTML=msgs.map(m=>{
-    const isMe=m.sender_id===currentUser.id;
-    const time=new Date(m.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};">
-      <div style="max-width:72%;padding:9px 13px;font-size:13px;line-height:1.45;" class="${isMe?'msg-bubble-me':'msg-bubble-them'}">${esc(m.text)}</div>
-      <span style="font-size:10px;color:var(--text3);margin-top:3px;">${time}</span>
-    </div>`;
-  }).join('');
-  if(wasAtBottom||msgs[msgs.length-1].sender_id===currentUser.id) el.scrollTop=el.scrollHeight;
-}
-async function sendMessage(){
-  const input=document.getElementById('msg-input'),text=input.value.trim();
-  if(!text||!currentThreadUserId)return;
-  input.value='';
-  try{await api('POST','/messages',{recipientId:currentThreadUserId,text});await loadThread();await loadConversations();}
-  catch(e){alert(e.message);}
-}
-async function showNewDM(){
-  const users=await api('GET','/messages/users');
-  const name=prompt('Start a DM — enter name or ID:\n\n'+users.map(u=>`${u.name} (${u.id})`).join('\n'));
-  if(!name)return;
-  const match=users.find(u=>u.name.toLowerCase().includes(name.toLowerCase())||u.id.toLowerCase()===name.toLowerCase());
-  if(!match){alert('User not found.');return;}
-  openThread(match.id,match.name);
-}
 function notificationLinkLabel(link){
-  if(link==='messages') return 'Open Messages';
+  if(link==='messages') return 'Open';
   if(link==='portfolio') return 'Open My Bets';
   if(link==='feed') return 'Open JewGram';
   return 'Open';
@@ -4104,14 +4268,6 @@ async function submitSuggestion(){
     showNotif('suggestions-status',e.message,'error');
   }
 }
-async function pollUnreadCount(){
-  if(!authToken||!currentUser) return;
-  try{
-    const {count}=await api('GET','/messages/unread-count');
-    const badge=document.getElementById('msg-badge');
-    if(count>0){badge.textContent=count;badge.style.display='inline';}else{badge.style.display='none';}
-  }catch(e){}
-}
 async function pollResolutions(){
   if(!authToken||!currentUser) return;
   try{
@@ -4142,21 +4298,24 @@ async function renderAdminTab(){
     api('GET','/markets'),
     api('GET','/users'),
     api('GET','/store'),
+    api('GET','/site-state'),
   ];
   const fallbacks=[
     {students:0,openMarkets:0,totalBets:0,pendingVol:0},
     [],
     [],
     [],
+    {mode:'normal',merchMode:false,videoUrl:'',launchAt:'',message:''},
   ];
   if(CASINO_ENABLED){
     requests.push(api('GET','/admin/casino'));
     fallbacks.push({stats:{},bets:[],total:0,hasMore:false});
   }
   const _results=await Promise.allSettled(requests);
-  const [stats,markets,users,storeItems]=_results.slice(0,4).map((r,i)=>r.status==='fulfilled'?r.value:(fallbacks[i]??{}));
+  const [stats,markets,users,storeItems,siteConfig]=_results.slice(0,5).map((r,i)=>r.status==='fulfilled'?r.value:(fallbacks[i]??{}));
+  siteState=siteConfig||siteState;
   const casinoData=CASINO_ENABLED
-    ?(_results[4]?.status==='fulfilled'?_results[4].value:(fallbacks[4]??{stats:{},bets:[],total:0,hasMore:false}))
+    ?(_results[5]?.status==='fulfilled'?_results[5].value:{stats:{},bets:[],total:0,hasMore:false})
     :{stats:{},bets:[],total:0,hasMore:false};
   document.getElementById('admin-stats').innerHTML=`
     <div class="stat-card"><div class="stat-label">Students</div><div class="stat-value">${stats.students}</div></div>
@@ -4177,6 +4336,19 @@ async function renderAdminTab(){
       </div>
       <button class="btn-admin" onclick="changeAccessPassword()">Update Access Password</button>`;
   } else { grosePanel.innerHTML=''; }
+
+  const merchVideoInput=document.getElementById('merch-video-url');
+  const merchLaunchInput=document.getElementById('merch-launch-at');
+  const merchMessageInput=document.getElementById('merch-message-input');
+  const selfDestructStatus=document.getElementById('self-destruct-status');
+  if(merchVideoInput) merchVideoInput.value=siteState.videoUrl||'';
+  if(merchLaunchInput) merchLaunchInput.value=siteState.launchAt?formatMarketCloseInputValue(siteState.launchAt):'';
+  if(merchMessageInput) merchMessageInput.value=siteState.message||'';
+  if(selfDestructStatus){
+    selfDestructStatus.textContent=siteState.merchMode
+      ?`Self-destruct is active. Public visitors now see the merch countdown page. Launch set for ${siteState.launchAt?new Date(siteState.launchAt).toLocaleString():'not set'}.`
+      :'Self-destruct is not active yet.';
+  }
 
   document.getElementById('admin-markets-list').innerHTML=markets.map(m=>{
     const isOU=m.market_type==='overunder';
@@ -5066,6 +5238,27 @@ async function createMarket(){
     renderAdminTab();showToast('Market created!');
   }catch(e){alert(e.message);}
 }
+async function triggerSelfDestruct(){
+  const videoUrl=document.getElementById('merch-video-url')?.value.trim()||'';
+  const launchAt=document.getElementById('merch-launch-at')?.value||'';
+  const message=document.getElementById('merch-message-input')?.value.trim()||'';
+  const status=document.getElementById('self-destruct-status');
+  if(!launchAt){
+    if(status) status.textContent='Pick a merch launch time before self-destructing.';
+    return;
+  }
+  if(!confirm('Trigger self-destruct? Public visitors will be moved to the merch countdown page.')) return;
+  try{
+    const next=await api('POST','/admin/site-mode/self-destruct',{mode:'merch',videoUrl,launchAt,message});
+    siteState=next;
+    renderMerchScreen();
+    if(status) status.textContent=`Self-destruct is active. Launch set for ${next.launchAt?new Date(next.launchAt).toLocaleString():'not set'}.`;
+    showToast('Self-destruct activated.');
+  }catch(e){
+    if(status) status.textContent=e.message;
+    alert(e.message);
+  }
+}
 async function resolveMarket(id,outcome){
   if(!confirm(`Resolve as ${outcome}?`))return;
   try{await api('POST','/markets/'+id+'/resolve',{outcome});await refreshUser();renderAdminTab();showToast(`Resolved as ${outcome}!`);}
@@ -5211,10 +5404,6 @@ async function clearAllMessages(){
   if(!confirm('Permanently clear all direct messages for everyone?')) return;
   try{
     const res=await api('POST','/admin/messages/clear',{});
-    currentThreadUserId=null;
-    document.getElementById('thread-header').textContent='Select a conversation';
-    document.getElementById('thread-messages').innerHTML='<div class="empty-state"><div class="icon">✉️</div><div>No conversation selected</div></div>';
-    await loadConversations();
     showToast(`Cleared ${res.cleared||0} messages.`);
   }catch(e){alert(e.message);}
 }
@@ -7076,6 +7265,7 @@ function showNotif(containerId,msg,type='success'){
 }
 
 (async()=>{
+  await fetchSiteState();
   const params=new URLSearchParams(window.location.search);
   if(params.get('reset')){
     authToken=null;
@@ -7101,10 +7291,12 @@ function showNotif(containerId,msg,type='success'){
       if(e.message==='Invalid token'||e.message==='No token'){
         localStorage.removeItem('ew_token');
       }
-      document.getElementById('auth-screen').style.display='flex';
+      if(siteState.merchMode) showMerchScreen();
+      else document.getElementById('auth-screen').style.display='flex';
     }
   } else {
-    showLiveScreen();
+    if(siteState.merchMode) showMerchScreen();
+    else showLiveScreen();
   }
 })();
 </script>

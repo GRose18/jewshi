@@ -74,6 +74,7 @@ const EXCHANGE_INTEREST_PERCENT = 5;
 const EXCHANGE_MIN_TERM_DAYS = 1;
 const EXCHANGE_MAX_TERM_DAYS = 30;
 const EXCHANGE_MIN_ACCOUNT_AGE_MS = 1000 * 60 * 60 * 24 * 10;
+const DEFAULT_MERCH_MESSAGE = 'Jewshi is shutting down. The legacy lives on through the final merch drop.';
 
 app.use('/api/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
@@ -505,6 +506,13 @@ async function ensureProtectedSettings() {
     const hash = await bcrypt.hash(DEFAULT_POPUP_TAB_PASSWORD, 10);
     await db.run('INSERT INTO settings (key,value) VALUES (?,?)',[POPUP_TAB_PASSWORD_KEY, hash]);
   }
+  const defaultAccessPassword = getBootstrapSecret('INITIAL_ACCESS_PASSWORD', 'INITIAL_ACCESS_PASSWORD');
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('volunteer_rate','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password',?)",[defaultAccessPassword]);
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('site_mode','normal')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_video_url','')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_launch_at','')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_message',?)",[DEFAULT_MERCH_MESSAGE]);
 }
 
 async function seedIfEmpty() {
@@ -540,6 +548,10 @@ async function seedIfEmpty() {
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_mines_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_roulette_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_coinflip_odds','100')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('site_mode','normal')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_video_url','')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_launch_at','')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_message',?)",[DEFAULT_MERCH_MESSAGE]);
   console.log('Database seeded.');
 }
 
@@ -1331,6 +1343,19 @@ async function getCasinoConfig(userId=null) {
     coinflipOdds: clampNumber(base.coinflipOdds + luckyStreak.boostPercent, 0, 200),
   } : { ...base };
   return { ...base, effective, luckyStreak };
+}
+async function getSiteState() {
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('site_mode','merch_video_url','merch_launch_at','merch_message')");
+  const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
+  const launchAtRaw = String(settings.merch_launch_at || '').trim();
+  const launchAt = launchAtRaw ? new Date(launchAtRaw).toISOString() : '';
+  return {
+    mode: settings.site_mode === 'merch' ? 'merch' : 'normal',
+    merchMode: settings.site_mode === 'merch',
+    videoUrl: String(settings.merch_video_url || '').trim(),
+    launchAt,
+    message: String(settings.merch_message || DEFAULT_MERCH_MESSAGE).trim() || DEFAULT_MERCH_MESSAGE,
+  };
 }
 function parsePage(value, fallback, min, max){
   const num = Math.floor(Number(value));
@@ -3188,6 +3213,42 @@ app.get('/api/admin/stats', authMiddleware, adminOnly, async(req,res)=>{
     totalCreditsInCirculation:circ,
     mailConfigured:!!process.env.APPS_SCRIPT_URL,
   });
+});
+
+app.get('/api/site-state', async(req,res)=>{
+  try{
+    res.json(await getSiteState());
+  }catch(e){
+    res.status(500).json({error:e.message});
+  }
+});
+
+app.post('/api/admin/site-mode/self-destruct', authMiddleware, adminOnly, async(req,res)=>{
+  try{
+    if(req.user.id!==PRIMARY_ADMIN_ID){
+      return res.status(403).json({error:'Only GROSE can self-destruct Jewshi.'});
+    }
+    const nextMode = String(req.body?.mode||'merch').toLowerCase()==='normal' ? 'normal' : 'merch';
+    const videoUrl = String(req.body?.videoUrl||'').trim();
+    const message = String(req.body?.message||DEFAULT_MERCH_MESSAGE).trim() || DEFAULT_MERCH_MESSAGE;
+    const launchAtInput = String(req.body?.launchAt||'').trim();
+    if(nextMode==='merch' && !launchAtInput){
+      return res.status(400).json({error:'Set a merch launch time first.'});
+    }
+    let normalizedLaunchAt = '';
+    if(launchAtInput){
+      const parsed = Date.parse(launchAtInput);
+      if(Number.isNaN(parsed)) return res.status(400).json({error:'Launch time is invalid.'});
+      normalizedLaunchAt = new Date(parsed).toISOString();
+    }
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('site_mode',?)",[nextMode]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_video_url',?)",[videoUrl]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_launch_at',?)",[normalizedLaunchAt]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_message',?)",[message]);
+    res.json(await getSiteState());
+  }catch(e){
+    res.status(500).json({error:e.message});
+  }
 });
 
 app.post('/api/admin/send-digest', authMiddleware, adminOnly, async(req,res)=>{
