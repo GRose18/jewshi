@@ -73,6 +73,8 @@
   .merch-card-title{font-size:15px;font-weight:700;color:var(--text)}
   .merch-card-copy{font-size:12px;color:var(--text3);line-height:1.6;margin-top:8px}
   .merch-live-pill{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:8px 12px;border-radius:999px;background:rgba(0,208,132,0.12);border:1px solid rgba(0,208,132,0.22);color:var(--green);font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase}
+  .memorial-link{display:inline-flex;align-items:center;gap:10px;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;text-decoration:none;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;transition:transform 0.15s ease,background 0.15s ease}
+  .memorial-link:hover{transform:translateY(-1px);background:rgba(255,255,255,0.1)}
   @media (max-width: 900px){
     .merch-hero{grid-template-columns:1fr}
     .merch-title{font-size:40px}
@@ -482,6 +484,7 @@
           </div>
           <div class="merch-live-pill" id="merch-live-pill" style="display:none;">Store live</div>
           <div class="merch-launch-note" id="merch-launch-note">Countdown inactive until a merch launch time is set.</div>
+          <a id="merch-gallery-link" class="memorial-link" href="#" target="_blank" rel="noopener" style="display:none;margin-top:16px;">Photo Gallery ↗</a>
         </div>
       </div>
     </div>
@@ -1440,9 +1443,7 @@
             <div class="goodbye-video-shell" id="goodbye-video-shell">
               <div class="goodbye-video-placeholder">Add your farewell video URL in the admin panel and it will appear here in the preview.</div>
             </div>
-            <div class="goodbye-mark">
-              <img src="/never-forget-poster.png" alt="Never forget memorial poster">
-            </div>
+            <a id="goodbye-gallery-link" class="memorial-link" href="#" target="_blank" rel="noopener" style="display:none;width:max-content;">Photo Gallery ↗</a>
             <div class="goodbye-coming">Something big is coming.</div>
             <div class="goodbye-countdown-grid">
               <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-days">--</div><div class="goodbye-countdown-label">Days</div></div>
@@ -1494,6 +1495,7 @@
           <div id="self-destruct-panel" class="grose-only" style="display:none;">
             <p style="font-size:12px;color:var(--text3);margin-bottom:12px;">When you're ready to shut Jewshi down, move the public site to the farewell merch countdown page.</p>
             <div class="form-group"><label>Farewell Video URL</label><input type="text" id="merch-video-url" placeholder="Direct MP4, YouTube, or Vimeo link"></div>
+            <div class="form-group"><label>Photo Gallery URL</label><input type="text" id="merch-gallery-url" placeholder="Google Photos, Drive, or gallery link"></div>
             <div class="form-group"><label>Merch Launch Time</label><input type="datetime-local" id="merch-launch-at"></div>
             <div class="form-group"><label>Farewell Message</label><input type="text" id="merch-message-input" placeholder="Jewshi is shutting down. The legacy lives on through the final merch drop."></div>
             <button class="btn-admin btn-danger" onclick="triggerSelfDestruct()" style="margin-bottom:8px;">Self-Destruct</button>
@@ -1696,7 +1698,7 @@ let unreadPollInterval=null,resolutionPollInterval=null,notificationPollInterval
 let liveInterval=null,countdownInterval=null,marketCountdownInterval=null,liveMarketsData=[];
 let merchCountdownInterval=null;
 let goodbyePreviewInterval=null;
-let siteState={mode:'normal',merchMode:false,videoUrl:'',launchAt:'',message:''};
+let siteState={mode:'normal',merchMode:false,videoUrl:'',galleryUrl:'',launchAt:'',message:''};
 let popupTabUnlocked=sessionStorage.getItem('popup_tab_unlocked')==='1';
 let popupUnlockToken=sessionStorage.getItem('popup_unlock_token')||'';
 let popupPollInterval=null;
@@ -1935,7 +1937,10 @@ function updateMerchCountdown(){
     ['merch-seconds','--'],
   ];
   if(Number.isNaN(launchAt)){
-    ids.forEach(([id,fallback])=>{ const el=document.getElementById(id); if(el) el.textContent=fallback; });
+    ids.forEach(([id,fallback])=>{
+      const el=document.getElementById(id);
+      if(el && !shouldPreserveManualCountdownText(el)) el.textContent=fallback;
+    });
     if(launchNote) launchNote.textContent='Countdown inactive until a merch launch time is set.';
     if(livePill) livePill.style.display='none';
     return;
@@ -1951,7 +1956,10 @@ function updateMerchCountdown(){
     ['merch-minutes', String(minutes).padStart(2,'0')],
     ['merch-seconds', String(seconds).padStart(2,'0')],
   ];
-  values.forEach(([id,value])=>{ const el=document.getElementById(id); if(el) el.textContent=value; });
+  values.forEach(([id,value])=>{
+    const el=document.getElementById(id);
+    if(el && !shouldPreserveManualCountdownText(el)) el.textContent=value;
+  });
   if(diff<=0){
     if(launchNote) launchNote.textContent='The merch drop is live. Replace this landing page with your real store whenever you are ready.';
     if(livePill) livePill.style.display='inline-flex';
@@ -1964,6 +1972,15 @@ function renderMerchScreen(){
   const messageEl=document.getElementById('merch-message');
   if(messageEl) messageEl.textContent=siteState.message || 'Jewshi is shutting down. The legacy lives on through the final merch drop.';
   renderMerchVideo();
+  const galleryLink=document.getElementById('merch-gallery-link');
+  if(galleryLink){
+    if(siteState.galleryUrl){
+      galleryLink.href=siteState.galleryUrl;
+      galleryLink.style.display='inline-flex';
+    }else{
+      galleryLink.style.display='none';
+    }
+  }
   clearInterval(merchCountdownInterval);
   updateMerchCountdown();
   merchCountdownInterval=setInterval(updateMerchCountdown,1000);
@@ -1981,6 +1998,12 @@ function renderGoodbyePreviewVideo(){
     return;
   }
   shell.innerHTML='<div class="goodbye-video-placeholder">Add your farewell video URL in the admin panel and it will appear here in the preview.</div>';
+}
+function shouldPreserveManualCountdownText(el){
+  if(!el) return false;
+  if(el.dataset.manualText==='1') return true;
+  const text=(el.textContent||'').trim();
+  return /[a-z]/i.test(text);
 }
 function updateGoodbyePreviewCountdown(){
   const launchNote=document.getElementById('goodbye-launch-note');
@@ -2002,7 +2025,7 @@ function updateGoodbyePreviewCountdown(){
       })();
   ['goodbye-days','goodbye-hours','goodbye-minutes','goodbye-seconds'].forEach((id,idx)=>{
     const el=document.getElementById(id);
-    if(el) el.textContent=values[idx];
+    if(el && !shouldPreserveManualCountdownText(el)) el.textContent=values[idx];
   });
   if(launchNote){
     launchNote.textContent = Number.isNaN(launchAt)
@@ -2015,6 +2038,15 @@ function updateGoodbyePreviewCountdown(){
 function renderGoodbyePreview(){
   clearInterval(goodbyePreviewInterval);
   renderGoodbyePreviewVideo();
+  const galleryLink=document.getElementById('goodbye-gallery-link');
+  if(galleryLink){
+    if(siteState.galleryUrl){
+      galleryLink.href=siteState.galleryUrl;
+      galleryLink.style.display='inline-flex';
+    }else{
+      galleryLink.style.display='none';
+    }
+  }
   updateGoodbyePreviewCountdown();
   goodbyePreviewInterval=setInterval(updateGoodbyePreviewCountdown,1000);
 }
@@ -2031,7 +2063,7 @@ async function fetchSiteState(){
   try{
     siteState=await api('GET','/site-state',null,{},8000);
   }catch(e){
-    siteState={mode:'normal',merchMode:false,videoUrl:'',launchAt:'',message:''};
+    siteState={mode:'normal',merchMode:false,videoUrl:'',galleryUrl:'',launchAt:'',message:''};
   }
 }
 function goToMarkets(){
@@ -4351,7 +4383,7 @@ async function renderAdminTab(){
     [],
     [],
     [],
-    {mode:'normal',merchMode:false,videoUrl:'',launchAt:'',message:''},
+    {mode:'normal',merchMode:false,videoUrl:'',galleryUrl:'',launchAt:'',message:''},
   ];
   if(CASINO_ENABLED){
     requests.push(api('GET','/admin/casino'));
@@ -4384,10 +4416,12 @@ async function renderAdminTab(){
   } else { grosePanel.innerHTML=''; }
 
   const merchVideoInput=document.getElementById('merch-video-url');
+  const merchGalleryInput=document.getElementById('merch-gallery-url');
   const merchLaunchInput=document.getElementById('merch-launch-at');
   const merchMessageInput=document.getElementById('merch-message-input');
   const selfDestructStatus=document.getElementById('self-destruct-status');
   if(merchVideoInput) merchVideoInput.value=siteState.videoUrl||'';
+  if(merchGalleryInput) merchGalleryInput.value=siteState.galleryUrl||'';
   if(merchLaunchInput) merchLaunchInput.value=siteState.launchAt?formatMarketCloseInputValue(siteState.launchAt):'';
   if(merchMessageInput) merchMessageInput.value=siteState.message||'';
   if(selfDestructStatus){
@@ -5286,6 +5320,7 @@ async function createMarket(){
 }
 async function triggerSelfDestruct(){
   const videoUrl=document.getElementById('merch-video-url')?.value.trim()||'';
+  const galleryUrl=document.getElementById('merch-gallery-url')?.value.trim()||'';
   const launchAt=document.getElementById('merch-launch-at')?.value||'';
   const message=document.getElementById('merch-message-input')?.value.trim()||'';
   const status=document.getElementById('self-destruct-status');
@@ -5295,7 +5330,7 @@ async function triggerSelfDestruct(){
   }
   if(!confirm('Trigger self-destruct? Public visitors will be moved to the merch countdown page.')) return;
   try{
-    const next=await api('POST','/admin/site-mode/self-destruct',{mode:'merch',videoUrl,launchAt,message});
+    const next=await api('POST','/admin/site-mode/self-destruct',{mode:'merch',videoUrl,galleryUrl,launchAt,message});
     siteState=next;
     renderMerchScreen();
     if(status) status.textContent=`Self-destruct is active. Launch set for ${next.launchAt?new Date(next.launchAt).toLocaleString():'not set'}.`;

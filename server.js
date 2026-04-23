@@ -511,6 +511,7 @@ async function ensureProtectedSettings() {
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('access_password',?)",[defaultAccessPassword]);
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('site_mode','normal')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_video_url','')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_gallery_url','')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_launch_at','')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_message',?)",[DEFAULT_MERCH_MESSAGE]);
 }
@@ -550,6 +551,7 @@ async function seedIfEmpty() {
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('casino_coinflip_odds','100')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('site_mode','normal')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_video_url','')");
+  await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_gallery_url','')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_launch_at','')");
   await db.run("INSERT OR IGNORE INTO settings (key,value) VALUES ('merch_message',?)",[DEFAULT_MERCH_MESSAGE]);
   console.log('Database seeded.');
@@ -1345,7 +1347,7 @@ async function getCasinoConfig(userId=null) {
   return { ...base, effective, luckyStreak };
 }
 async function getSiteState() {
-  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('site_mode','merch_video_url','merch_launch_at','merch_message')");
+  const rows = await db.all("SELECT key,value FROM settings WHERE key IN ('site_mode','merch_video_url','merch_gallery_url','merch_launch_at','merch_message')");
   const settings = Object.fromEntries(rows.map(row=>[row.key, row.value]));
   const launchAtRaw = String(settings.merch_launch_at || '').trim();
   const launchAt = launchAtRaw ? new Date(launchAtRaw).toISOString() : '';
@@ -1353,6 +1355,7 @@ async function getSiteState() {
     mode: settings.site_mode === 'merch' ? 'merch' : 'normal',
     merchMode: settings.site_mode === 'merch',
     videoUrl: String(settings.merch_video_url || '').trim(),
+    galleryUrl: String(settings.merch_gallery_url || '').trim(),
     launchAt,
     message: String(settings.merch_message || DEFAULT_MERCH_MESSAGE).trim() || DEFAULT_MERCH_MESSAGE,
   };
@@ -3230,6 +3233,7 @@ app.post('/api/admin/site-mode/self-destruct', authMiddleware, adminOnly, async(
     }
     const nextMode = String(req.body?.mode||'merch').toLowerCase()==='normal' ? 'normal' : 'merch';
     const videoUrl = String(req.body?.videoUrl||'').trim();
+    const galleryUrl = String(req.body?.galleryUrl||'').trim();
     const message = String(req.body?.message||DEFAULT_MERCH_MESSAGE).trim() || DEFAULT_MERCH_MESSAGE;
     const launchAtInput = String(req.body?.launchAt||'').trim();
     if(nextMode==='merch' && !launchAtInput){
@@ -3243,6 +3247,7 @@ app.post('/api/admin/site-mode/self-destruct', authMiddleware, adminOnly, async(
     }
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('site_mode',?)",[nextMode]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_video_url',?)",[videoUrl]);
+    await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_gallery_url',?)",[galleryUrl]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_launch_at',?)",[normalizedLaunchAt]);
     await db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('merch_message',?)",[message]);
     res.json(await getSiteState());
