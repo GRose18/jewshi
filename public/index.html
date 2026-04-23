@@ -20,6 +20,7 @@
     --orange:#ff8c42;--orange-bg:rgba(255,140,66,0.08);--orange-dim:rgba(255,140,66,0.2);
     --shadow:0 2px 16px rgba(0,0,0,0.4);--shadow-lg:0 8px 40px rgba(0,0,0,0.6);
     --radius:10px;--radius-lg:14px;
+    --display-font:'Horizon','Inter',sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
@@ -149,19 +150,36 @@
   .exchange-item{padding:14px 15px;border-radius:18px;background:var(--bg3);border:1px solid var(--border)}
   .exchange-policy{display:flex;flex-direction:column;gap:10px}
   .exchange-policy-row{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)}
-  .goodbye-preview{position:relative;overflow:hidden;padding:34px;border-radius:28px;background:
-    radial-gradient(circle at top right, rgba(124,106,247,0.18), transparent 28%),
-    radial-gradient(circle at left center, rgba(240,192,64,0.12), transparent 22%),
-    linear-gradient(180deg, #0b0b12, #13131d 50%, #0d0d14);border:1px solid rgba(255,255,255,0.08);box-shadow:var(--shadow-lg)}
-  .goodbye-quote{font-size:42px;line-height:1.02;letter-spacing:-0.05em;font-weight:800;max-width:760px}
-  .goodbye-copy{margin-top:16px;max-width:720px;font-size:15px;line-height:1.75;color:#c9c9d8}
-  .goodbye-mark{margin-top:26px;display:inline-flex;align-items:center;justify-content:center;padding:16px 20px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);font-size:18px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase}
-  .goodbye-countdown-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:28px}
-  .goodbye-countdown-box{padding:18px 12px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);text-align:center}
-  .goodbye-countdown-value{font-size:34px;font-weight:800;letter-spacing:-0.05em;font-variant-numeric:tabular-nums}
-  .goodbye-countdown-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text3);margin-top:8px}
+  .goodbye-preview{position:relative;overflow:hidden;min-height:calc(100vh - 170px);padding:36px;border-radius:30px;background:
+    radial-gradient(circle at 18% 10%, rgba(154,122,255,0.32), transparent 24%),
+    radial-gradient(circle at 90% 0%, rgba(124,106,247,0.28), transparent 26%),
+    linear-gradient(135deg, #1a1038 0%, #24184f 35%, #160c2f 70%, #0d0919 100%);
+    border:1px solid rgba(255,255,255,0.08);box-shadow:var(--shadow-lg)}
+  .goodbye-layout{display:grid;grid-template-columns:minmax(300px,420px) minmax(0,1fr);gap:28px;align-items:start}
+  .goodbye-poster-wrap{position:sticky;top:18px}
+  .goodbye-poster{display:block;width:100%;border-radius:26px;border:1px solid rgba(255,255,255,0.1);box-shadow:0 24px 50px rgba(0,0,0,0.35)}
+  .goodbye-content{display:flex;flex-direction:column;gap:18px}
+  .goodbye-eyebrow{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.7);font-weight:800}
+  .goodbye-quote{font-family:var(--display-font);font-size:56px;line-height:0.9;letter-spacing:0.01em;text-transform:uppercase;color:#ffffff;max-width:760px}
+  .goodbye-copy{max-width:760px;font-size:15px;line-height:1.8;color:rgba(238,238,245,0.82)}
+  .goodbye-video-shell{overflow:hidden;border-radius:24px;background:rgba(8,8,14,0.88);border:1px solid rgba(255,255,255,0.08);aspect-ratio:16 / 9;box-shadow:0 18px 36px rgba(0,0,0,0.24)}
+  .goodbye-video-shell iframe,.goodbye-video-shell video{width:100%;height:100%;display:block;border:0;background:#000}
+  .goodbye-video-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;color:rgba(238,238,245,0.54);font-size:14px;line-height:1.8}
+  .goodbye-mark{display:inline-block;padding:0}
+  .goodbye-mark img{display:block;width:min(100%,460px);border-radius:22px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 18px 36px rgba(0,0,0,0.24)}
+  .goodbye-coming{font-family:var(--display-font);font-size:34px;line-height:0.92;letter-spacing:0.04em;text-transform:uppercase;color:#fff}
+  .goodbye-countdown-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .goodbye-countdown-box{padding:18px 12px;border-radius:18px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);text-align:center}
+  .goodbye-countdown-value{font-family:var(--display-font);font-size:34px;line-height:0.95;font-weight:800;letter-spacing:0.04em;font-variant-numeric:tabular-nums}
+  .goodbye-countdown-label{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.48);margin-top:8px}
+  @media (max-width: 980px){
+    .goodbye-layout{grid-template-columns:1fr}
+    .goodbye-poster-wrap{position:static;max-width:420px}
+  }
   @media (max-width: 640px){
-    .goodbye-quote{font-size:30px}
+    .goodbye-preview{padding:20px;min-height:auto}
+    .goodbye-quote{font-size:40px}
+    .goodbye-coming{font-size:28px}
     .goodbye-countdown-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
 
@@ -1411,17 +1429,30 @@
 
     <div id="tab-goodbye" class="tab-content">
       <div class="goodbye-preview">
-        <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--gold);font-weight:800;">Farewell Preview</div>
-        <div class="goodbye-quote">“One must imagine Sisyphus happy.”</div>
-        <div class="goodbye-copy">Jewshi started as a joke, became a ritual, and then somehow became part of the school’s daily rhythm. This preview is the final sendoff: a little absurd, a little sincere, and built to hold the last countdown before the merch drop opens.</div>
-        <div class="goodbye-mark">Never forget: 4.23.2026</div>
-        <div class="goodbye-countdown-grid">
-          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-days">--</div><div class="goodbye-countdown-label">Days</div></div>
-          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-hours">--</div><div class="goodbye-countdown-label">Hours</div></div>
-          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-minutes">--</div><div class="goodbye-countdown-label">Minutes</div></div>
-          <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-seconds">--</div><div class="goodbye-countdown-label">Seconds</div></div>
+        <div class="goodbye-layout">
+          <div class="goodbye-poster-wrap">
+            <img class="goodbye-poster" src="/never-forget-poster.png" alt="Never Forget poster">
+          </div>
+          <div class="goodbye-content">
+            <div class="goodbye-eyebrow">Goodbye Screen Preview</div>
+            <div class="goodbye-quote">Gone, but never resolved.</div>
+            <div class="goodbye-copy">Jewshi was never supposed to become a real thing, and then it did. Now the line has finally closed. What comes next lives behind a quiet one-week countdown, a farewell video, and one last memorial page for the people who were here when it happened.</div>
+            <div class="goodbye-video-shell" id="goodbye-video-shell">
+              <div class="goodbye-video-placeholder">Add your farewell video URL in the admin panel and it will appear here in the preview.</div>
+            </div>
+            <div class="goodbye-mark">
+              <img src="/never-forget-poster.png" alt="Never forget memorial poster">
+            </div>
+            <div class="goodbye-coming">Something big is coming.</div>
+            <div class="goodbye-countdown-grid">
+              <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-days">--</div><div class="goodbye-countdown-label">Days</div></div>
+              <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-hours">--</div><div class="goodbye-countdown-label">Hours</div></div>
+              <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-minutes">--</div><div class="goodbye-countdown-label">Minutes</div></div>
+              <div class="goodbye-countdown-box"><div class="goodbye-countdown-value" id="goodbye-seconds">--</div><div class="goodbye-countdown-label">Seconds</div></div>
+            </div>
+            <div id="goodbye-launch-note" style="font-size:12px;color:rgba(255,255,255,0.58);">Set the merch launch time in the admin panel to activate this countdown.</div>
+          </div>
         </div>
-        <div id="goodbye-launch-note" style="margin-top:18px;font-size:12px;color:var(--text3);">Set the merch launch time in the admin panel to activate this countdown.</div>
       </div>
     </div>
     
@@ -1937,6 +1968,20 @@ function renderMerchScreen(){
   updateMerchCountdown();
   merchCountdownInterval=setInterval(updateMerchCountdown,1000);
 }
+function renderGoodbyePreviewVideo(){
+  const shell=document.getElementById('goodbye-video-shell');
+  if(!shell) return;
+  const media=normalizeEmbedUrl(siteState.videoUrl);
+  if(media.type==='video'){
+    shell.innerHTML=`<video controls playsinline src="${esc(media.src)}"></video>`;
+    return;
+  }
+  if(media.type==='iframe'){
+    shell.innerHTML=`<iframe src="${esc(media.src)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+    return;
+  }
+  shell.innerHTML='<div class="goodbye-video-placeholder">Add your farewell video URL in the admin panel and it will appear here in the preview.</div>';
+}
 function updateGoodbyePreviewCountdown(){
   const launchNote=document.getElementById('goodbye-launch-note');
   const launchAt=siteState.launchAt ? Date.parse(siteState.launchAt) : NaN;
@@ -1969,6 +2014,7 @@ function updateGoodbyePreviewCountdown(){
 }
 function renderGoodbyePreview(){
   clearInterval(goodbyePreviewInterval);
+  renderGoodbyePreviewVideo();
   updateGoodbyePreviewCountdown();
   goodbyePreviewInterval=setInterval(updateGoodbyePreviewCountdown,1000);
 }
